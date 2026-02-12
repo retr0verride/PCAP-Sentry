@@ -165,7 +165,7 @@ def _check_tkinterdnd2():
 SIZE_SAMPLE_LIMIT = 50000
 DEFAULT_MAX_ROWS = 200000
 IOC_SET_LIMIT = 50000
-APP_VERSION = "2026.02.12-17"
+APP_VERSION = "2026.02.12-18"
 
 
 def _get_pandas():
@@ -2868,6 +2868,12 @@ class PCAPSentryApp:
 
     def _download_and_install_update(self, version):
         """Download and install the update."""
+        # Back up the knowledge base before updating so user data is preserved
+        try:
+            _backup_knowledge_base()
+        except Exception:
+            pass
+
         # Create progress UI on the main thread first
         progress_window = tk.Toplevel(self.root)
         progress_window.title("Downloading Update")

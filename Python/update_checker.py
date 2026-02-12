@@ -221,6 +221,22 @@ class UpdateChecker:
         os.makedirs(update_dir, exist_ok=True)
         return update_dir
 
+    def _backup_knowledge_base_before_update(self) -> None:
+        """Back up the knowledge base file before applying an update."""
+        try:
+            app_dir = self.get_app_data_dir()
+            kb_path = os.path.join(app_dir, "pcap_knowledge_base_offline.json")
+            if not os.path.exists(kb_path):
+                return
+            backup_dir = os.path.join(app_dir, "kb_backups")
+            os.makedirs(backup_dir, exist_ok=True)
+            from datetime import datetime
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_path = os.path.join(backup_dir, f"pcap_knowledge_base_{ts}.json")
+            shutil.copy2(kb_path, backup_path)
+        except Exception as e:
+            print(f"Warning: could not back up knowledge base: {e}")
+
     def launch_installer(self, installer_path: str) -> bool:
         """
         Launch the downloaded installer.
@@ -255,6 +271,9 @@ class UpdateChecker:
             current_exe_path = sys.executable
 
         try:
+            # Back up the knowledge base so user data is preserved
+            self._backup_knowledge_base_before_update()
+
             # Create a backup
             backup_path = current_exe_path + ".backup"
             if os.path.exists(current_exe_path):
@@ -274,12 +293,12 @@ class UpdateChecker:
                 print(f"Error restoring backup: {restore_err}")
             return False
 
-    def cleanup_old_updates(self, keep_count: int = 3) -> None:
+    def cleanup_old_updates(self, keep_count: int = 0) -> None:
         """
         Clean up old update files.
 
         Args:
-            keep_count: Number of recent updates to keep
+            keep_count: Number of recent updates to keep (0 = delete all)
         """
         try:
             update_dir = self.get_update_dir()

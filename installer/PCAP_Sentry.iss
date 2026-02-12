@@ -6,7 +6,7 @@
 [Setup]
 AppId={{B8A5C2E1-7F3D-4A1B-9C6E-2D8F5A4E3B71}
 AppName=PCAP Sentry
-AppVersion=2026.02.12-17
+AppVersion=2026.02.12-18
 AppPublisher=industrial-dave
 DefaultDirName={autopf}\PCAP Sentry
 DefaultGroupName=PCAP Sentry
