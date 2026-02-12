@@ -5682,7 +5682,7 @@ class PCAPSentryApp:
 
             for row in self.flow_table.get_children():
                 self.flow_table.delete(row)
-            for _, row in flow_df.head(25).iterrows():
+            for _, row in flow_df_early.head(25).iterrows():
                 self.flow_table.insert(
                     "",
                     tk.END,
