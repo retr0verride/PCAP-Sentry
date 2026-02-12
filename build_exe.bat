@@ -57,18 +57,36 @@ del "%TEMP%\pcap_version.txt" >nul 2>&1
 
 if defined NO_PUSH (
 	echo Skipping git commit/push because -NoPush was provided.>> "%LOG_PATH%"
-) else (
-	REM Stage and commit version changes
-	git add version_info.txt VERSION_LOG.md installer\PCAP_Sentry.iss Python\pcap_sentry_gui.py >> "%LOG_PATH%" 2>&1
-	git commit -m "EXE Build: Version %VERSION%" >> "%LOG_PATH%" 2>&1
-
-	REM Push to GitHub
-	git push origin main >> "%LOG_PATH%" 2>&1
-	if errorlevel 1 (
-		echo Warning: Failed to push to GitHub. See %LOG_PATH% for details.
-	) else (
-		echo Pushed version %VERSION% to GitHub
-	)
+	goto :DONE
 )
 
+REM Stage and commit version changes
+git add version_info.txt VERSION_LOG.md installer\PCAP_Sentry.iss Python\pcap_sentry_gui.py Python\update_checker.py >> "%LOG_PATH%" 2>&1
+git commit -m "EXE Build: Version %VERSION%" >> "%LOG_PATH%" 2>&1
+
+REM Push to GitHub
+git push origin main >> "%LOG_PATH%" 2>&1
+if errorlevel 1 (
+	echo Warning: Failed to push to GitHub. See %LOG_PATH% for details.
+) else (
+	echo Pushed version %VERSION% to GitHub
+)
+
+REM Create GitHub Release with the EXE (requires gh CLI)
+where gh >nul 2>&1
+if errorlevel 1 (
+	echo Warning: GitHub CLI not found. Skipping release creation.>> "%LOG_PATH%"
+	echo Warning: Install gh CLI to auto-create releases: winget install GitHub.cli
+	goto :DONE
+)
+
+echo ==== Creating GitHub Release v%VERSION% ====>> "%LOG_PATH%"
+gh release create "v%VERSION%" "dist\PCAP_Sentry.exe" --title "PCAP Sentry v%VERSION%" --notes "Build %VERSION%" >> "%LOG_PATH%" 2>&1
+if errorlevel 1 (
+	echo Warning: Failed to create GitHub release. See %LOG_PATH% for details.
+) else (
+	echo Created GitHub release v%VERSION% with PCAP_Sentry.exe
+)
+
+:DONE
 endlocal

@@ -66,6 +66,10 @@ if (-not $DryRun) {
         "filevers=($newYear, $newMonth, $newDay, $newBuild)"
     $updatedContent = $updatedContent -replace 'prodvers=\(\d+,\s*\d+,\s*\d+,\s*\d+\)', `
         "prodvers=($newYear, $newMonth, $newDay, $newBuild)"
+    $updatedContent = $updatedContent -replace "StringStruct\('FileVersion',\s*'[^']*'\)", `
+        "StringStruct('FileVersion', '$newVersion')"
+    $updatedContent = $updatedContent -replace "StringStruct\('ProductVersion',\s*'[^']*'\)", `
+        "StringStruct('ProductVersion', '$newVersion')"
     Set-Content -Path $versionFile -Value $updatedContent -NoNewline
     Write-Host "Updated version_info.txt to $newVersion"
 } else {
