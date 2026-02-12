@@ -3,19 +3,19 @@
 #define IncludeVCRedist
 #endif
 
-#define AppVer "2026.02.12-21"
+#define AppVer "2026.02.12-25"
 
 [Setup]
 AppId={{B8A5C2E1-7F3D-4A1B-9C6E-2D8F5A4E3B71}
 AppName=PCAP Sentry
 AppVersion={#AppVer}
 AppVerName=PCAP Sentry {#AppVer}
-VersionInfoVersion=2026.2.12.21
+VersionInfoVersion=2026.2.12.25
 AppPublisher=industrial-dave
 AppSupportURL=https://github.com/industrial-dave/PCAP-Sentry
 DefaultDirName={autopf}\PCAP Sentry
 DefaultGroupName=PCAP Sentry
-OutputDir=dist
+OutputDir=..\dist
 OutputBaseFilename=PCAP_Sentry_Setup
 Compression=lzma
 SolidCompression=yes
@@ -50,10 +50,9 @@ Filename: "{tmp}\vcredist_x64.exe"; Parameters: "/install /quiet /norestart"; St
 Filename: "{app}\PCAP_Sentry.exe"; Description: "Launch PCAP Sentry"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
-; Remove app-created files and folders under the install directory
-Type: filesandirs; Name: "{app}\data"
-Type: filesandirs; Name: "{app}\logs"
-Type: filesandirs; Name: "{app}"
+; Remove app-created subdirectories under the install directory
+Type: filesandordirs; Name: "{app}\data"
+Type: filesandordirs; Name: "{app}\logs"
 
 [Code]
 const
@@ -75,11 +74,9 @@ begin
     if FileExists(KBFile) or DirExists(KBBackupDir) then
     begin
       KeepKB := MsgBox(
-        'Do you want to keep your trained Knowledge Base data?' + #13#10 +
-        #13#10 +
+        'Do you want to keep your trained Knowledge Base data?' + #13#10 + #13#10 +
         'If you plan to reinstall later, choosing Yes will preserve ' +
-        'your training data so you do not have to retrain.' + #13#10 +
-        #13#10 +
+        'your training data so you do not have to retrain.' + #13#10 + #13#10 +
         'Choose No to remove ALL application data.',
         mbConfirmation, MB_YESNO);
 
