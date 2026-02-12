@@ -52,7 +52,7 @@ if errorlevel 1 (
 )
 
 echo ==== Build succeeded! ====>> "%LOG_PATH%"
-echo ==== Pushing to GitHub ====>> "%LOG_PATH%"
+echo ==== Uploading to GitHub ====>> "%LOG_PATH%"
 
 REM Get current version from version_info.txt
 for /f "tokens=2 delims=,()" %%A in ('findstr /R "filevers=" version_info.txt ^| findstr /v "prod"') do (
@@ -61,8 +61,8 @@ for /f "tokens=2 delims=,()" %%A in ('findstr /R "filevers=" version_info.txt ^|
 	)
 )
 
-REM Stage and commit version changes
-git add version_info.txt VERSION_LOG.md installer\PCAP_Sentry.iss >> "%LOG_PATH%" 2>&1
+REM Stage and commit version changes plus installer
+git add version_info.txt VERSION_LOG.md installer\PCAP_Sentry.iss dist\PCAP_Sentry_Setup.exe >> "%LOG_PATH%" 2>&1
 git commit -m "Installer Build: Version %VERSION%" >> "%LOG_PATH%" 2>&1
 
 REM Push to GitHub
@@ -70,7 +70,7 @@ git push origin main >> "%LOG_PATH%" 2>&1
 if errorlevel 1 (
 	echo Warning: Failed to push to GitHub. See %LOG_PATH% for details.
 ) else (
-	echo Pushed version %VERSION% to GitHub
+	echo Pushed version %VERSION% and installer to GitHub
 )
 
 endlocal
