@@ -145,7 +145,7 @@ def _check_tkinterdnd2():
 SIZE_SAMPLE_LIMIT = 50000
 DEFAULT_MAX_ROWS = 200000
 IOC_SET_LIMIT = 50000
-APP_VERSION = "2026.02.11-2"
+APP_VERSION = "2026.02.12-3"
 
 
 def _get_pandas():
@@ -2354,8 +2354,6 @@ class PCAPSentryApp:
         checker_thread = BackgroundUpdateChecker(APP_VERSION, callback=show_result)
         checker_thread.start()
 
-        messagebox.showinfo("Check for Updates", "Checking for updates...")
-
     def _download_and_install_update(self, version):
         """Download and install the update."""
         def download_in_background():
@@ -2404,25 +2402,14 @@ class PCAPSentryApp:
                 if checker.download_update(dest_path, progress_callback=progress_callback):
                     progress_window.destroy()
 
-                    # Launch the installer
+                    # Close current instance, then launch the new version
                     if checker.launch_installer(dest_path):
-                        messagebox.showinfo(
-                            "Update Downloaded",
-                            f"Update installer has been launched.\n\n"
-                            f"The application will need to be restarted to complete the installation.",
-                        )
-                        # Optionally quit the app
-                        quit_now = messagebox.askyesno(
-                            "Update",
-                            "Would you like to close PCAP Sentry now?",
-                        )
-                        if quit_now:
-                            self.root.quit()
+                        self.root.after(0, self.root.quit)
                     else:
-                        messagebox.showerror(
+                        messagebox.showinfo(
                             "Download Complete",
-                            f"Update downloaded to: {dest_path}\n\n"
-                            f"Please run it manually to complete the installation.",
+                            f"Update saved to:\n{dest_path}\n\n"
+                            f"Please run it manually to install.",
                         )
                 else:
                     progress_window.destroy()
