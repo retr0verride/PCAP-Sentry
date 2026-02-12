@@ -165,7 +165,7 @@ def _check_tkinterdnd2():
 SIZE_SAMPLE_LIMIT = 50000
 DEFAULT_MAX_ROWS = 200000
 IOC_SET_LIMIT = 50000
-APP_VERSION = "2026.02.12-18"
+APP_VERSION = "2026.02.12-21"
 
 
 def _get_pandas():
@@ -2933,6 +2933,8 @@ class PCAPSentryApp:
                     def on_success():
                         progress_window.destroy()
                         if is_installer:
+                            # Installer handles placing files in the right
+                            # Program Files directory – just launch it.
                             messagebox.showinfo(
                                 "Update Ready",
                                 "The installer has been downloaded.\n\n"
@@ -2940,14 +2942,41 @@ class PCAPSentryApp:
                                 "(executable, documentation, runtime libraries).\n\n"
                                 "PCAP Sentry will close so the update can proceed.",
                             )
-                        if checker.launch_installer(dest_path):
-                            self.root.quit()
+                            if checker.launch_installer(dest_path):
+                                self.root.quit()
+                            else:
+                                messagebox.showinfo(
+                                    "Download Complete",
+                                    f"Update saved to:\n{dest_path}\n\n"
+                                    f"Please run it manually to install.",
+                                )
                         else:
-                            messagebox.showinfo(
-                                "Download Complete",
-                                f"Update saved to:\n{dest_path}\n\n"
-                                f"Please run it manually to install.",
-                            )
+                            # Standalone EXE – replace the currently running
+                            # executable in the program directory, then
+                            # relaunch from the correct location.
+                            current_exe = sys.executable
+                            if checker.replace_executable(dest_path, current_exe):
+                                messagebox.showinfo(
+                                    "Update Installed",
+                                    "The update has been installed successfully.\n\n"
+                                    "PCAP Sentry will now restart.",
+                                )
+                                try:
+                                    subprocess.Popen([current_exe])
+                                except Exception:
+                                    messagebox.showinfo(
+                                        "Restart",
+                                        f"Could not restart automatically.\n"
+                                        f"Please relaunch from:\n{current_exe}",
+                                    )
+                                self.root.quit()
+                            else:
+                                messagebox.showinfo(
+                                    "Download Complete",
+                                    f"Could not replace the running executable.\n\n"
+                                    f"Update saved to:\n{dest_path}\n\n"
+                                    f"Please copy it manually to:\n{current_exe}",
+                                )
                     self.root.after(0, on_success)
                 else:
                     self.root.after(0, lambda: (

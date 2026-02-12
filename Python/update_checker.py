@@ -208,9 +208,9 @@ class UpdateChecker:
 
     @staticmethod
     def get_app_data_dir() -> str:
-        """Get the app data directory."""
-        app_data = os.getenv("APPDATA", os.path.expanduser("~\\AppData\\Roaming"))
-        app_dir = os.path.join(app_data, "PCAP Sentry")
+        """Get the app data directory (aligned with GUI's LOCALAPPDATA path)."""
+        app_data = os.getenv("LOCALAPPDATA") or os.getenv("APPDATA") or os.path.expanduser("~")
+        app_dir = os.path.join(app_data, "PCAP_Sentry")
         os.makedirs(app_dir, exist_ok=True)
         return app_dir
 
