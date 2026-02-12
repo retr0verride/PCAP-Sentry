@@ -2901,14 +2901,18 @@ class PCAPSentryApp:
                     self.root.after(0, lambda: (
                         progress_window.destroy(),
                         messagebox.showerror(
-                            "Download Failed", "No executable found in the latest release."
+                            "Download Failed", "No installer or executable found in the latest release."
                         ),
                     ))
                     return
 
                 update_dir = checker.get_update_dir()
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                exe_name = f"PCAP_Sentry_{version}_{timestamp}.exe"
+                is_installer = getattr(checker, "download_is_installer", False)
+                if is_installer:
+                    exe_name = f"PCAP_Sentry_Setup_{version}_{timestamp}.exe"
+                else:
+                    exe_name = f"PCAP_Sentry_{version}_{timestamp}.exe"
                 dest_path = os.path.join(update_dir, exe_name)
 
                 def progress_callback(downloaded, total):
@@ -2922,6 +2926,14 @@ class PCAPSentryApp:
                 if checker.download_update(dest_path, progress_callback=progress_callback):
                     def on_success():
                         progress_window.destroy()
+                        if is_installer:
+                            messagebox.showinfo(
+                                "Update Ready",
+                                "The installer has been downloaded.\n\n"
+                                "The installer will now launch to update all files\n"
+                                "(executable, documentation, runtime libraries).\n\n"
+                                "PCAP Sentry will close so the update can proceed.",
+                            )
                         if checker.launch_installer(dest_path):
                             self.root.quit()
                         else:

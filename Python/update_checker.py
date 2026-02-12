@@ -137,13 +137,28 @@ class UpdateChecker:
             self.latest_version = best.get("tag_name", "").lstrip("v")
             self.release_notes = best.get("body", "")
 
-            # Find the Windows EXE asset
+            # Find the best downloadable asset.
+            # Prefer the installer (Setup EXE) so that ALL files
+            # (EXE, README, LICENSE, VC++ runtime, etc.) are replaced.
             assets = best.get("assets", [])
+            installer_url = None
+            standalone_url = None
+            self.download_is_installer = False
             for asset in assets:
                 name = asset.get("name", "")
-                if name.endswith(".exe") and "PCAP_Sentry" in name:
-                    self.download_url = asset["browser_download_url"]
-                    break
+                if not name.lower().endswith(".exe"):
+                    continue
+                if "setup" in name.lower() or "install" in name.lower():
+                    installer_url = asset["browser_download_url"]
+                elif "PCAP_Sentry" in name:
+                    standalone_url = asset["browser_download_url"]
+
+            if installer_url:
+                self.download_url = installer_url
+                self.download_is_installer = True
+            elif standalone_url:
+                self.download_url = standalone_url
+                self.download_is_installer = False
 
             return True
 
