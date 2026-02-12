@@ -43,13 +43,13 @@ class EnhancedMLTrainer:
         # Process safe samples
         for entry in kb.get("safe", []):
             features = entry.get("features", {})
-            training_rows.append(features)
+            training_rows.append(vectorize_features(features))
             labels.append("safe")
 
         # Process malicious samples
         for entry in kb.get("malicious", []):
             features = entry.get("features", {})
-            training_rows.append(features)
+            training_rows.append(vectorize_features(features))
             labels.append("malicious")
 
         if len(set(labels)) < 2 or len(labels) < 2:
@@ -139,14 +139,15 @@ class EnhancedMLTrainer:
             return None, None
 
         try:
-            X = self.vectorizer.transform([features])
+            X = self.vectorizer.transform([vectorize_features(features)])
             prediction = self.model.predict(X)[0]
             probability = None
 
             if hasattr(self.model, "predict_proba"):
                 probas = self.model.predict_proba(X)[0]
-                mal_idx = list(self.model.classes_).index("malicious")
-                probability = float(probas[mal_idx])
+                if "malicious" in list(self.model.classes_):
+                    mal_idx = list(self.model.classes_).index("malicious")
+                    probability = float(probas[mal_idx])
 
             return prediction, probability
         except Exception as e:

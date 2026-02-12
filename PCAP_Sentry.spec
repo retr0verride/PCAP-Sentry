@@ -36,7 +36,7 @@ def _collect_package(name):
     pkg_hidden = _filter_hiddenimports(collect_submodules(name, on_error="ignore"))
     return pkg_datas, pkg_bins, pkg_hidden
 
-npcap_dir = r"C:\\Windows\\System32\\Npcap"
+npcap_dir = r"C:\Windows\System32\Npcap"
 if os.path.isdir(npcap_dir):
     os.environ["PATH"] = npcap_dir + os.pathsep + os.environ.get("PATH", "")
 
@@ -67,8 +67,8 @@ for icon_name in ("pcap_sentry.ico", "custom.ico"):
         datas.append((icon_path, "assets"))
 
 # Include Npcap DLLs if available for packet capture support.
-wpcap_path = r"C:\\Windows\\System32\\Npcap\\wpcap.dll"
-packet_path = r"C:\\Windows\\System32\\Npcap\\Packet.dll"
+wpcap_path = r"C:\Windows\System32\Npcap\wpcap.dll"
+packet_path = r"C:\Windows\System32\Npcap\Packet.dll"
 if os.path.exists(wpcap_path):
     binaries.append((wpcap_path, "."))
 if os.path.exists(packet_path):
@@ -98,7 +98,7 @@ a = Analysis(
         'matplotlib.backends.qt_compat',
     ],
     noarchive=False,
-    optimize=2,
+    optimize=1,
 )
 pyz = PYZ(a.pure)
 

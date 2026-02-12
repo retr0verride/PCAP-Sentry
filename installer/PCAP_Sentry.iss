@@ -4,9 +4,11 @@
 #endif
 
 [Setup]
+AppId={{B8A5C2E1-7F3D-4A1B-9C6E-2D8F5A4E3B71}
 AppName=PCAP Sentry
-AppVersion=2026.02.12-12
-DefaultDirName={commonpf}\PCAP Sentry
+AppVersion=2026.02.12-13
+AppPublisher=industrial-dave
+DefaultDirName={autopf}\PCAP Sentry
 DefaultGroupName=PCAP Sentry
 OutputDir=dist
 OutputBaseFilename=PCAP_Sentry_Setup
@@ -17,6 +19,8 @@ WizardStyle=modern
 SetupIconFile=..\assets\pcap_sentry.ico
 LicenseFile=..\LICENSE.txt
 InfoBeforeFile=..\README.txt
+UninstallDisplayIcon={app}\PCAP_Sentry.exe
+MinVersion=10.0
 
 [Files]
 Source: "..\dist\PCAP_Sentry.exe"; DestDir: "{app}"; Flags: ignoreversion

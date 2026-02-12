@@ -12,8 +12,6 @@ import subprocess
 import sys
 import threading
 import urllib.request
-from datetime import datetime
-from pathlib import Path
 
 
 class UpdateChecker:
@@ -36,6 +34,7 @@ class UpdateChecker:
         self.latest_version = None
         self.download_url = None
         self.release_notes = None
+        self._last_error = None
 
     @staticmethod
     def _parse_version(version_string: str) -> tuple:
@@ -169,15 +168,23 @@ class UpdateChecker:
 
         try:
             ctx = ssl.create_default_context()
-
-            def report_progress(chunk_count, chunk_size, total_size):
-                if progress_callback:
-                    downloaded = chunk_count * chunk_size
-                    progress_callback(downloaded, total_size)
-
-            urllib.request.urlretrieve(
-                self.download_url, destination, reporthook=report_progress
+            req = urllib.request.Request(
+                self.download_url,
+                headers={"User-Agent": "PCAP-Sentry-Updater"},
             )
+            with urllib.request.urlopen(req, context=ctx, timeout=120) as response:
+                total_size = int(response.headers.get("Content-Length", 0))
+                downloaded = 0
+                chunk_size = 65536
+                with open(destination, "wb") as f:
+                    while True:
+                        chunk = response.read(chunk_size)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if progress_callback:
+                            progress_callback(downloaded, total_size)
             return os.path.exists(destination) and os.path.getsize(destination) > 0
 
         except Exception as e:
@@ -244,6 +251,12 @@ class UpdateChecker:
 
         except Exception as e:
             print(f"Error replacing executable: {e}")
+            # Attempt to restore from backup
+            try:
+                if os.path.exists(backup_path) and not os.path.exists(current_exe_path):
+                    shutil.copy2(backup_path, current_exe_path)
+            except Exception as restore_err:
+                print(f"Error restoring backup: {restore_err}")
             return False
 
     def cleanup_old_updates(self, keep_count: int = 3) -> None:

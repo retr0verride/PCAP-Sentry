@@ -10,11 +10,11 @@ import random
 import re
 import shutil
 import statistics
-import struct
 import sys
 import tempfile
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 import traceback
 import zipfile
 from collections import Counter
@@ -98,10 +98,22 @@ def _write_error_log(message, exc=None, tb=None):
 
 def _handle_exception(exc_type, exc, tb):
     _write_error_log("Unhandled exception", exc, tb)
-    _show_startup_error(
-        "An unexpected error occurred. See app_errors.log in the app data folder.",
-        exc,
-    )
+    if threading.current_thread() is threading.main_thread():
+        _show_startup_error(
+            "An unexpected error occurred. See app_errors.log in the app data folder.",
+            exc,
+        )
+    else:
+        # Schedule messagebox on the main thread to avoid tkinter threading crash
+        try:
+            root = tk._default_root
+            if root:
+                root.after(0, lambda: _show_startup_error(
+                    "An unexpected error occurred. See app_errors.log in the app data folder.",
+                    exc,
+                ))
+        except Exception:
+            pass
 
 
 def _show_startup_error(message, exc=None):
@@ -127,7 +139,7 @@ def _check_sklearn():
         import sklearn.linear_model
         import joblib
         _sklearn_available = True
-    except Exception:
+    except (ImportError, ModuleNotFoundError):
         _sklearn_available = False
     return _sklearn_available
 
@@ -139,14 +151,14 @@ def _check_tkinterdnd2():
     try:
         import tkinterdnd2
         _tkinterdnd2_available = True
-    except Exception:
+    except (ImportError, ModuleNotFoundError):
         _tkinterdnd2_available = False
     return _tkinterdnd2_available
 
 SIZE_SAMPLE_LIMIT = 50000
 DEFAULT_MAX_ROWS = 200000
 IOC_SET_LIMIT = 50000
-APP_VERSION = "2026.02.12-12"
+APP_VERSION = "2026.02.12-13"
 
 
 def _get_pandas():
@@ -353,6 +365,7 @@ def _default_settings():
         "parse_http": True,
         "use_high_memory": False,
         "use_local_model": False,
+        "use_multithreading": True,
         "backup_dir": os.path.dirname(KNOWLEDGE_BASE_FILE),
         "theme": "system",
         "app_data_notice_shown": False,
@@ -417,8 +430,19 @@ def load_knowledge_base():
 
 def save_knowledge_base(data):
     os.makedirs(os.path.dirname(KNOWLEDGE_BASE_FILE), exist_ok=True)
-    with open(KNOWLEDGE_BASE_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
+    fd, tmp_path = tempfile.mkstemp(
+        dir=os.path.dirname(KNOWLEDGE_BASE_FILE), suffix=".tmp"
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        os.replace(tmp_path, KNOWLEDGE_BASE_FILE)
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 def _backup_knowledge_base(max_backups=3):
@@ -1850,8 +1874,11 @@ class _HelpTooltip:
     def _show(self, event=None):
         if self.tip_window:
             return
-        x = self.widget.winfo_rootx() + 16
-        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 6
+        try:
+            x = self.widget.winfo_rootx() + 16
+            y = self.widget.winfo_rooty() + self.widget.winfo_height() + 6
+        except tk.TclError:
+            return  # widget was destroyed before tooltip fired
         tw = tk.Toplevel(self.widget)
         tw.wm_overrideredirect(True)
         tw.wm_geometry(f"+{x}+{y}")
@@ -1908,8 +1935,14 @@ class PCAPSentryApp:
         self.parse_http_var = tk.BooleanVar(value=self.settings.get("parse_http", True))
         self.use_high_memory_var = tk.BooleanVar(value=self.settings.get("use_high_memory", False))
         self.use_local_model_var = tk.BooleanVar(value=self.settings.get("use_local_model", False))
+        self.use_multithreading_var = tk.BooleanVar(value=self.settings.get("use_multithreading", True))
         self.status_var = tk.StringVar(value="Ready")
         self.progress_percent_var = tk.StringVar(value="")
+        self._progress_target = 0.0
+        self._progress_current = 0.0
+        self._progress_animating = False
+        self._progress_anim_id = None
+        self._shutting_down = False
         self.sample_note_var = tk.StringVar(value="")
         self.ioc_path_var = tk.StringVar()
         self.ioc_summary_var = tk.StringVar(value="")
@@ -1986,7 +2019,9 @@ class PCAPSentryApp:
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
     def _on_close(self):
-        """Handle window close – backup KB then destroy."""
+        """Handle window close – cancel timers, backup KB, then destroy."""
+        self._shutting_down = True
+        self._reset_progress()
         _backup_knowledge_base()
         self.root.destroy()
 
@@ -2249,14 +2284,24 @@ class PCAPSentryApp:
             "Analysis will be faster and work without an internet connection, but you lose the "
             "ability to check IPs/domains against live public threat feeds.", row=6, column=2, sticky="w")
 
+        ttk.Checkbutton(
+            frame,
+            text="Multithreaded analysis (faster, uses more CPU)",
+            variable=self.use_multithreading_var,
+            style="Quiet.TCheckbutton"
+        ).grid(row=7, column=0, sticky="w", pady=6, columnspan=2)
+        self._help_icon_grid(frame, "Runs analysis tasks in parallel using multiple threads. "
+            "This can significantly speed up analysis on multi-core systems. "
+            "Disable if you experience stability issues or want to reduce CPU usage.", row=7, column=2, sticky="w")
+
         # Backup directory row with improved spacing
 
-        ttk.Label(frame, text="Backup directory:").grid(row=7, column=0, sticky="w", pady=6)
+        ttk.Label(frame, text="Backup directory:").grid(row=8, column=0, sticky="w", pady=6)
         backup_entry = ttk.Entry(frame, textvariable=self.backup_dir_var, width=60)
-        backup_entry.grid(row=7, column=1, sticky="ew", pady=6)
+        backup_entry.grid(row=8, column=1, sticky="ew", pady=6)
         frame.grid_columnconfigure(1, weight=1)
         button_frame = ttk.Frame(frame)
-        button_frame.grid(row=7, column=2, columnspan=4, sticky="e", pady=6)
+        button_frame.grid(row=8, column=2, columnspan=4, sticky="e", pady=6)
         ttk.Button(button_frame, text="\u2715", width=2, style="Secondary.TButton",
                    command=lambda: self.backup_dir_var.set("")).pack(side=tk.LEFT, padx=2)
         ttk.Button(button_frame, text="Browse", style="Secondary.TButton",
@@ -2265,7 +2310,7 @@ class PCAPSentryApp:
         ttk.Button(button_frame, text="Cancel", style="Secondary.TButton",
                    command=window.destroy).pack(side=tk.LEFT, padx=2)
         ttk.Button(frame, text="Reset to Defaults", style="Danger.TButton",
-                   command=self._reset_preferences).grid(row=8, column=0, columnspan=6, sticky="e", pady=(10, 0))
+                   command=self._reset_preferences).grid(row=9, column=0, columnspan=6, sticky="e", pady=(10, 0))
 
         window.grab_set()
 
@@ -2281,6 +2326,7 @@ class PCAPSentryApp:
             "parse_http": bool(self.parse_http_var.get()),
             "use_high_memory": bool(self.use_high_memory_var.get()),
             "use_local_model": bool(self.use_local_model_var.get()),
+            "use_multithreading": bool(self.use_multithreading_var.get()),
             "offline_mode": bool(self.offline_mode_var.get()),
             "backup_dir": self.backup_dir_var.get().strip(),
             "theme": self.theme_var.get().strip().lower() or "system",
@@ -2302,6 +2348,7 @@ class PCAPSentryApp:
         self.parse_http_var.set(defaults["parse_http"])
         self.use_high_memory_var.set(defaults["use_high_memory"])
         self.use_local_model_var.set(defaults["use_local_model"])
+        self.use_multithreading_var.set(defaults.get("use_multithreading", True))
         self.offline_mode_var.set(defaults.get("offline_mode", False))
         self.backup_dir_var.set(defaults["backup_dir"])
         self.theme_var.set(defaults["theme"])
@@ -2582,11 +2629,15 @@ class PCAPSentryApp:
         canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        # Bind mousewheel to canvas for scrolling
+        # Bind mousewheel to canvas for scrolling (widget-scoped, not global)
         def _on_mousewheel(event):
             canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-        canvas.bind("<Enter>", lambda _: canvas.bind_all("<MouseWheel>", _on_mousewheel))
-        canvas.bind("<Leave>", lambda _: canvas.unbind_all("<MouseWheel>"))
+        def _bind_mousewheel(_event):
+            canvas.bind("<MouseWheel>", _on_mousewheel)
+        def _unbind_mousewheel(_event):
+            canvas.unbind("<MouseWheel>")
+        canvas.bind("<Enter>", _bind_mousewheel)
+        canvas.bind("<Leave>", _unbind_mousewheel)
         
         # Use scrollable_frame as container
         container = scrollable_frame
@@ -3003,7 +3054,10 @@ class PCAPSentryApp:
         summary_frame = ttk.LabelFrame(container, text="  \U0001f6a8  Key Findings  ", padding=10)
         summary_frame.pack(fill=tk.X, pady=(0, 8))
 
-        self.extracted_summary_text = tk.Text(summary_frame, height=8, wrap=tk.WORD)
+        summary_text_frame = ttk.Frame(summary_frame)
+        summary_text_frame.pack(fill=tk.BOTH, expand=True)
+
+        self.extracted_summary_text = tk.Text(summary_text_frame, height=8, wrap=tk.WORD)
         self._style_text(self.extracted_summary_text)
         self.extracted_summary_text.insert(tk.END, "Run an analysis to see extracted credentials and host information.")
         # Configure highlight tags for the summary
@@ -3013,7 +3067,11 @@ class PCAPSentryApp:
         self.extracted_summary_text.tag_configure("hostname_tag", foreground="#3fb950", font=("Consolas", 10, "bold"))
         self.extracted_summary_text.tag_configure("label_dim", foreground="#8b949e", font=("Segoe UI", 9))
         self.extracted_summary_text.tag_configure("separator", foreground="#30363d")
-        self.extracted_summary_text.pack(fill=tk.BOTH, expand=True)
+
+        summary_scrollbar = ttk.Scrollbar(summary_text_frame, orient=tk.VERTICAL, command=self.extracted_summary_text.yview)
+        self.extracted_summary_text.configure(yscrollcommand=summary_scrollbar.set)
+        self.extracted_summary_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        summary_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         # -- Credentials table --
         cred_frame = ttk.LabelFrame(container, text="  All Extracted Items  ", padding=8)
@@ -3320,7 +3378,7 @@ class PCAPSentryApp:
         if self.current_df is None or self.packet_table is None:
             return
 
-        df = self.current_df
+        df = self.current_df.copy()
         if df.empty:
             self._update_packet_table(df)
             return
@@ -3739,8 +3797,6 @@ class PCAPSentryApp:
         else:
             self.busy_count = max(0, self.busy_count - 1)
             if self.busy_count == 0:
-                self._reset_progress()
-                self.status_var.set("Ready")
                 self.root.configure(cursor="")
                 self.root_title = self._get_window_title()
                 self.root.title(self.root_title)
@@ -3753,6 +3809,12 @@ class PCAPSentryApp:
         self.progress.configure(mode="indeterminate", maximum=100)
         self.progress["value"] = 0
         self.progress_percent_var.set("")
+        self._progress_target = 0.0
+        self._progress_current = 0.0
+        self._progress_animating = False
+        if self._progress_anim_id is not None:
+            self.root.after_cancel(self._progress_anim_id)
+            self._progress_anim_id = None
 
 
     def _set_determinate_progress(self, percent):
@@ -3766,17 +3828,51 @@ class PCAPSentryApp:
     def _set_progress(self, percent, eta_seconds=None, label=None, processed=None, total=None):
         if percent is None:
             self.progress_percent_var.set("")
+            self._progress_target = 0.0
+            self._progress_current = 0.0
             return
         self.progress.stop()
         self.progress.configure(mode="determinate", maximum=100)
         percent_value = min(max(percent, 0.0), 100.0)
-        self.progress["value"] = percent_value
-        self.progress_percent_var.set(f"{percent_value:.0f}%")
+        self._progress_target = percent_value
+        if not self._progress_animating:
+            self._animate_progress()
         if label:
             status_text = f"{label} {percent:.0f}%"
             if processed is not None and total:
                 status_text = f"{label} {percent:.0f}% ({_format_bytes(processed)} / {_format_bytes(total)})"
             self.status_var.set(status_text)
+
+    def _animate_progress(self):
+        """Smoothly interpolate the progress bar toward _progress_target."""
+        if self._shutting_down:
+            self._progress_animating = False
+            return
+        target = self._progress_target
+        current = self._progress_current
+        diff = target - current
+
+        if abs(diff) < 0.5:
+            # Close enough – snap to target
+            self._progress_current = target
+            self.progress["value"] = target
+            self.progress_percent_var.set(f"{target:.0f}%")
+            self._progress_animating = False
+            self._progress_anim_id = None
+            return
+
+        # Ease toward target: move ~25 % of remaining distance per tick
+        step = diff * 0.25
+        if abs(step) < 0.5:
+            step = 0.5 if diff > 0 else -0.5
+
+        new_val = current + step
+        self._progress_current = new_val
+        self.progress["value"] = new_val
+        self.progress_percent_var.set(f"{new_val:.0f}%")
+
+        self._progress_animating = True
+        self._progress_anim_id = self.root.after(30, self._animate_progress)
 
     def _apply_theme(self):
         theme = self._resolve_theme()
@@ -4216,7 +4312,7 @@ class PCAPSentryApp:
         self._set_busy(True, message)
         q = queue.Queue()
 
-        def progress_cb(percent, eta_seconds=None, processed=None, total=None):
+        def progress_cb(percent, eta_seconds=None, processed=None, total=None, label=None):
             q.put(
                 (
                     "progress",
@@ -4225,6 +4321,7 @@ class PCAPSentryApp:
                         "eta": eta_seconds,
                         "processed": processed,
                         "total": total,
+                        "label": label,
                     },
                 )
             )
@@ -4236,53 +4333,69 @@ class PCAPSentryApp:
                 else:
                     q.put(("ok", func()))
             except Exception as exc:
-                q.put(("err", exc))
+                import traceback as _tb
+                q.put(("err", exc, _tb.format_exc()))
 
         threading.Thread(target=worker, daemon=True).start()
 
         def check():
+            if self._shutting_down:
+                return
             done = False
             payload = None
             error = None
+            error_tb = None
             latest_progress = None
             try:
                 for _ in range(50):
-                    status, item = q.get_nowait()
+                    msg = q.get_nowait()
+                    status = msg[0]
                     if status == "progress":
-                        latest_progress = item
+                        latest_progress = msg[1]
                     elif status == "ok":
                         done = True
-                        payload = item
+                        payload = msg[1]
                         break
                     elif status == "err":
                         done = True
-                        error = item
+                        error = msg[1]
+                        error_tb = msg[2] if len(msg) > 2 else None
                         break
             except queue.Empty:
                 pass
 
             if latest_progress is not None:
+                lbl = latest_progress.get("label") or progress_label
                 self._set_progress(
                     latest_progress.get("percent"),
                     latest_progress.get("eta"),
-                    progress_label,
+                    lbl,
                     processed=latest_progress.get("processed"),
                     total=latest_progress.get("total"),
                 )
 
             if done:
-                self._set_busy(False)
-                if error is None:
-                    on_success(payload)
-                else:
-                    if on_error:
-                        on_error(error)
-                    else:
-                        messagebox.showerror("Error", str(error))
+                # Snap progress to 100% before clearing
+                self._set_progress(100, label="Complete")
+                self.root.after(600, lambda: self._finish_task(error, payload, error_tb, on_success, on_error))
             else:
                 self.root.after(100, check)
 
         self.root.after(100, check)
+
+    def _finish_task(self, error, payload, error_tb, on_success, on_error):
+        """Called after the 100% progress hold to clean up and deliver results."""
+        if self._shutting_down:
+            return
+        self._set_busy(False)
+        if error is None:
+            on_success(payload)
+        else:
+            if on_error:
+                on_error(error)
+            else:
+                detail = f"{error}\n\n{error_tb}" if error_tb else str(error)
+                messagebox.showerror("Error", detail)
 
     def _reset_kb(self):
         if os.path.exists(KNOWLEDGE_BASE_FILE):
@@ -5263,100 +5376,434 @@ class PCAPSentryApp:
 
         return "\n".join(lines)
 
+    def _build_result_output_lines(self, risk_score, verdict, classifier_result,
+                                    anomaly_result, anomaly_reasons, ioc_matches,
+                                    ioc_count, ioc_available, stats, safe_scores,
+                                    mal_scores, suspicious_flows, threat_intel_findings,
+                                    use_local_model, features):
+        """Build the Results tab text lines (can run off main thread)."""
+        output_lines = [
+            f"Risk Score: {risk_score}/100",
+            f"Verdict: {verdict}",
+            "",
+            "Signals:",
+        ]
+
+        if classifier_result is None:
+            output_lines.append("- Classifier: not enough labeled data")
+        else:
+            output_lines.append(f"- Classifier risk: {classifier_result['score']} (centroid distance)")
+
+        if anomaly_result is None:
+            output_lines.append("- Baseline anomaly: no safe baseline available")
+        else:
+            reasons = ", ".join(anomaly_reasons) if anomaly_reasons else "no standout outliers"
+            output_lines.append(f"- Baseline anomaly: {anomaly_result} ({reasons})")
+
+        if ioc_available:
+            if ioc_count:
+                output_lines.append(
+                    f"- IoC matches: {ioc_count} (domains: {len(ioc_matches['domains'])}, ips: {len(ioc_matches['ips'])})"
+                )
+                if ioc_matches["domains"]:
+                    output_lines.append(f"  Domains: {', '.join(ioc_matches['domains'][:5])}")
+                if ioc_matches["ips"]:
+                    output_lines.append(f"  IPs: {', '.join(ioc_matches['ips'][:5])}")
+            else:
+                output_lines.append("- IoC matches: none")
+        else:
+            output_lines.append("- IoC feed: not loaded")
+
+        if stats.get("ioc_truncated"):
+            output_lines.append("- Note: IoC scan truncated due to large unique set")
+
+        output_lines.append("")
+        output_lines.append("Heuristic Similarity")
+        output_lines.append(summarize_stats(stats))
+
+        if not safe_scores and not mal_scores:
+            output_lines.append("Knowledge base is empty. Add safe/malware PCAPs to enable scoring.")
+        else:
+            best_safe = max(safe_scores) if safe_scores else 0.0
+            best_mal = max(mal_scores) if mal_scores else 0.0
+            output_lines.append(f"Best safe match: {best_safe}")
+            output_lines.append(f"Best malware match: {best_mal}")
+            if best_mal - best_safe >= 10:
+                output_lines.append("Verdict: Likely Malicious")
+            elif best_safe - best_mal >= 10:
+                output_lines.append("Verdict: Likely Safe")
+            else:
+                output_lines.append("Verdict: Suspicious / Inconclusive")
+
+        if use_local_model:
+            output_lines.append("")
+            output_lines.append("Local Model Verdict")
+            if not _check_sklearn():
+                output_lines.append("Local model unavailable (scikit-learn not installed).")
+            else:
+                model_bundle = _load_local_model()
+                if model_bundle is None:
+                    output_lines.append("Local model not trained yet. Add labeled PCAPs.")
+                else:
+                    label, proba = _predict_local_model(model_bundle, features)
+                    backend = model_bundle.get("backend", "cpu")
+                    if label:
+                        output_lines.append(f"Verdict: Likely {label.title()}")
+                    if proba is not None:
+                        output_lines.append(f"Malicious confidence: {proba:.2%}")
+                    output_lines.append(f"Backend: {backend.upper()}")
+
+        if threat_intel_findings.get("threat_intel"):
+            output_lines.append("")
+            output_lines.append("Online Threat Intelligence")
+            intel_data = threat_intel_findings["threat_intel"]
+
+            if intel_data.get("risky_ips"):
+                output_lines.append("Flagged IPs (from public threat feeds):")
+                for ip_info in intel_data["risky_ips"][:5]:
+                    output_lines.append(f"  - {ip_info['ip']}: risk score {ip_info['risk_score']:.0f}/100")
+                    if ip_info.get("sources", {}).get("otx"):
+                        otx_info = ip_info["sources"]["otx"]
+                        if otx_info.get("pulse_count"):
+                            output_lines.append(f"    (AlienVault OTX: {otx_info['pulse_count']} pulses)")
+
+            if intel_data.get("risky_domains"):
+                output_lines.append("Flagged Domains (from public threat feeds):")
+                for domain_info in intel_data["risky_domains"][:5]:
+                    output_lines.append(f"  - {domain_info['domain']}: risk score {domain_info['risk_score']:.0f}/100")
+                    if domain_info.get("sources", {}).get("urlhaus"):
+                        urlhaus = domain_info["sources"]["urlhaus"]
+                        if urlhaus.get("found"):
+                            output_lines.append(f"    (URLhaus: {urlhaus.get('url_count', 0)} malicious URLs)")
+
+        output_lines.append("")
+        output_lines.append("Suspicious Flows (heuristic)")
+        if not suspicious_flows:
+            output_lines.append("No suspicious flows detected.")
+        else:
+            for item in suspicious_flows:
+                output_lines.append(
+                    f"- {item['flow']} | {item['reason']} | {item['bytes']} | {item['packets']} pkts"
+                )
+
+        return output_lines
+
+    def _build_why_lines(self, verdict, risk_score, classifier_result,
+                          anomaly_result, anomaly_reasons, ioc_matches,
+                          ioc_count, ioc_available, stats, suspicious_flows,
+                          threat_intel_findings, wireshark_filters):
+        """Build the Why tab text lines (can run off main thread)."""
+        why_lines = [
+            "========================================",
+            "  WHY THIS VERDICT WAS REACHED",
+            "========================================",
+            "",
+            f"Verdict: {verdict}  |  Risk Score: {risk_score}/100",
+            "",
+            "This tab explains the analytical reasoning behind the",
+            "verdict. For definitions, tutorials, and learning resources",
+            "see the Education tab.",
+            "",
+            "----------------------------------------",
+            "VERDICT REASONING",
+            "----------------------------------------",
+        ]
+
+        if verdict == "Likely Malicious":
+            why_lines.append("Multiple independent checks flagged this traffic. When several")
+            why_lines.append("signals agree (ML match + IoC hits + unusual patterns), confidence")
+            why_lines.append("in a malicious classification is high.")
+        elif verdict == "Suspicious (IoC Match)":
+            why_lines.append("Traffic contacted addresses that appear on known threat intelligence")
+            why_lines.append("feeds. IoC matches alone don't prove compromise but warrant immediate")
+            why_lines.append("investigation.")
+        elif verdict == "Suspicious":
+            why_lines.append("Some patterns deviate from normal baselines, but no single check")
+            why_lines.append("produced a definitive result. Manual review is recommended.")
+        elif verdict == "Likely Safe":
+            why_lines.append("All checks returned within normal ranges. No known-bad addresses")
+            why_lines.append("were contacted and traffic patterns match established baselines.")
+
+        why_lines.append("")
+        why_lines.append("----------------------------------------")
+        why_lines.append("EVIDENCE SUMMARY")
+        why_lines.append("----------------------------------------")
+        why_lines.append("")
+
+        why_lines.append("[A] ML PATTERN MATCH")
+        if classifier_result is None:
+            why_lines.append("    Result: Not enough training data yet.")
+        else:
+            score_val = classifier_result['score']
+            if score_val > 70:
+                why_lines.append(f"    Result: HIGH MATCH (score: {score_val})")
+            elif score_val > 40:
+                why_lines.append(f"    Result: PARTIAL MATCH (score: {score_val})")
+            else:
+                why_lines.append(f"    Result: LOW MATCH (score: {score_val})")
+        why_lines.append("")
+
+        why_lines.append("[B] BASELINE ANOMALY DETECTION")
+        if anomaly_result is None:
+            why_lines.append("    Result: No baseline available.")
+        else:
+            reasons = ", ".join(anomaly_reasons) if anomaly_reasons else "nothing unusual"
+            if isinstance(anomaly_result, (int, float)) and anomaly_result >= 40:
+                why_lines.append(f"    Result: ANOMALOUS — deviates from baseline (score: {anomaly_result})")
+                why_lines.append(f"    Reasons: {reasons}")
+            elif isinstance(anomaly_result, (int, float)):
+                why_lines.append(f"    Result: NORMAL — fits within baseline (score: {anomaly_result})")
+                why_lines.append(f"    Details: {reasons}")
+            else:
+                why_lines.append(f"    Result: {anomaly_result}")
+                why_lines.append(f"    Details: {reasons}")
+        why_lines.append("")
+
+        why_lines.append("[C] INDICATOR OF COMPROMISE (IoC) CHECK")
+        if ioc_available:
+            if ioc_count:
+                domain_ct = len(ioc_matches['domains'])
+                ip_ct = len(ioc_matches['ips'])
+                why_lines.append(f"    Result: {ioc_count} MATCHES FOUND")
+                why_lines.append(f"    Breakdown: {domain_ct} domain(s) and {ip_ct} IP(s) matched")
+                if ioc_matches['domains']:
+                    why_lines.append(f"    Domains: {', '.join(ioc_matches['domains'][:5])}")
+                if ioc_matches['ips']:
+                    why_lines.append(f"    IPs: {', '.join(ioc_matches['ips'][:5])}")
+            else:
+                why_lines.append("    Result: No matches against any blocklists.")
+        else:
+            why_lines.append("    Result: Threat feeds not loaded.")
+        why_lines.append("")
+
+        why_lines.append("----------------------------------------")
+        why_lines.append("TRAFFIC DETAILS")
+        why_lines.append("----------------------------------------")
+        why_lines.append("")
+
+        top_ports = stats.get("top_ports", [])
+        if top_ports:
+            common_ports = {22, 53, 80, 123, 443, 445, 3389, 25, 110, 143, 21, 8080}
+            unusual = [(p, c) for p, c in top_ports if p not in common_ports]
+            why_lines.append("[D] PORTS")
+            for port, count in top_ports[:10]:
+                flag = " << UNUSUAL" if port not in common_ports else ""
+                why_lines.append(f"      Port {port}: {count} packet(s){flag}")
+            if unusual:
+                why_lines.append(f"    {len(unusual)} non-standard port(s) detected.")
+            why_lines.append("")
+
+        dns_count = stats.get("dns_query_count", 0)
+        if dns_count:
+            why_lines.append("[E] DNS")
+            top_dns = stats.get("top_dns", [])
+            if top_dns:
+                for domain, count in top_dns[:8]:
+                    why_lines.append(f"      {domain} — {count} lookup(s)")
+            else:
+                why_lines.append(f"    Total DNS queries: {dns_count}")
+            why_lines.append("")
+
+        http_count = stats.get("http_request_count", 0)
+        http_hosts = stats.get("http_hosts", [])
+        if http_count:
+            why_lines.append("[F] HTTP (unencrypted)")
+            if http_hosts:
+                why_lines.append(f"    Hosts: {', '.join(http_hosts[:5])}")
+            else:
+                why_lines.append(f"    Requests: {http_count}")
+            why_lines.append("")
+
+        tls_count = stats.get("tls_packet_count", 0)
+        tls_sni = stats.get("tls_sni", [])
+        if tls_count:
+            why_lines.append("[G] HTTPS/TLS (encrypted)")
+            if tls_sni:
+                why_lines.append(f"    SNI destinations: {', '.join(tls_sni[:5])}")
+            else:
+                why_lines.append(f"    TLS packets: {tls_count}")
+            why_lines.append("")
+
+        avg_size = stats.get("avg_size", 0.0)
+        median_size = stats.get("median_size", 0.0)
+        why_lines.append("[H] PACKET SIZES")
+        why_lines.append(f"    Average: {avg_size:.1f} bytes  |  Median: {median_size:.1f} bytes")
+        if median_size and median_size < 120:
+            why_lines.append("    !! Many small packets — possible beaconing pattern.")
+        elif avg_size and avg_size > 1200:
+            why_lines.append("    !! Unusually large packets — possible data exfiltration.")
+        else:
+            why_lines.append("    Sizes are within normal range.")
+        why_lines.append("")
+
+        if threat_intel_findings.get("threat_intel"):
+            intel_data = threat_intel_findings["threat_intel"]
+            if intel_data.get("risky_ips") or intel_data.get("risky_domains"):
+                why_lines.append("[I] ONLINE THREAT INTELLIGENCE")
+                if intel_data.get("risky_ips"):
+                    for ip_info in intel_data["risky_ips"][:3]:
+                        risk = ip_info['risk_score']
+                        why_lines.append(f"    IP: {ip_info['ip']} — {risk:.0f}/100")
+                if intel_data.get("risky_domains"):
+                    for domain_info in intel_data["risky_domains"][:3]:
+                        risk = domain_info['risk_score']
+                        why_lines.append(f"    Domain: {domain_info['domain']} — {risk:.0f}/100")
+                why_lines.append("")
+
+        why_lines.append("----------------------------------------")
+        why_lines.append("SUSPICIOUS FLOWS")
+        why_lines.append("----------------------------------------")
+        why_lines.append("")
+        if not suspicious_flows:
+            why_lines.append("No flows were flagged as suspicious.")
+        else:
+            why_lines.append(f"{len(suspicious_flows)} suspicious flow(s) detected:")
+            why_lines.append("")
+            for idx, item in enumerate(suspicious_flows, 1):
+                why_lines.append(f"  #{idx}: {item['flow']}")
+                why_lines.append(f"      Reason: {item['reason']}  |  {item['bytes']}  |  {item['packets']} pkts")
+                why_lines.append("")
+            why_lines.append("See the Education tab for detailed explanations of each pattern.")
+        why_lines.append("")
+
+        if wireshark_filters:
+            unique_filters = list(dict.fromkeys(wireshark_filters))
+            why_lines.append("")
+            why_lines.append("----------------------------------------")
+            why_lines.append("STEP 5: INVESTIGATE IN WIRESHARK")
+            why_lines.append("----------------------------------------")
+            why_lines.append("")
+            why_lines.append("Paste into Wireshark's display filter bar to isolate relevant packets.")
+            why_lines.append("(Or click 'Copy Wireshark Filters' below to copy all of them.)")
+            why_lines.append("")
+            for filt in unique_filters:
+                why_lines.append(f"  {filt}")
+            why_lines.append("")
+            why_lines.append("See the Education tab for a full Wireshark filter quick-reference.")
+
+        return why_lines
+
     def _analyze(self):
         path = self.target_path_var.get()
         if not path:
             messagebox.showwarning("Missing file", "Please select a PCAP or ZIP file.")
             return
 
-        def task(progress_cb=None):
-            parse_result = parse_pcap_path(
-                path,
-                max_rows=self.max_rows_var.get(),
-                parse_http=self.parse_http_var.get(),
-                progress_cb=progress_cb,
-                use_high_memory=self.use_high_memory_var.get(),
-            )
-            # Second pass: extract credentials, hosts, MACs
+        # Read tkinter variables on main thread before launching worker
+        max_rows = self.max_rows_var.get()
+        parse_http = self.parse_http_var.get()
+        use_high_memory = self.use_high_memory_var.get()
+        offline_mode = self.offline_mode_var.get()
+        use_local_model = self.use_local_model_var.get()
+        use_multithreading = self.use_multithreading_var.get()
+        kb = self._get_knowledge_base()
+        normalizer_cache = self.normalizer_cache
+
+        def _safe_extract(p, high_mem):
             try:
-                extracted = extract_credentials_and_hosts(
-                    path, use_high_memory=self.use_high_memory_var.get()
-                )
+                return extract_credentials_and_hosts(p, use_high_memory=high_mem)
             except Exception as e:
                 print(f"[DEBUG] Credential extraction failed: {e}")
-                extracted = {"credentials": [], "hosts": {}}
-            return parse_result, extracted
+                return {"credentials": [], "hosts": {}}
 
-        def done(result):
-            (df, stats, sample_info), extracted_data = result
-            if stats.get("packet_count", 0) == 0:
-                messagebox.showwarning("No data", "No IP packets found in this capture.")
-                self.label_safe_button.configure(state=tk.DISABLED)
-                self.label_mal_button.configure(state=tk.DISABLED)
-                return
+        def _core_analysis(df, stats, extracted, sample_info, t_start, progress_cb=None):
+            """Shared analysis logic used by both sequential and multithreaded paths."""
 
-            self.current_df = df
-            self.current_stats = stats
-            self.current_sample_info = sample_info
-            # Store the base time for packet filtering
-            if not df.empty and "Time" in df.columns:
-                self.packet_base_time = float(df["Time"].min())
-            else:
-                self.packet_base_time = None
+            def _report(pct, label="Analyzing..."):
+                if progress_cb:
+                    progress_cb(pct, label=label)
 
-            # Enrich stats with threat intelligence data for better ML features (single pass)
-            threat_intel_findings = {}
-            if not self.offline_mode_var.get() and _check_threat_intel():
-                self._set_determinate_progress(35)
-                self.status_var.set("Enriching with threat intelligence...")
-                self.root.update_idletasks()
+            def _do_threat_intel():
+                if offline_mode or not _check_threat_intel():
+                    return {}
                 try:
                     from threat_intelligence import ThreatIntelligence
                     ti = ThreatIntelligence()
                     if ti.is_available():
                         print("[DEBUG] Enriching stats with threat intelligence...")
-                        threat_intel_findings = ti.enrich_stats(stats)
-                        stats.update(threat_intel_findings)  # Merge findings into stats
-                        self.current_stats = stats
+                        return ti.enrich_stats(stats)
                 except Exception as e:
                     print(f"[DEBUG] Threat intelligence enrichment failed: {e}")
+                return {}
 
-            t1 = time.time()
-            self._set_determinate_progress(50)
-            self.status_var.set("Building features...")
-            self.root.update_idletasks()
-            
-            features = build_features(stats)
-            vector = _vector_from_features(features)
-            kb = self._get_knowledge_base()  # Use cached KB instead of reloading
-            t2 = time.time()
-            print(f"[TIMING] Feature building: {t2-t1:.2f}s")
-            
-            self._set_determinate_progress(60)
-            self.status_var.set("Computing risk scores...")
-            self.root.update_idletasks()
-            
-            # OPTIMIZATION: Use top-K similar entries instead of scoring all KB entries
-            safe_entries, safe_scores = get_top_k_similar_entries(features, kb["safe"], k=5)
-            mal_entries, mal_scores = get_top_k_similar_entries(features, kb["malicious"], k=5)
+            if use_multithreading:
+                # ── Parallel Phase 2: Threat intel + IoC + baseline + flows ──
+                _report(32, "Running threat intelligence & IoC matching...")
+                with ThreadPoolExecutor(max_workers=4) as pool:
+                    f_ti = pool.submit(_do_threat_intel)
+                    f_ioc = pool.submit(match_iocs, stats, kb.get("ioc", {}))
+                    f_base = pool.submit(compute_baseline_from_kb, kb)
+                    f_flows = pool.submit(lambda: (
+                        compute_flow_stats(df),
+                        None,  # placeholder
+                    ))
 
-            t3 = time.time()
-            print(f"[TIMING] Score calculation: {t3-t2:.2f}s")
-            
-            baseline = compute_baseline_from_kb(kb)
-            anomaly_result, anomaly_reasons = anomaly_score(vector, baseline)
-            classifier_result = classify_vector(vector, kb, normalizer_cache=self.normalizer_cache)
-            # OPTIMIZATION: Cache the normalizer for subsequent analyses with same KB
-            if classifier_result and self.normalizer_cache is None and "normalizer" in classifier_result:
-                self.normalizer_cache = classifier_result.get("normalizer")
+                    threat_intel_findings = f_ti.result()
+                    if threat_intel_findings:
+                        stats.update(threat_intel_findings)
+                    ioc_matches = f_ioc.result()
+                    baseline = f_base.result()
+                    flow_df_early, _ = f_flows.result()
 
-            ioc_matches = match_iocs(stats, kb.get("ioc", {}))
+                _report(45, "Detecting suspicious flows...")
+                suspicious_flows = detect_suspicious_flows(df, kb, flow_df=flow_df_early)
+
+                t_p2 = time.time()
+                print(f"[TIMING] Phase 2 parallel (intel+ioc+baseline+flows): {t_p2-t_start:.2f}s")
+
+                # ── Parallel Phase 3: Scoring ──
+                _report(50, "Building feature vectors...")
+                features = build_features(stats)
+                vector = _vector_from_features(features)
+
+                _report(55, "Scoring against knowledge base...")
+                with ThreadPoolExecutor(max_workers=3) as pool:
+                    f_safe = pool.submit(lambda: get_top_k_similar_entries(features, kb["safe"], k=5))
+                    f_mal = pool.submit(lambda: get_top_k_similar_entries(features, kb["malicious"], k=5))
+                    f_classify = pool.submit(lambda: classify_vector(vector, kb, normalizer_cache=normalizer_cache))
+
+                    _, safe_scores = f_safe.result()
+                    _, mal_scores = f_mal.result()
+                    classifier_result = f_classify.result()
+
+                _report(62, "Computing anomaly scores...")
+                anomaly_result, anomaly_reasons = anomaly_score(vector, baseline)
+                t_p3 = time.time()
+                print(f"[TIMING] Phase 3 parallel (scoring): {t_p3-t_p2:.2f}s")
+            else:
+                # ── Sequential path ──
+                _report(32, "Running threat intelligence...")
+                threat_intel_findings = _do_threat_intel()
+                if threat_intel_findings:
+                    stats.update(threat_intel_findings)
+
+                _report(38, "Matching indicators of compromise...")
+                ioc_matches = match_iocs(stats, kb.get("ioc", {}))
+                _report(42, "Computing baseline statistics...")
+                baseline = compute_baseline_from_kb(kb)
+                _report(46, "Analyzing network flows...")
+                flow_df_early = compute_flow_stats(df)
+                _report(48, "Detecting suspicious flows...")
+                suspicious_flows = detect_suspicious_flows(df, kb, flow_df=flow_df_early)
+
+                _report(52, "Building feature vectors...")
+                features = build_features(stats)
+                vector = _vector_from_features(features)
+                _report(56, "Scoring against knowledge base...")
+                _, safe_scores = get_top_k_similar_entries(features, kb["safe"], k=5)
+                _, mal_scores = get_top_k_similar_entries(features, kb["malicious"], k=5)
+                _report(60, "Classifying traffic patterns...")
+                classifier_result = classify_vector(vector, kb, normalizer_cache=normalizer_cache)
+                _report(64, "Computing anomaly scores...")
+                anomaly_result, anomaly_reasons = anomaly_score(vector, baseline)
+                t_p3 = time.time()
+                print(f"[TIMING] Sequential analysis: {t_p3-t_start:.2f}s")
+
+            # ── Risk scoring (same for both paths) ──
+            _report(68, "Calculating risk score...")
             ioc_count = len(ioc_matches["ips"]) + len(ioc_matches["domains"])
             ioc_available = any(kb.get("ioc", {}).get(key) for key in ("ips", "domains", "hashes"))
-            if ioc_count:
-                ioc_score = min(100.0, 75.0 + (ioc_count - 1) * 5.0)
-            else:
-                ioc_score = 0.0
+            ioc_score = min(100.0, 75.0 + (ioc_count - 1) * 5.0) if ioc_count else 0.0
 
             risk_components = []
             if classifier_result is not None:
@@ -5367,9 +5814,8 @@ class PCAPSentryApp:
                 risk_components.append((ioc_score, 0.2))
 
             if risk_components:
-                total_weight = sum(weight for _, weight in risk_components)
-                risk_score = sum(score * weight for score, weight in risk_components) / total_weight
-                risk_score = round(risk_score, 1)
+                total_weight = sum(w for _, w in risk_components)
+                risk_score = round(sum(s * w for s, w in risk_components) / total_weight, 1)
             else:
                 risk_score = 0.0
 
@@ -5382,355 +5828,166 @@ class PCAPSentryApp:
             if ioc_count and verdict == "Likely Safe":
                 verdict = "Suspicious (IoC Match)"
 
-            output_lines = [
-                f"Risk Score: {risk_score}/100",
-                f"Verdict: {verdict}",
-                "",
-                "Signals:",
-            ]
-
-            if classifier_result is None:
-                output_lines.append("- Classifier: not enough labeled data")
-            else:
-                output_lines.append(f"- Classifier risk: {classifier_result['score']} (centroid distance)")
-
-            if anomaly_result is None:
-                output_lines.append("- Baseline anomaly: no safe baseline available")
-            else:
-                reasons = ", ".join(anomaly_reasons) if anomaly_reasons else "no standout outliers"
-                output_lines.append(f"- Baseline anomaly: {anomaly_result} ({reasons})")
-
-            if ioc_available:
-                if ioc_count:
-                    output_lines.append(
-                        f"- IoC matches: {ioc_count} (domains: {len(ioc_matches['domains'])}, ips: {len(ioc_matches['ips'])})"
-                    )
-                    if ioc_matches["domains"]:
-                        output_lines.append(f"  Domains: {', '.join(ioc_matches['domains'][:5])}")
-                    if ioc_matches["ips"]:
-                        output_lines.append(f"  IPs: {', '.join(ioc_matches['ips'][:5])}")
-                else:
-                    output_lines.append("- IoC matches: none")
-            else:
-                output_lines.append("- IoC feed: not loaded")
-
-            if stats.get("ioc_truncated"):
-                output_lines.append("- Note: IoC scan truncated due to large unique set")
-
-            output_lines.append("")
-            output_lines.append("Heuristic Similarity")
-            output_lines.append(summarize_stats(stats))
-
-            if not safe_scores and not mal_scores:
-                output_lines.append("Knowledge base is empty. Add safe/malware PCAPs to enable scoring.")
-            else:
-                best_safe = max(safe_scores) if safe_scores else 0.0
-                best_mal = max(mal_scores) if mal_scores else 0.0
-                output_lines.append(f"Best safe match: {best_safe}")
-                output_lines.append(f"Best malware match: {best_mal}")
-                if best_mal - best_safe >= 10:
-                    output_lines.append("Verdict: Likely Malicious")
-                elif best_safe - best_mal >= 10:
-                    output_lines.append("Verdict: Likely Safe")
-                else:
-                    output_lines.append("Verdict: Suspicious / Inconclusive")
-
-            if self.use_local_model_var.get():
-                output_lines.append("")
-                output_lines.append("Local Model Verdict")
-                if not _check_sklearn():
-                    output_lines.append("Local model unavailable (scikit-learn not installed).")
-                else:
-                    model_bundle = _load_local_model()
-                    if model_bundle is None:
-                        output_lines.append("Local model not trained yet. Add labeled PCAPs.")
-                    else:
-                        label, proba = _predict_local_model(model_bundle, features)
-                        backend = model_bundle.get("backend", "cpu")
-                        if label:
-                            output_lines.append(f"Verdict: Likely {label.title()}")
-                        if proba is not None:
-                            output_lines.append(f"Malicious confidence: {proba:.2%}")
-                        output_lines.append(f"Backend: {backend.upper()}")
-
-            # Add threat intelligence findings if available
-            if threat_intel_findings.get("threat_intel"):
-                output_lines.append("")
-                output_lines.append("Online Threat Intelligence")
-                intel_data = threat_intel_findings["threat_intel"]
-
-                if intel_data.get("risky_ips"):
-                    output_lines.append("Flagged IPs (from public threat feeds):")
-                    for ip_info in intel_data["risky_ips"][:5]:
-                        output_lines.append(f"  - {ip_info['ip']}: risk score {ip_info['risk_score']:.0f}/100")
-                        if ip_info.get("sources", {}).get("otx"):
-                            otx_info = ip_info["sources"]["otx"]
-                            if otx_info.get("pulse_count"):
-                                output_lines.append(f"    (AlienVault OTX: {otx_info['pulse_count']} pulses)")
-
-                if intel_data.get("risky_domains"):
-                    output_lines.append("Flagged Domains (from public threat feeds):")
-                    for domain_info in intel_data["risky_domains"][:5]:
-                        output_lines.append(f"  - {domain_info['domain']}: risk score {domain_info['risk_score']:.0f}/100")
-                        if domain_info.get("sources", {}).get("urlhaus"):
-                            urlhaus = domain_info["sources"]["urlhaus"]
-                            if urlhaus.get("found"):
-                                output_lines.append(f"    (URLhaus: {urlhaus.get('url_count', 0)} malicious URLs)")
-
-            t4 = time.time()
-            self._set_determinate_progress(80)
-            self.status_var.set("Detecting suspicious flows...")
-            self.root.update_idletasks()
-            
-            flow_df_early = compute_flow_stats(df)
-            suspicious_flows = detect_suspicious_flows(df, kb, flow_df=flow_df_early)
-            t5 = time.time()
-            print(f"[TIMING] Suspicious flows detection: {t5-t4:.2f}s")
-            
-            output_lines.append("")
-            output_lines.append("Suspicious Flows (heuristic)")
-            if not suspicious_flows:
-                output_lines.append("No suspicious flows detected.")
-            else:
-                for item in suspicious_flows:
-                    output_lines.append(
-                        f"- {item['flow']} | {item['reason']} | {item['bytes']} | {item['packets']} pkts"
-                    )
-
+            # ── Text generation ──
+            _report(75, "Generating Wireshark filters...")
             wireshark_filters = self._build_wireshark_filters(
                 stats, ioc_matches, verdict, suspicious_flows=suspicious_flows
             )
+
+            _report(80, "Building analysis report...")
+            if use_multithreading:
+                with ThreadPoolExecutor(max_workers=3) as pool:
+                    f_output = pool.submit(
+                        self._build_result_output_lines,
+                        risk_score, verdict, classifier_result, anomaly_result, anomaly_reasons,
+                        ioc_matches, ioc_count, ioc_available, stats, safe_scores, mal_scores,
+                        suspicious_flows, threat_intel_findings, use_local_model, features,
+                    )
+                    f_why = pool.submit(
+                        self._build_why_lines,
+                        verdict, risk_score, classifier_result, anomaly_result, anomaly_reasons,
+                        ioc_matches, ioc_count, ioc_available, stats, suspicious_flows,
+                        threat_intel_findings, wireshark_filters,
+                    )
+                    f_edu = pool.submit(
+                        self._build_education_content,
+                        verdict, risk_score, stats, classifier_result,
+                        anomaly_result, anomaly_reasons, ioc_matches,
+                        ioc_available, ioc_count, suspicious_flows,
+                        threat_intel_findings,
+                    )
+                    output_lines = f_output.result()
+                    why_lines = f_why.result()
+                    edu_content = f_edu.result()
+            else:
+                output_lines = self._build_result_output_lines(
+                    risk_score, verdict, classifier_result, anomaly_result, anomaly_reasons,
+                    ioc_matches, ioc_count, ioc_available, stats, safe_scores, mal_scores,
+                    suspicious_flows, threat_intel_findings, use_local_model, features,
+                )
+                _report(85, "Generating explanation...")
+                why_lines = self._build_why_lines(
+                    verdict, risk_score, classifier_result, anomaly_result, anomaly_reasons,
+                    ioc_matches, ioc_count, ioc_available, stats, suspicious_flows,
+                    threat_intel_findings, wireshark_filters,
+                )
+                _report(90, "Building education content...")
+                edu_content = self._build_education_content(
+                    verdict, risk_score, stats, classifier_result,
+                    anomaly_result, anomaly_reasons, ioc_matches,
+                    ioc_available, ioc_count, suspicious_flows,
+                    threat_intel_findings,
+                )
+
             if wireshark_filters:
                 output_lines.append("- Wireshark filters: see Why tab")
 
-            why_lines = [
-                "========================================",
-                "  WHY THIS VERDICT WAS REACHED",
-                "========================================",
-                "",
-                f"Verdict: {verdict}  |  Risk Score: {risk_score}/100",
-                "",
-                "This tab explains the analytical reasoning behind the",
-                "verdict. For definitions, tutorials, and learning resources",
-                "see the Education tab.",
-                "",
-                "----------------------------------------",
-                "VERDICT REASONING",
-                "----------------------------------------",
-            ]
+            _report(95, "Finalizing results...")
+            t_end = time.time()
+            mode = "multithreaded" if use_multithreading else "sequential"
+            print(f"[TIMING] Total worker processing ({mode}): {t_end-t_start:.2f}s")
 
-            if verdict == "Likely Malicious":
-                why_lines.append("Multiple independent checks flagged this traffic. When several")
-                why_lines.append("signals agree (ML match + IoC hits + unusual patterns), confidence")
-                why_lines.append("in a malicious classification is high.")
-            elif verdict == "Suspicious (IoC Match)":
-                why_lines.append("Traffic contacted addresses that appear on known threat intelligence")
-                why_lines.append("feeds. IoC matches alone don't prove compromise but warrant immediate")
-                why_lines.append("investigation.")
-            elif verdict == "Suspicious":
-                why_lines.append("Some patterns deviate from normal baselines, but no single check")
-                why_lines.append("produced a definitive result. Manual review is recommended.")
-            elif verdict == "Likely Safe":
-                why_lines.append("All checks returned within normal ranges. No known-bad addresses")
-                why_lines.append("were contacted and traffic patterns match established baselines.")
+            return {
+                "empty": False,
+                "df": df,
+                "stats": stats,
+                "extracted_data": extracted,
+                "threat_intel_findings": threat_intel_findings,
+                "classifier_result": classifier_result,
+                "flow_df_early": flow_df_early,
+                "suspicious_flows": suspicious_flows,
+                "output_lines": output_lines,
+                "why_lines": why_lines,
+                "edu_content": edu_content,
+                "wireshark_filters": wireshark_filters if wireshark_filters else [],
+                "risk_score": risk_score,
+                "verdict": verdict,
+                "sample_info": sample_info,
+            }
 
-            why_lines.append("")
-            why_lines.append("----------------------------------------")
-            why_lines.append("EVIDENCE SUMMARY")
-            why_lines.append("----------------------------------------")
-            why_lines.append("")
+        def task(progress_cb=None):
+            t_start = time.time()
 
-            # --- ML Classifier ---
-            why_lines.append("[A] ML PATTERN MATCH")
-            if classifier_result is None:
-                why_lines.append("    Result: Not enough training data yet.")
+            if use_multithreading:
+                # ── Phase 1: Parse + extract in parallel ──
+                with ThreadPoolExecutor(max_workers=2) as pool:
+                    parse_future = pool.submit(
+                        parse_pcap_path, path,
+                        max_rows=max_rows, parse_http=parse_http,
+                        progress_cb=progress_cb, use_high_memory=use_high_memory,
+                    )
+                    extract_future = pool.submit(
+                        lambda: _safe_extract(path, use_high_memory)
+                    )
+                    parse_result = parse_future.result()
+                    extracted = extract_future.result()
             else:
-                score_val = classifier_result['score']
-                if score_val > 70:
-                    why_lines.append(f"    Result: HIGH MATCH (score: {score_val})")
-                elif score_val > 40:
-                    why_lines.append(f"    Result: PARTIAL MATCH (score: {score_val})")
-                else:
-                    why_lines.append(f"    Result: LOW MATCH (score: {score_val})")
-            why_lines.append("")
+                parse_result = parse_pcap_path(
+                    path, max_rows=max_rows, parse_http=parse_http,
+                    progress_cb=progress_cb, use_high_memory=use_high_memory,
+                )
+                extracted = _safe_extract(path, use_high_memory)
 
-            # --- Anomaly baseline ---
-            why_lines.append("[B] BASELINE ANOMALY DETECTION")
-            if anomaly_result is None:
-                why_lines.append("    Result: No baseline available.")
+            (df, stats, sample_info) = parse_result
+            t_p1 = time.time()
+            print(f"[TIMING] Phase 1 (parse + extract): {t_p1-t_start:.2f}s")
+
+            if stats.get("packet_count", 0) == 0:
+                return {"empty": True, "extracted_data": extracted}
+
+            return _core_analysis(df, stats, extracted, sample_info, t_p1, progress_cb)
+
+        def done(result):
+            if result.get("empty"):
+                messagebox.showwarning("No data", "No IP packets found in this capture.")
+                self.label_safe_button.configure(state=tk.DISABLED)
+                self.label_mal_button.configure(state=tk.DISABLED)
+                return
+
+            df = result["df"]
+            stats = result["stats"]
+            sample_info = result["sample_info"]
+            extracted_data = result["extracted_data"]
+            flow_df_early = result["flow_df_early"]
+            output_lines = result["output_lines"]
+            why_lines = result["why_lines"]
+            edu_content = result["edu_content"]
+            wireshark_filters = result["wireshark_filters"]
+            classifier_result = result["classifier_result"]
+
+            self.current_df = df
+            self.current_stats = stats
+            self.current_sample_info = sample_info
+            if not df.empty and "Time" in df.columns:
+                self.packet_base_time = float(df["Time"].min())
             else:
-                reasons = ", ".join(anomaly_reasons) if anomaly_reasons else "nothing unusual"
-                if isinstance(anomaly_result, (int, float)) and anomaly_result >= 40:
-                    why_lines.append(f"    Result: ANOMALOUS — deviates from baseline (score: {anomaly_result})")
-                    why_lines.append(f"    Reasons: {reasons}")
-                elif isinstance(anomaly_result, (int, float)):
-                    why_lines.append(f"    Result: NORMAL — fits within baseline (score: {anomaly_result})")
-                    why_lines.append(f"    Details: {reasons}")
-                else:
-                    why_lines.append(f"    Result: {anomaly_result}")
-                    why_lines.append(f"    Details: {reasons}")
-            why_lines.append("")
+                self.packet_base_time = None
 
-            # --- IoC matching ---
-            why_lines.append("[C] INDICATOR OF COMPROMISE (IoC) CHECK")
-            if ioc_available:
-                if ioc_count:
-                    domain_ct = len(ioc_matches['domains'])
-                    ip_ct = len(ioc_matches['ips'])
-                    why_lines.append(f"    Result: {ioc_count} MATCHES FOUND")
-                    why_lines.append(f"    Breakdown: {domain_ct} domain(s) and {ip_ct} IP(s) matched")
-                    if ioc_matches['domains']:
-                        why_lines.append(f"    Domains: {', '.join(ioc_matches['domains'][:5])}")
-                    if ioc_matches['ips']:
-                        why_lines.append(f"    IPs: {', '.join(ioc_matches['ips'][:5])}")
-                else:
-                    why_lines.append("    Result: No matches against any blocklists.")
-            else:
-                why_lines.append("    Result: Threat feeds not loaded.")
-            why_lines.append("")
+            # Cache normalizer if available
+            if classifier_result and self.normalizer_cache is None and "normalizer" in classifier_result:
+                self.normalizer_cache = classifier_result.get("normalizer")
 
-            why_lines.append("----------------------------------------")
-            why_lines.append("TRAFFIC DETAILS")
-            why_lines.append("----------------------------------------")
-            why_lines.append("")
+            self.wireshark_filters = wireshark_filters
 
-            # --- Port analysis (data only) ---
-            top_ports = stats.get("top_ports", [])
-            if top_ports:
-                common_ports = {22, 53, 80, 123, 443, 445, 3389, 25, 110, 143, 21, 8080}
-                unusual = [(p, c) for p, c in top_ports if p not in common_ports]
-                why_lines.append("[D] PORTS")
-                for port, count in top_ports[:10]:
-                    flag = " << UNUSUAL" if port not in common_ports else ""
-                    why_lines.append(f"      Port {port}: {count} packet(s){flag}")
-                if unusual:
-                    why_lines.append(f"    {len(unusual)} non-standard port(s) detected.")
-                why_lines.append("")
-
-            # --- DNS (data only) ---
-            dns_count = stats.get("dns_query_count", 0)
-            if dns_count:
-                why_lines.append("[E] DNS")
-                top_dns = stats.get("top_dns", [])
-                if top_dns:
-                    for domain, count in top_dns[:8]:
-                        why_lines.append(f"      {domain} — {count} lookup(s)")
-                else:
-                    why_lines.append(f"    Total DNS queries: {dns_count}")
-                why_lines.append("")
-
-            # --- HTTP (data only) ---
-            http_count = stats.get("http_request_count", 0)
-            http_hosts = stats.get("http_hosts", [])
-            if http_count:
-                why_lines.append("[F] HTTP (unencrypted)")
-                if http_hosts:
-                    why_lines.append(f"    Hosts: {', '.join(http_hosts[:5])}")
-                else:
-                    why_lines.append(f"    Requests: {http_count}")
-                why_lines.append("")
-
-            # --- TLS (data only) ---
-            tls_count = stats.get("tls_packet_count", 0)
-            tls_sni = stats.get("tls_sni", [])
-            if tls_count:
-                why_lines.append("[G] HTTPS/TLS (encrypted)")
-                if tls_sni:
-                    why_lines.append(f"    SNI destinations: {', '.join(tls_sni[:5])}")
-                else:
-                    why_lines.append(f"    TLS packets: {tls_count}")
-                why_lines.append("")
-
-            # --- Packet sizes (data only) ---
-            avg_size = stats.get("avg_size", 0.0)
-            median_size = stats.get("median_size", 0.0)
-            why_lines.append("[H] PACKET SIZES")
-            why_lines.append(f"    Average: {avg_size:.1f} bytes  |  Median: {median_size:.1f} bytes")
-            if median_size and median_size < 120:
-                why_lines.append("    !! Many small packets — possible beaconing pattern.")
-            elif avg_size and avg_size > 1200:
-                why_lines.append("    !! Unusually large packets — possible data exfiltration.")
-            else:
-                why_lines.append("    Sizes are within normal range.")
-            why_lines.append("")
-
-            # --- Threat intel (data only) ---
-            if threat_intel_findings.get("threat_intel"):
-                intel_data = threat_intel_findings["threat_intel"]
-                if intel_data.get("risky_ips") or intel_data.get("risky_domains"):
-                    why_lines.append("[I] ONLINE THREAT INTELLIGENCE")
-                    if intel_data.get("risky_ips"):
-                        for ip_info in intel_data["risky_ips"][:3]:
-                            risk = ip_info['risk_score']
-                            why_lines.append(f"    IP: {ip_info['ip']} — {risk:.0f}/100")
-                    if intel_data.get("risky_domains"):
-                        for domain_info in intel_data["risky_domains"][:3]:
-                            risk = domain_info['risk_score']
-                            why_lines.append(f"    Domain: {domain_info['domain']} — {risk:.0f}/100")
-                    why_lines.append("")
-
-            # --- Suspicious flows (concise) ---
-            why_lines.append("----------------------------------------")
-            why_lines.append("SUSPICIOUS FLOWS")
-            why_lines.append("----------------------------------------")
-            why_lines.append("")
-            if not suspicious_flows:
-                why_lines.append("No flows were flagged as suspicious.")
-            else:
-                why_lines.append(f"{len(suspicious_flows)} suspicious flow(s) detected:")
-                why_lines.append("")
-                for idx, item in enumerate(suspicious_flows, 1):
-                    why_lines.append(f"  #{idx}: {item['flow']}")
-                    why_lines.append(f"      Reason: {item['reason']}  |  {item['bytes']}  |  {item['packets']} pkts")
-                    why_lines.append("")
-                why_lines.append("See the Education tab for detailed explanations of each pattern.")
-            why_lines.append("")
-
-            # --- Wireshark filters (capture-specific only) ---
-            if wireshark_filters:
-                unique_filters = list(dict.fromkeys(wireshark_filters))
-                self.wireshark_filters = unique_filters
-                why_lines.append("")
-                why_lines.append("----------------------------------------")
-                why_lines.append("STEP 5: INVESTIGATE IN WIRESHARK")
-                why_lines.append("----------------------------------------")
-                why_lines.append("")
-                why_lines.append("Paste into Wireshark's display filter bar to isolate relevant packets.")
-                why_lines.append("(Or click 'Copy Wireshark Filters' below to copy all of them.)")
-                why_lines.append("")
-                for filt in unique_filters:
-                    why_lines.append(f"  {filt}")
-                why_lines.append("")
-                why_lines.append("See the Education tab for a full Wireshark filter quick-reference.")
-            else:
-                self.wireshark_filters = []
+            # Update UI text widgets
+            self.result_text.delete("1.0", tk.END)
+            self.result_text.insert(tk.END, "\n".join(output_lines))
 
             if self.why_text is not None:
                 self.why_text.delete("1.0", tk.END)
                 self.why_text.insert(tk.END, "\n".join(why_lines))
 
-            # Build and populate the Education tab
-            edu_content = self._build_education_content(
-                verdict, risk_score, stats, classifier_result,
-                anomaly_result, anomaly_reasons, ioc_matches,
-                ioc_available, ioc_count, suspicious_flows,
-                threat_intel_findings,
-            )
             if self.education_text is not None:
                 self.education_text.delete("1.0", tk.END)
                 self.education_text.insert(tk.END, edu_content)
 
             if self.copy_filters_button is not None:
-                if self.wireshark_filters:
+                if wireshark_filters:
                     self.copy_filters_button.configure(state=tk.NORMAL)
                 else:
                     self.copy_filters_button.configure(state=tk.DISABLED)
 
-            self.result_text.delete("1.0", tk.END)
-            self.result_text.insert(tk.END, "\n".join(output_lines))
-
             print(f"[DEBUG] _analyze: self.packet_table id={id(self.packet_table)}")
-            # Select Results tab before updating table
             if hasattr(self, 'results_notebook') and hasattr(self, 'results_tab'):
                 try:
                     self.results_notebook.select(self.results_tab)
@@ -5740,14 +5997,10 @@ class PCAPSentryApp:
                     pass
             self._apply_packet_filters()
 
-            # Reuse flow stats computed earlier
             self._update_packet_hints(df, stats, flow_df=flow_df_early)
-            
-            self._set_determinate_progress(100)
+
             self.status_var.set("Done")
-            self.root.update_idletasks()
-            
-            # Switch to Results tab to show analysis
+
             if hasattr(self, 'results_notebook') and hasattr(self, 'results_tab'):
                 try:
                     self.results_notebook.select(self.results_tab)
@@ -5772,14 +6025,10 @@ class PCAPSentryApp:
             self.label_safe_button.configure(state=tk.NORMAL)
             self.label_mal_button.configure(state=tk.NORMAL)
 
-            # Populate Extracted Info tab
             self.extracted_data = extracted_data
             self._populate_extracted_tab(extracted_data)
 
             self.target_path_var.set("")
-            
-            t_end = time.time()
-            print(f"[TIMING] Total result processing: {t_end-t1:.2f}s")
 
         self._run_task(task, done, message="Analyzing PCAP...", progress_label="Analyzing PCAP")
 
@@ -5846,7 +6095,6 @@ def _acquire_single_instance():
         mutex = ctypes.windll.kernel32.CreateMutexW(None, False, MUTEX_NAME)
         if ctypes.windll.kernel32.GetLastError() == ERROR_ALREADY_EXISTS:
             # Another instance exists – try to bring its window forward
-            hwnd = ctypes.windll.user32.FindWindowW(None, None)
             # Walk windows looking for our title
             import ctypes.wintypes
             EnumWindows = ctypes.windll.user32.EnumWindows

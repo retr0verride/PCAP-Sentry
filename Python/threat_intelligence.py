@@ -9,11 +9,12 @@ Integrates with free/public threat intelligence sources:
 """
 
 import json
-import threading
+import re
 import time
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, Optional
 import ipaddress
-import socket
+import threading
+import urllib.parse
 
 try:
     import requests
@@ -29,8 +30,10 @@ class ThreatIntelligence:
         self.otx_base_url = "https://otx.alienvault.com/api/v1"
         self.abuseipdb_base_url = "https://api.abuseipdb.com/api/v2"
         self.urlhaus_base_url = "https://urlhaus-api.abuse.ch/v1"
-        self.cache = {}  # Simple cache to avoid repeated lookups
+        self._cache = {}  # Thread-safe cache to avoid repeated lookups
+        self._cache_lock = threading.Lock()
         self.cache_ttl = 3600  # 1 hour
+        self._max_cache_size = 500
 
     def is_available(self) -> bool:
         """Check if threat intelligence is available"""
@@ -49,10 +52,9 @@ class ThreatIntelligence:
 
         # Check cache first
         cache_key = f"ip:{ip}"
-        if cache_key in self.cache:
-            cached_data, timestamp = self.cache[cache_key]
-            if time.time() - timestamp < self.cache_ttl:
-                return cached_data
+        cached = self._cache_get(cache_key)
+        if cached is not None:
+            return cached
 
         result = {
             "valid": True,
@@ -74,8 +76,33 @@ class ThreatIntelligence:
         result["risk_score"] = self._calculate_ip_risk(result["sources"])
 
         # Cache the result
-        self.cache[cache_key] = (result, time.time())
+        self._cache_put(cache_key, result)
         return result
+
+    def _cache_get(self, key: str):
+        """Thread-safe cache read with TTL expiry."""
+        with self._cache_lock:
+            if key in self._cache:
+                data, timestamp = self._cache[key]
+                if time.time() - timestamp < self.cache_ttl:
+                    return data
+                del self._cache[key]
+        return None
+
+    def _cache_put(self, key: str, value):
+        """Thread-safe cache write with size eviction."""
+        now = time.time()
+        with self._cache_lock:
+            # Evict expired entries if cache is at capacity
+            if len(self._cache) >= self._max_cache_size:
+                expired = [k for k, (_, ts) in self._cache.items() if now - ts >= self.cache_ttl]
+                for k in expired:
+                    del self._cache[k]
+                # If still full, remove oldest entry
+                if len(self._cache) >= self._max_cache_size:
+                    oldest_key = min(self._cache, key=lambda k: self._cache[k][1])
+                    del self._cache[oldest_key]
+            self._cache[key] = (value, now)
 
     def check_domain_reputation(self, domain: str) -> Dict:
         """
@@ -84,11 +111,14 @@ class ThreatIntelligence:
         if not self.is_available():
             return {"available": False}
 
+        # Basic domain validation
+        if not domain or not re.match(r'^[a-zA-Z0-9][a-zA-Z0-9.\-]+$', domain):
+            return {"valid": False}
+
         cache_key = f"domain:{domain}"
-        if cache_key in self.cache:
-            cached_data, timestamp = self.cache[cache_key]
-            if time.time() - timestamp < self.cache_ttl:
-                return cached_data
+        cached = self._cache_get(cache_key)
+        if cached is not None:
+            return cached
 
         result = {
             "domain": domain,
@@ -108,7 +138,7 @@ class ThreatIntelligence:
         # Calculate overall risk score
         result["risk_score"] = self._calculate_domain_risk(result["sources"])
 
-        self.cache[cache_key] = (result, time.time())
+        self._cache_put(cache_key, result)
         return result
 
     def _is_valid_ip(self, ip: str) -> bool:
@@ -142,7 +172,8 @@ class ThreatIntelligence:
     def _check_otx_domain(self, domain: str) -> Optional[Dict]:
         """Check domain against AlienVault OTX"""
         try:
-            url = f"{self.otx_base_url}/indicators/domain/{domain}/reputation"
+            safe_domain = urllib.parse.quote(domain, safe='')
+            url = f"{self.otx_base_url}/indicators/domain/{safe_domain}/reputation"
             headers = {"Accept": "application/json"}
             response = requests.get(url, headers=headers, timeout=5)
 
@@ -161,28 +192,11 @@ class ThreatIntelligence:
 
     def _check_abuseipdb_ip(self, ip: str) -> Optional[Dict]:
         """
-        Check IP against AbuseIPDB (free tier, limited requests)
-        Note: Free tier endpoint doesn't require API key but has limitations
+        Check IP against AbuseIPDB (free tier, limited requests).
+        Note: Requires API key – returns None when no key is configured.
         """
-        try:
-            # Using the free daily endpoint that doesn't require API key
-            url = "https://www.abuseipdb.com/api/v2/check"
-            headers = {
-                "Accept": "application/json",
-                "User-Agent": "PCAP-Sentry"
-            }
-            params = {
-                "ipAddress": ip,
-                "maxAgeInDays": 90,
-                "verbose": ""
-            }
-
-            # This endpoint requires an API key, so we'll skip it for truly free access
-            # Instead, we can use public lists if available
-            return None
-        except Exception as e:
-            print(f"[DEBUG] AbuseIPDB check failed: {e}")
-            return None
+        # This endpoint requires an API key; skip for truly free access.
+        return None
 
     def _check_urlhaus(self, domain: str) -> Optional[Dict]:
         """Check domain against URLhaus malware URL database"""
