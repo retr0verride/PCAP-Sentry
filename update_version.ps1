@@ -4,7 +4,7 @@
     Automatically increments version number for PCAP Sentry builds.
 #>
 param(
-    [string]$BuildNotes = "Build update",
+    [string]$BuildNotes = "Minor tweaks and improvements",
     [switch]$DryRun
 )
 
@@ -96,7 +96,17 @@ $issFile = "installer\PCAP_Sentry.iss"
 if (Test-Path $issFile) {
     $issContent = Get-Content $issFile -Raw
     if (-not $DryRun) {
-        $updatedIss = $issContent -replace 'AppVersion=[\d.]+-\d+', "AppVersion=$newVersion"
+        # Update #define AppVer
+        $updatedIss = $issContent -replace '#define AppVer "[^"]*"', "#define AppVer `"$newVersion`""
+        # Update AppVersion
+        $updatedIss = $updatedIss -replace 'AppVersion=[\d.]+-\d+', "AppVersion=$newVersion"
+        # Update AppVerName
+        $updatedIss = $updatedIss -replace 'AppVerName=PCAP Sentry [\d.]+-\d+', "AppVerName=PCAP Sentry $newVersion"
+        # Update UninstallDisplayName
+        $updatedIss = $updatedIss -replace 'UninstallDisplayName=PCAP Sentry [\d.]+-\d+', "UninstallDisplayName=PCAP Sentry $newVersion"
+        # Update VersionInfoVersion (must be 4-part dotted: major.minor.patch.build)
+        $viv = "$newYear.$newMonth.$newDay.$newBuild"
+        $updatedIss = $updatedIss -replace 'VersionInfoVersion=[\d.]+', "VersionInfoVersion=$viv"
         Set-Content -Path $issFile -Value $updatedIss -NoNewline
         Write-Host "Updated installer/PCAP_Sentry.iss to $newVersion"
     } else {

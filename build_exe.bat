@@ -1,12 +1,31 @@
 @echo off
-setlocal
+setlocal enabledelayedexpansion
 
 REM Build a self-contained EXE using PyInstaller.
 REM Run from repo root after activating your Python environment.
 REM Optional: pass -NoPush to skip git commit/push.
+REM Optional: pass -Notes "your notes here" to set release notes / What's New.
+REM   If omitted, defaults to "Minor tweaks and improvements".
 
 set "NO_PUSH="
-if /I "%~1"=="-NoPush" set "NO_PUSH=1"
+set "BUILD_NOTES=Minor tweaks and improvements"
+
+:parse_args
+if "%~1"=="" goto :args_done
+if /I "%~1"=="-NoPush" (
+	set "NO_PUSH=1"
+	shift
+	goto :parse_args
+)
+if /I "%~1"=="-Notes" (
+	set "BUILD_NOTES=%~2"
+	shift
+	shift
+	goto :parse_args
+)
+shift
+goto :parse_args
+:args_done
 
 set "LOG_DIR=logs"
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
@@ -19,7 +38,8 @@ echo ==== Build started %DATE% %TIME% ====>> "%LOG_PATH%"
 
 REM Update version before build
 echo ==== Updating Version ====>> "%LOG_PATH%"
-powershell -NoProfile -ExecutionPolicy Bypass -File "update_version.ps1" -BuildNotes "Rebuild artifacts" >> "%LOG_PATH%" 2>&1
+echo Build Notes: !BUILD_NOTES!>> "%LOG_PATH%"
+powershell -NoProfile -ExecutionPolicy Bypass -File "update_version.ps1" -BuildNotes "!BUILD_NOTES!" >> "%LOG_PATH%" 2>&1
 if errorlevel 1 (
 	echo Failed to update version. See %LOG_PATH% for details.
 	exit /b 1
@@ -61,8 +81,8 @@ if defined NO_PUSH (
 )
 
 REM Stage and commit version changes
-git add version_info.txt VERSION_LOG.md installer\PCAP_Sentry.iss Python\pcap_sentry_gui.py Python\update_checker.py >> "%LOG_PATH%" 2>&1
-git commit -m "EXE Build: Version %VERSION%" >> "%LOG_PATH%" 2>&1
+git add version_info.txt VERSION_LOG.md installer\PCAP_Sentry.iss Python\pcap_sentry_gui.py Python\update_checker.py Python\threat_intelligence.py Python\enhanced_ml_trainer.py >> "%LOG_PATH%" 2>&1
+git commit -m "EXE Build: Version %VERSION% - !BUILD_NOTES!" >> "%LOG_PATH%" 2>&1
 
 REM Push to GitHub
 git push origin main >> "%LOG_PATH%" 2>&1
@@ -81,7 +101,9 @@ if errorlevel 1 (
 )
 
 echo ==== Creating GitHub Release v%VERSION% ====>> "%LOG_PATH%"
-gh release create "v%VERSION%" "dist\PCAP_Sentry.exe" --title "PCAP Sentry v%VERSION%" --notes "Build %VERSION%" >> "%LOG_PATH%" 2>&1
+echo Release Notes: !BUILD_NOTES!>> "%LOG_PATH%"
+gh release create "v%VERSION%" "dist\PCAP_Sentry.exe" --title "PCAP Sentry v%VERSION%" --notes "## What's New
+!BUILD_NOTES!" >> "%LOG_PATH%" 2>&1
 if errorlevel 1 (
 	echo Warning: Failed to create GitHub release. See %LOG_PATH% for details.
 ) else (

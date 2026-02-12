@@ -1,12 +1,31 @@
 @echo off
-setlocal
+setlocal enabledelayedexpansion
 
 REM Builds the installer using Inno Setup.
 REM Run this after building the EXE.
 REM Optional: pass -NoPush to skip git commit/push.
+REM Optional: pass -Notes "your notes here" to set release notes / What's New.
+REM   If omitted, defaults to "Minor tweaks and improvements".
 
 set "NO_PUSH="
-if /I "%~1"=="-NoPush" set "NO_PUSH=1"
+set "BUILD_NOTES=Minor tweaks and improvements"
+
+:parse_args
+if "%~1"=="" goto :args_done
+if /I "%~1"=="-NoPush" (
+	set "NO_PUSH=1"
+	shift
+	goto :parse_args
+)
+if /I "%~1"=="-Notes" (
+	set "BUILD_NOTES=%~2"
+	shift
+	shift
+	goto :parse_args
+)
+shift
+goto :parse_args
+:args_done
 
 set "ISCC_EXE="
 for %%I in (iscc.exe) do set "ISCC_EXE=%%~$PATH:I"
@@ -38,7 +57,8 @@ echo ==== Build started %DATE% %TIME% ====>> "%LOG_PATH%"
 
 REM Update version before build
 echo ==== Updating Version ====>> "%LOG_PATH%"
-powershell -NoProfile -ExecutionPolicy Bypass -File "update_version.ps1" -BuildNotes "Installer build" >> "%LOG_PATH%" 2>&1
+echo Build Notes: !BUILD_NOTES!>> "%LOG_PATH%"
+powershell -NoProfile -ExecutionPolicy Bypass -File "update_version.ps1" -BuildNotes "!BUILD_NOTES!" >> "%LOG_PATH%" 2>&1
 if errorlevel 1 (
 	echo Failed to update version. See %LOG_PATH% for details.
 	exit /b 1
@@ -66,9 +86,9 @@ del "%TEMP%\pcap_version.txt" >nul 2>&1
 if defined NO_PUSH (
 	echo Skipping git commit/push because -NoPush was provided.>> "%LOG_PATH%"
 ) else (
-	REM Stage and commit version changes plus installer
-	git add version_info.txt VERSION_LOG.md installer\PCAP_Sentry.iss dist\PCAP_Sentry_Setup.exe >> "%LOG_PATH%" 2>&1
-	git commit -m "Installer Build: Version %VERSION%" >> "%LOG_PATH%" 2>&1
+	REM Stage and commit version changes (not the large setup binary)
+	git add version_info.txt VERSION_LOG.md installer\PCAP_Sentry.iss Python\pcap_sentry_gui.py Python\update_checker.py Python\threat_intelligence.py Python\enhanced_ml_trainer.py >> "%LOG_PATH%" 2>&1
+	git commit -m "Installer Build: Version %VERSION% - !BUILD_NOTES!" >> "%LOG_PATH%" 2>&1
 
 	REM Push to GitHub
 	git push origin main >> "%LOG_PATH%" 2>&1
@@ -76,6 +96,23 @@ if defined NO_PUSH (
 		echo Warning: Failed to push to GitHub. See %LOG_PATH% for details.
 	) else (
 		echo Pushed version %VERSION% and installer to GitHub
+	)
+
+	REM Create GitHub Release with the installer (requires gh CLI)
+	where gh >nul 2>&1
+	if errorlevel 1 (
+		echo Warning: GitHub CLI not found. Skipping release creation.>> "%LOG_PATH%"
+		echo Warning: Install gh CLI to auto-create releases: winget install GitHub.cli
+	) else (
+		echo ==== Creating GitHub Release v%VERSION% ====>> "%LOG_PATH%"
+		echo Release Notes: !BUILD_NOTES!>> "%LOG_PATH%"
+		gh release create "v%VERSION%" "dist\PCAP_Sentry_Setup.exe" --title "PCAP Sentry v%VERSION%" --notes "## What's New
+!BUILD_NOTES!" >> "%LOG_PATH%" 2>&1
+		if errorlevel 1 (
+			echo Warning: Failed to create GitHub release. See %LOG_PATH% for details.
+		) else (
+			echo Created GitHub release v%VERSION% with PCAP_Sentry_Setup.exe
+		)
 	)
 )
 
