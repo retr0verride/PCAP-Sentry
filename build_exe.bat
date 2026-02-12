@@ -52,7 +52,7 @@ set /p VERSION=<"%TEMP%\pcap_version.txt"
 del "%TEMP%\pcap_version.txt" >nul 2>&1
 
 REM Stage and commit version changes
-git add version_info.txt VERSION_LOG.md installer\PCAP_Sentry.iss >> "%LOG_PATH%" 2>&1
+git add version_info.txt VERSION_LOG.md installer\PCAP_Sentry.iss Python\pcap_sentry_gui.py >> "%LOG_PATH%" 2>&1
 git commit -m "EXE Build: Version %VERSION%" >> "%LOG_PATH%" 2>&1
 
 REM Push to GitHub

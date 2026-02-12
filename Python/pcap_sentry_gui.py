@@ -145,7 +145,7 @@ def _check_tkinterdnd2():
 SIZE_SAMPLE_LIMIT = 50000
 DEFAULT_MAX_ROWS = 200000
 IOC_SET_LIMIT = 50000
-APP_VERSION = "2026.02.12-3"
+APP_VERSION = "2026.02.12-4"
 
 
 def _get_pandas():
