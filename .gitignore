@@ -20,3 +20,5 @@ Desktop.ini
 
 # Editor
 .vscode/
+.venv-gpu/
+

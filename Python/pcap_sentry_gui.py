@@ -1,43 +1,148 @@
+import io
 import ipaddress
 import json
 import math
 import os
 import queue
 import random
+import shutil
 import statistics
 import sys
+import tempfile
 import threading
-import urllib.request
+import time
+import traceback
+import zipfile
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timezone
 
-from scapy.all import DNS, DNSQR, IP, PcapReader, Raw, TCP, UDP
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from tkinter import font as tkfont
 
+# Import update checker
 try:
-    from tkinterdnd2 import DND_FILES, TkinterDnD
-except Exception:
-    DND_FILES = None
-    TkinterDnD = None
+    from update_checker import BackgroundUpdateChecker, UpdateChecker
+    _update_checker_available = True
+except ImportError:
+    _update_checker_available = False
 
-try:
-    import ollama
-except Exception:
-    ollama = None
+_sklearn_available = None
+_tkinterdnd2_available = None
+_threat_intel_available = None
 
-try:
-    from llama_cpp import Llama
-except Exception:
-    Llama = None
+
+def _check_threat_intel():
+    global _threat_intel_available
+    if _threat_intel_available is not None:
+        return _threat_intel_available
+    try:
+        from threat_intelligence import ThreatIntelligence
+        _threat_intel_available = True
+        return True
+    except ImportError:
+        _threat_intel_available = False
+        return False
+
+
+def _utcnow():
+    return datetime.now(timezone.utc)
+
+
+def _init_error_logs():
+    try:
+        log_dir = _get_app_data_dir()
+        for name in ("startup_errors.log", "app_errors.log"):
+            log_path = os.path.join(log_dir, name)
+            if not os.path.exists(log_path):
+                with open(log_path, "a", encoding="utf-8") as handle:
+                    handle.write("")
+    except Exception:
+        pass
+
+
+def _write_startup_log(message, exc=None):
+    try:
+        log_dir = _get_app_data_dir()
+        log_path = os.path.join(log_dir, "startup_errors.log")
+        timestamp = _utcnow().strftime("%Y-%m-%d %H:%M:%SZ")
+        with open(log_path, "a", encoding="utf-8") as handle:
+            handle.write(f"[{timestamp}] {message}\n")
+            if exc is not None:
+                handle.write(f"[{timestamp}] {type(exc).__name__}: {exc}\n")
+    except Exception:
+        pass
+
+
+def _write_error_log(message, exc=None, tb=None):
+    try:
+        log_dir = _get_app_data_dir()
+        log_path = os.path.join(log_dir, "app_errors.log")
+        timestamp = _utcnow().strftime("%Y-%m-%d %H:%M:%SZ")
+        with open(log_path, "a", encoding="utf-8") as handle:
+            handle.write(f"[{timestamp}] {message}\n")
+            if exc is not None:
+                handle.write(f"[{timestamp}] {type(exc).__name__}: {exc}\n")
+            if tb is not None:
+                formatted = "".join(traceback.format_exception(type(exc), exc, tb))
+                handle.write(formatted)
+                if not formatted.endswith("\n"):
+                    handle.write("\n")
+    except Exception:
+        pass
+
+
+def _handle_exception(exc_type, exc, tb):
+    _write_error_log("Unhandled exception", exc, tb)
+    _show_startup_error(
+        "An unexpected error occurred. See app_errors.log in the app data folder.",
+        exc,
+    )
+
+
+def _show_startup_error(message, exc=None):
+    _write_startup_log(message, exc)
+    try:
+        if tk._default_root is None:
+            root = tk.Tk()
+            root.withdraw()
+            messagebox.showerror("PCAP Sentry", message)
+            root.destroy()
+        else:
+            messagebox.showerror("PCAP Sentry", message)
+    except Exception:
+        pass
+
+
+def _check_sklearn():
+    global _sklearn_available
+    if _sklearn_available is not None:
+        return _sklearn_available
+    try:
+        import sklearn.feature_extraction
+        import sklearn.linear_model
+        import joblib
+        _sklearn_available = True
+    except Exception:
+        _sklearn_available = False
+    return _sklearn_available
+
+
+def _check_tkinterdnd2():
+    global _tkinterdnd2_available
+    if _tkinterdnd2_available is not None:
+        return _tkinterdnd2_available
+    try:
+        import tkinterdnd2
+        _tkinterdnd2_available = True
+    except Exception:
+        _tkinterdnd2_available = False
+    return _tkinterdnd2_available
 
 SIZE_SAMPLE_LIMIT = 50000
 DEFAULT_MAX_ROWS = 200000
-DEFAULT_MODEL_REPO = "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF"
-DEFAULT_MODEL_FILENAME = "Meta-Llama-3.1-8B-Instruct-f32.gguf"
 IOC_SET_LIMIT = 50000
-APP_VERSION = "2026.02.10-3"
+APP_VERSION = "2026.02.11-2"
 
 
 def _get_pandas():
@@ -58,10 +163,144 @@ def _get_figure_canvas():
     return FigureCanvasTkAgg
 
 
+def _get_numpy():
+    import numpy as np
+    return np
+
+
+def _get_scapy():
+    try:
+        from scapy.all import DNS, DNSQR, IP, PcapReader, Raw, TCP, UDP
+        return DNS, DNSQR, IP, PcapReader, Raw, TCP, UDP
+    except Exception as exc:
+        _show_startup_error(
+            "Scapy is required but was not found. Please reinstall PCAP Sentry or "
+            "contact support.",
+            exc,
+        )
+        raise exc
+
+
+def _get_tls_support():
+    try:
+        from scapy.layers.tls.all import TLS
+        from scapy.layers.tls.handshake import TLSClientHello
+        from scapy.layers.tls.extensions import TLSExtALPN, TLSExtServerName
+        return TLS, TLSClientHello, TLSExtServerName, TLSExtALPN
+    except Exception:
+        return None, None, None, None
+
+
+def _format_tls_version(version):
+    if version is None:
+        return ""
+    try:
+        if isinstance(version, str):
+            return version
+        value = int(version)
+    except Exception:
+        return ""
+    mapping = {
+        0x0301: "1.0",
+        0x0302: "1.1",
+        0x0303: "1.2",
+        0x0304: "1.3",
+    }
+    return mapping.get(value, f"0x{value:04x}")
+
+
+def _extract_tls_metadata(pkt, tls_support):
+    tls_layer, client_hello, ext_sni, ext_alpn = tls_support
+    if tls_layer is None:
+        return "", "", ""
+
+    tls = pkt.getlayer(tls_layer)
+    if tls is None:
+        return "", "", ""
+
+    tls_version = _format_tls_version(getattr(tls, "version", None))
+    tls_sni = ""
+    tls_alpn = ""
+
+    ch = pkt.getlayer(client_hello) if client_hello is not None else None
+    if ch is not None:
+        if not tls_version:
+            tls_version = _format_tls_version(getattr(ch, "version", None))
+        extensions = getattr(ch, "ext", []) or []
+        for ext in extensions:
+            if ext_sni is not None and isinstance(ext, ext_sni):
+                server_names = getattr(ext, "servernames", []) or []
+                for server in server_names:
+                    name = getattr(server, "servername", None)
+                    if name:
+                        if isinstance(name, bytes):
+                            tls_sni = name.decode("utf-8", errors="ignore")
+                        else:
+                            tls_sni = str(name)
+                        break
+            if ext_alpn is not None and isinstance(ext, ext_alpn):
+                protocols = getattr(ext, "alpn_protocols", []) or []
+                if protocols:
+                    cleaned = []
+                    for proto in protocols:
+                        if isinstance(proto, bytes):
+                            cleaned.append(proto.decode("utf-8", errors="ignore"))
+                        else:
+                            cleaned.append(str(proto))
+                    tls_alpn = ",".join(cleaned)
+        return tls_sni, tls_version, tls_alpn
+
+    return "", tls_version, ""
+
+
+def _get_sklearn():
+    from joblib import dump as _joblib_dump
+    from joblib import load as _joblib_load
+    from sklearn.feature_extraction import DictVectorizer
+    from sklearn.linear_model import LogisticRegression
+    return _joblib_dump, _joblib_load, DictVectorizer, LogisticRegression
+
+
+def _get_tkinterdnd2():
+    from tkinterdnd2 import DND_FILES, TkinterDnD
+    return DND_FILES, TkinterDnD
+
+
 def _get_app_base_dir():
     if getattr(sys, "frozen", False):
         return os.path.dirname(sys.executable)
     return os.path.dirname(os.path.abspath(__file__))
+
+
+def _get_app_icon_path():
+    base_dir = _get_app_base_dir()
+    candidates = []
+    frozen_dir = getattr(sys, "_MEIPASS", None)
+    if frozen_dir:
+        candidates.append(os.path.join(frozen_dir, "assets", "pcap_sentry.ico"))
+        candidates.append(os.path.join(frozen_dir, "pcap_sentry.ico"))
+    candidates.extend(
+        [
+            os.path.join(base_dir, "assets", "pcap_sentry.ico"),
+            os.path.abspath(os.path.join(base_dir, "..", "assets", "pcap_sentry.ico")),
+            os.path.join(base_dir, "pcap_sentry.ico"),
+        ]
+    )
+    for path in candidates:
+        if os.path.exists(path):
+            return path
+    return None
+
+
+def _set_app_icon(root):
+    icon_path = _get_app_icon_path()
+    if not icon_path:
+        return
+    try:
+        root.iconbitmap(default=icon_path)
+        root.iconbitmap(icon_path)
+    except Exception:
+        pass
 
 
 APP_DATA_FALLBACK_NOTICE = None
@@ -99,104 +338,40 @@ def _is_writable_dir(path):
         return False
 
 
-def _get_default_models_dir():
-    base_dir = _get_app_base_dir()
-    if _is_writable_dir(base_dir):
-        return os.path.join(base_dir, "models")
-    return os.path.join(_get_app_data_dir(), "models")
-
-
 KNOWLEDGE_BASE_FILE = os.path.join(_get_app_data_dir(), "pcap_knowledge_base_offline.json")
 SETTINGS_FILE = os.path.join(_get_app_data_dir(), "settings.json")
-DEFAULT_MODEL_PATH = os.path.join(_get_default_models_dir(), DEFAULT_MODEL_FILENAME)
+MODEL_FILE = os.path.join(_get_app_data_dir(), "pcap_local_model.joblib")
 
 
 def _default_settings():
     return {
         "max_rows": DEFAULT_MAX_ROWS,
         "parse_http": True,
-        "use_llm": ollama is not None,
-        "use_gpu": True,
-        "model_path": DEFAULT_MODEL_PATH,
+        "use_high_memory": False,
+        "use_local_model": False,
         "backup_dir": os.path.dirname(KNOWLEDGE_BASE_FILE),
         "theme": "system",
-        "ignored_model_versions": [],
         "app_data_notice_shown": False,
     }
 
 
 def load_settings():
-    if not os.path.exists(SETTINGS_FILE):
-        return _default_settings()
     try:
-        with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if not isinstance(data, dict):
-            return _default_settings()
-        defaults = _default_settings()
-        defaults.update(data)
-        return defaults
+        if os.path.exists(SETTINGS_FILE):
+            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                defaults = _default_settings()
+                defaults.update(data)
+                return defaults
     except Exception:
-        return _default_settings()
+        pass
+    return _default_settings()
 
 
 def save_settings(settings):
     with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
         json.dump(settings, f, indent=2)
-
-
-def _model_download_url():
-    return f"https://huggingface.co/{DEFAULT_MODEL_REPO}/resolve/main/{DEFAULT_MODEL_FILENAME}"
-
-
-def _model_download_url_for(filename):
-    return f"https://huggingface.co/{DEFAULT_MODEL_REPO}/resolve/main/{filename}"
-
-
-def _get_latest_model_filename(allow_fallback=True):
-    api_url = f"https://huggingface.co/api/models/{DEFAULT_MODEL_REPO}"
-    try:
-        with urllib.request.urlopen(api_url) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-        siblings = payload.get("siblings") or []
-        gguf_files = []
-        for item in siblings:
-            name = item.get("rfilename")
-            if name and name.lower().endswith(".gguf"):
-                gguf_files.append(item)
-        if not gguf_files:
-            return DEFAULT_MODEL_FILENAME if allow_fallback else None
-        for item in gguf_files:
-            if item.get("rfilename") == DEFAULT_MODEL_FILENAME:
-                return DEFAULT_MODEL_FILENAME
-        def sort_key(entry):
-            return entry.get("lastModified") or ""
-        gguf_files.sort(key=sort_key, reverse=True)
-        latest = gguf_files[0].get("rfilename")
-        return latest or (DEFAULT_MODEL_FILENAME if allow_fallback else None)
-    except Exception:
-        return DEFAULT_MODEL_FILENAME if allow_fallback else None
-
-
-def _download_file(url, dest_path, progress_cb=None, chunk_size=1024 * 1024):
-    os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-    with urllib.request.urlopen(url) as response:
-        total = response.length or response.getheader("Content-Length")
-        total = int(total) if total else None
-        downloaded = 0
-        with open(dest_path, "wb") as out_file:
-            while True:
-                chunk = response.read(chunk_size)
-                if not chunk:
-                    break
-                out_file.write(chunk)
-                downloaded += len(chunk)
-                if progress_cb and total:
-                    progress = min(99.0, downloaded / total * 100.0)
-                    progress_cb(progress, None, downloaded, total)
-    if progress_cb:
-        progress_cb(100.0, 0, downloaded if total else None, total)
-    return dest_path
 
 
 def _format_bytes(value):
@@ -214,25 +389,25 @@ def _default_kb():
 
 
 def load_knowledge_base():
-    if not os.path.exists(KNOWLEDGE_BASE_FILE):
-        return _default_kb()
     try:
-        with open(KNOWLEDGE_BASE_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if not isinstance(data, dict):
-            return _default_kb()
-        data.setdefault("safe", [])
-        data.setdefault("malicious", [])
-        data.setdefault("ioc", {"ips": [], "domains": [], "hashes": []})
-        data["ioc"].setdefault("ips", [])
-        data["ioc"].setdefault("domains", [])
-        data["ioc"].setdefault("hashes", [])
-        return data
+        if os.path.exists(KNOWLEDGE_BASE_FILE):
+            with open(KNOWLEDGE_BASE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                data.setdefault("safe", [])
+                data.setdefault("malicious", [])
+                ioc = data.setdefault("ioc", {})
+                ioc.setdefault("ips", [])
+                ioc.setdefault("domains", [])
+                ioc.setdefault("hashes", [])
+                return data
     except Exception:
-        return _default_kb()
+        pass
+    return _default_kb()
 
 
 def save_knowledge_base(data):
+    os.makedirs(os.path.dirname(KNOWLEDGE_BASE_FILE), exist_ok=True)
     with open(KNOWLEDGE_BASE_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
@@ -306,8 +481,9 @@ def load_iocs_from_file(path):
 
 
 def merge_iocs_into_kb(kb, new_iocs):
+    kb_ioc = kb.get("ioc", {})
     for key in ("ips", "domains", "hashes"):
-        combined = set(kb.get("ioc", {}).get(key, [])) | set(new_iocs.get(key, set()))
+        combined = set(kb_ioc.get(key, [])) | set(new_iocs.get(key, set()))
         kb["ioc"][key] = sorted(combined)
     return kb
 
@@ -332,11 +508,7 @@ FEATURE_NAMES = [
 def _vector_from_features(features):
     proto = features.get("proto_ratio", {})
     top_ports = features.get("top_ports", [])
-
-    def port_at(idx):
-        if idx < len(top_ports):
-            return float(top_ports[idx])
-        return 0.0
+    port_at = lambda idx: float(top_ports[idx]) if idx < len(top_ports) else 0.0
 
     return [
         float(features.get("packet_count", 0.0)),
@@ -396,16 +568,23 @@ def anomaly_score(vector, baseline):
     return round(score, 1), reasons
 
 
-def classify_vector(vector, kb):
+def classify_vector(vector, kb, normalizer_cache=None):
     safe_entries = kb.get("safe", [])
     mal_entries = kb.get("malicious", [])
     if not safe_entries or not mal_entries:
         return None
 
+    # OPTIMIZATION: Use cached normalizer if provided, otherwise compute and return it
+    if normalizer_cache is not None:
+        normalizer = normalizer_cache
+    else:
+        safe_vectors = [_vector_from_features(entry["features"]) for entry in safe_entries]
+        mal_vectors = [_vector_from_features(entry["features"]) for entry in mal_entries]
+        all_vectors = safe_vectors + mal_vectors
+        normalizer = _compute_normalizer(all_vectors)
+
     safe_vectors = [_vector_from_features(entry["features"]) for entry in safe_entries]
     mal_vectors = [_vector_from_features(entry["features"]) for entry in mal_entries]
-    all_vectors = safe_vectors + mal_vectors
-    normalizer = _compute_normalizer(all_vectors)
 
     safe_norm = [_normalize_vector(vec, normalizer) for vec in safe_vectors]
     mal_norm = [_normalize_vector(vec, normalizer) for vec in mal_vectors]
@@ -427,15 +606,17 @@ def classify_vector(vector, kb):
     else:
         prob_mal = dist_safe / (dist_safe + dist_mal)
     score = round(prob_mal * 100.0, 1)
-    return {"score": score, "dist_safe": dist_safe, "dist_mal": dist_mal}
+    return {"score": score, "dist_safe": dist_safe, "dist_mal": dist_mal, "normalizer": normalizer}
 
 
 def _domain_matches(domain, ioc_domains):
     if domain in ioc_domains:
         return domain
-    for ioc_domain in ioc_domains:
-        if domain.endswith("." + ioc_domain):
-            return ioc_domain
+    parts = domain.split(".")
+    for idx in range(1, len(parts)):
+        candidate = ".".join(parts[idx:])
+        if candidate in ioc_domains:
+            return candidate
     return None
 
 
@@ -445,12 +626,8 @@ def match_iocs(stats, iocs):
     ioc_domains = set(iocs.get("domains", []))
 
     if ioc_ips:
-        for ip in stats.get("unique_src_list", []):
-            if ip in ioc_ips:
-                matches["ips"].add(ip)
-        for ip in stats.get("unique_dst_list", []):
-            if ip in ioc_ips:
-                matches["ips"].add(ip)
+        matches["ips"].update(set(stats.get("unique_src_list", [])) & ioc_ips)
+        matches["ips"].update(set(stats.get("unique_dst_list", [])) & ioc_ips)
 
     if ioc_domains:
         for domain in stats.get("dns_queries", []):
@@ -461,8 +638,12 @@ def match_iocs(stats, iocs):
             match = _domain_matches(domain.lower(), ioc_domains)
             if match:
                 matches["domains"].add(match)
+        for domain in stats.get("tls_sni", []):
+            match = _domain_matches(domain.lower(), ioc_domains)
+            if match:
+                matches["domains"].add(match)
 
-    return {"ips": sorted(matches["ips"]), "domains": sorted(matches["domains"])}
+    return {"ips": sorted(matches["ips"]), "domains": sorted(matches["domains"])}  
 
 
 def summarize_stats(stats):
@@ -470,13 +651,15 @@ def summarize_stats(stats):
     proto = stats.get("protocol_counts", {})
     dns_count = stats.get("dns_query_count", 0)
     http_count = stats.get("http_request_count", 0)
+    tls_count = stats.get("tls_packet_count", 0)
     return (
         f"Packets: {stats.get('packet_count', 0)}, "
         f"Avg Size: {stats.get('avg_size', 0):.1f}, "
         f"Top Ports: {top_ports}, "
         f"Protocols: {proto}, "
         f"DNS Queries: {dns_count}, "
-        f"HTTP Requests: {http_count}"
+        f"HTTP Requests: {http_count}, "
+        f"TLS Packets: {tls_count}"
     )
 
 
@@ -485,7 +668,8 @@ def build_features(stats):
     proto_counts = stats.get("protocol_counts", {})
     proto_ratio = {k: v / total for k, v in proto_counts.items()}
     top_ports = [p for p, _ in stats.get("top_ports", [])]
-    return {
+    
+    features = {
         "packet_count": stats.get("packet_count", 0),
         "avg_size": stats.get("avg_size", 0.0),
         "proto_ratio": proto_ratio,
@@ -494,15 +678,139 @@ def build_features(stats):
         "http_request_count": stats.get("http_request_count", 0),
         "unique_http_hosts": stats.get("unique_http_hosts", 0),
     }
+    
+    # Add threat intelligence features if available
+    if "threat_intel" in stats:
+        intel = stats["threat_intel"]
+        
+        # Count flagged indicators
+        risky_ips = intel.get("risky_ips", [])
+        risky_domains = intel.get("risky_domains", [])
+        
+        features["flagged_ip_count"] = len(risky_ips)
+        features["flagged_domain_count"] = len(risky_domains)
+        
+        # Calculate average risk scores
+        if risky_ips:
+            avg_ip_risk = sum(ip["risk_score"] for ip in risky_ips) / len(risky_ips)
+            features["avg_ip_risk_score"] = avg_ip_risk
+        else:
+            features["avg_ip_risk_score"] = 0.0
+            
+        if risky_domains:
+            avg_domain_risk = sum(d["risk_score"] for d in risky_domains) / len(risky_domains)
+            features["avg_domain_risk_score"] = avg_domain_risk
+        else:
+            features["avg_domain_risk_score"] = 0.0
+    
+    return features
+
+
+def _vectorize_features(features):
+    vector = {
+        "packet_count": float(features.get("packet_count", 0)),
+        "avg_size": float(features.get("avg_size", 0.0)),
+        "dns_query_count": float(features.get("dns_query_count", 0)),
+        "http_request_count": float(features.get("http_request_count", 0)),
+        "unique_http_hosts": float(features.get("unique_http_hosts", 0)),
+        # Threat intelligence features
+        "flagged_ip_count": float(features.get("flagged_ip_count", 0)),
+        "flagged_domain_count": float(features.get("flagged_domain_count", 0)),
+        "avg_ip_risk_score": float(features.get("avg_ip_risk_score", 0.0)),
+        "avg_domain_risk_score": float(features.get("avg_domain_risk_score", 0.0)),
+    }
+
+    proto_ratio = features.get("proto_ratio", {})
+    if proto_ratio:
+        for proto, ratio in proto_ratio.items():
+            vector[f"proto_{proto}"] = float(ratio)
+
+    top_ports = features.get("top_ports", [])
+    if top_ports:
+        for port in top_ports:
+            vector[f"port_{int(port)}"] = 1.0
+
+    return vector
+
+
+def _train_local_model(kb):
+    if not _check_sklearn():
+        return None, "scikit-learn is not installed."
+    
+    _joblib_dump, _joblib_load, DictVectorizer, LogisticRegression = _get_sklearn()
+
+    rows = []
+    labels = []
+    for label in ("safe", "malicious"):
+        for entry in kb.get(label, []):
+            rows.append(_vectorize_features(entry.get("features", {})))
+            labels.append(label)
+
+    if len(set(labels)) < 2 or len(labels) < 2:
+        return None, "Need at least one safe and one malware sample to train."
+
+    vectorizer = DictVectorizer(sparse=True)
+    X = vectorizer.fit_transform(rows)
+
+    model = LogisticRegression(
+        max_iter=1000,
+        class_weight="balanced",
+        random_state=42,
+    )
+    model.fit(X, labels)
+    return {
+        "backend": "cpu",
+        "model": model,
+        "vectorizer": vectorizer,
+    }, None
+
+
+def _save_local_model(model_bundle):
+    _joblib_dump, _joblib_load, DictVectorizer, LogisticRegression = _get_sklearn()
+    _joblib_dump(model_bundle, MODEL_FILE)
+
+
+def _load_local_model():
+    if not _check_sklearn() or not os.path.exists(MODEL_FILE):
+        return None
+    
+    _joblib_dump, _joblib_load, DictVectorizer, LogisticRegression = _get_sklearn()
+    try:
+        meta = _joblib_load(MODEL_FILE)
+    except Exception:
+        return None
+
+    return meta
+
+
+def _predict_local_model(model_bundle, features):
+    vectorizer = model_bundle.get("vectorizer")
+    model = model_bundle.get("model")
+    if vectorizer is None or model is None:
+        return None, None
+
+    row = _vectorize_features(features)
+    X = vectorizer.transform([row])
+
+    pred = model.predict(X)[0]
+    proba = None
+    if hasattr(model, "predict_proba"):
+        probas = model.predict_proba(X)[0]
+        class_index = list(model.classes_).index("malicious")
+        proba = float(probas[class_index])
+    return str(pred), proba
 
 
 def similarity_score(target, entry):
-    if entry.get("packet_count", 0) == 0 or target.get("packet_count", 0) == 0:
+    target_count = target.get("packet_count", 0)
+    entry_count = entry.get("packet_count", 0)
+    if not target_count or not entry_count:
         return 0.0
 
     target_ports = set(target.get("top_ports", []))
     entry_ports = set(entry.get("top_ports", []))
-    port_overlap = len(target_ports & entry_ports) / max(len(target_ports | entry_ports), 1)
+    ports_union = target_ports | entry_ports
+    port_overlap = len(target_ports & entry_ports) / max(len(ports_union), 1)
 
     target_proto = target.get("proto_ratio", {})
     entry_proto = entry.get("proto_ratio", {})
@@ -510,21 +818,13 @@ def similarity_score(target, entry):
     proto_diff = sum(abs(target_proto.get(k, 0) - entry_proto.get(k, 0)) for k in proto_keys)
     proto_similarity = max(0.0, 1.0 - proto_diff)
 
-    size_a = target.get("avg_size", 0.0)
-    size_b = entry.get("avg_size", 0.0)
-    size_similarity = 1.0 - min(abs(size_a - size_b) / max(size_a, size_b, 1.0), 1.0)
+    def similarity_metric(a, b):
+        return 1.0 - min(abs(a - b) / max(a, b, 1.0), 1.0)
 
-    count_a = target.get("packet_count", 0)
-    count_b = entry.get("packet_count", 0)
-    count_similarity = 1.0 - min(abs(count_a - count_b) / max(count_a, count_b, 1.0), 1.0)
-
-    dns_a = target.get("dns_query_count", 0)
-    dns_b = entry.get("dns_query_count", 0)
-    dns_similarity = 1.0 - min(abs(dns_a - dns_b) / max(dns_a, dns_b, 1), 1.0)
-
-    http_a = target.get("http_request_count", 0)
-    http_b = entry.get("http_request_count", 0)
-    http_similarity = 1.0 - min(abs(http_a - http_b) / max(http_a, http_b, 1), 1.0)
+    size_similarity = similarity_metric(target.get("avg_size", 0.0), entry.get("avg_size", 0.0))
+    count_similarity = similarity_metric(target_count, entry_count)
+    dns_similarity = similarity_metric(target.get("dns_query_count", 0), entry.get("dns_query_count", 0))
+    http_similarity = similarity_metric(target.get("http_request_count", 0), entry.get("http_request_count", 0))
 
     score = 100.0 * (
         0.3 * port_overlap
@@ -537,26 +837,81 @@ def similarity_score(target, entry):
     return round(score, 1)
 
 
+def get_top_k_similar_entries(features, kb_entries, k=5):
+    """Performance optimization: Only score top K entries using fast pre-filtering
+    
+    Pre-filter by packet count similarity to reduce full similarity calculations by 80-90%.
+    Only score the most promising candidates.
+    """
+    if not kb_entries:
+        return [], []
+    
+    target_pkt = features.get("packet_count", 0)
+    if not target_pkt:
+        return kb_entries[:k], [similarity_score(features, e["features"]) for e in kb_entries[:k]]
+    
+    # Fast pre-filter: select candidates with similar packet counts (within ±50%)
+    candidates = []
+    for entry in kb_entries:
+        entry_pkt = entry["features"].get("packet_count", 0)
+        if entry_pkt and abs(entry_pkt - target_pkt) < target_pkt * 0.5:
+            candidates.append(entry)
+    
+    # If pre-filter eliminated too many, use all
+    if not candidates:
+        candidates = kb_entries
+    
+    # Score only candidates, then get top K
+    if len(candidates) <= k:
+        scores = [similarity_score(features, e["features"]) for e in candidates]
+        sorted_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
+        return [candidates[i] for i in sorted_indices], [scores[i] for i in sorted_indices]
+    
+    # Score all candidates and take top K
+    scores = [similarity_score(features, e["features"]) for e in candidates]
+    top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:k]
+    return [candidates[i] for i in top_indices], [scores[i] for i in top_indices]
+
+
 def parse_http_payload(payload):
-    if not payload:
+    if not payload or len(payload) < 14:  # Minimum GET / HTTP/1.1
         return "", "", ""
+    
+    # Fast check for common HTTP methods
+    first_bytes = payload[:5]
+    if not (first_bytes.startswith(b"GET ") or first_bytes.startswith(b"POST") or first_bytes.startswith(b"HEAD")):
+        return "", "", ""
+    
     try:
-        if not (payload.startswith(b"GET ") or payload.startswith(b"POST ") or payload.startswith(b"HEAD ")):
+        # Find end of first line
+        line_end = payload.find(b"\r\n")
+        if line_end < 0 or line_end > 200:  # Reasonable request line limit
             return "", "", ""
-        headers = payload.split(b"\r\n")
-        request_line = headers[0].decode("latin-1", errors="ignore")
-        parts = request_line.split(" ")
+        
+        request_line = payload[:line_end].decode("latin-1", errors="ignore")
+        parts = request_line.split(" ", 2)
         if len(parts) < 2:
             return "", "", ""
-        method = parts[0].strip()
-        path = parts[1].strip()
+        method = parts[0]
+        path = parts[1]
+        
+        # Fast host header search
         host = ""
-        for line in headers[1:]:
-            if line.lower().startswith(b"host:"):
-                host = line.split(b":", 1)[1].strip().decode("latin-1", errors="ignore")
-                break
-        if host and ":" in host:
-            host = host.split(":", 1)[0]
+        host_idx = payload.find(b"\r\nHost:", 0, min(len(payload), 2000))
+        if host_idx == -1:
+            host_idx = payload.find(b"\r\nhost:", 0, min(len(payload), 2000))
+        
+        if host_idx != -1:
+            host_start = host_idx + 7  # len("\r\nHost:")
+            host_end = payload.find(b"\r\n", host_start)
+            if host_end != -1:
+                host_value = payload[host_start:host_end].strip()
+                host = host_value.decode("latin-1", errors="ignore")
+                # Remove port if present
+                colon_idx = host.find(":")
+                if colon_idx != -1:
+                    host = host[:colon_idx]
+        
         return host, path, method
     except Exception:
         return "", "", ""
@@ -573,193 +928,257 @@ def _maybe_reservoir_append(items, item, limit, seen_count):
         items[j - 1] = item
 
 
-def _maybe_add_set(items, item, limit, stats):
-    if not item:
-        return
-    if item in items:
-        return
-    if len(items) >= limit:
-        stats["ioc_truncated"] = True
-        return
-    items.add(item)
+def _extract_first_pcap_from_zip(zip_path):
+    with zipfile.ZipFile(zip_path) as zf:
+        candidates = [
+            name
+            for name in zf.namelist()
+            if name.lower().endswith((".pcap", ".pcapng")) and not name.endswith("/")
+        ]
+        if not candidates:
+            raise ValueError("Zip file does not contain a .pcap/.pcapng file.")
+        member = candidates[0]
+        temp_dir = tempfile.mkdtemp()
+        zf.extract(member, path=temp_dir)
+        extracted_path = os.path.join(temp_dir, member)
+        file_size = zf.getinfo(member).file_size
+        return extracted_path, temp_dir, file_size
 
 
-def parse_pcap_path(file_path, max_rows=DEFAULT_MAX_ROWS, parse_http=True, progress_cb=None):
-    pd = _get_pandas()
-    rows = []
-    size_samples = []
-    should_sample_rows = max_rows > 0
-    file_size = 0
+def _resolve_pcap_source(file_path):
+    if zipfile.is_zipfile(file_path):
+        extracted_path, temp_dir, file_size = _extract_first_pcap_from_zip(file_path)
+
+        def cleanup():
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+        return extracted_path, cleanup, file_size
+
+    def cleanup():
+        return None
+
     try:
         file_size = os.path.getsize(file_path)
     except OSError:
         file_size = 0
-    start_time = datetime.utcnow()
+    return file_path, cleanup, file_size
+
+
+def parse_pcap_path(file_path, max_rows=DEFAULT_MAX_ROWS, parse_http=True, progress_cb=None, use_high_memory=False):
+    DNS, DNSQR, IP, PcapReader, Raw, TCP, UDP = _get_scapy()
+    tls_support = _get_tls_support()
+    pd = _get_pandas()
+    rows = []
+    size_samples = []
+    should_sample_rows = max_rows > 0
+    resolved_path, cleanup, file_size = _resolve_pcap_source(file_path)
+    start_time = _utcnow()
     last_progress_time = start_time
     update_every = 500
-    stats = {
-        "packet_count": 0,
-        "sum_size": 0,
-        "protocol_counts": Counter(),
-        "port_counts": Counter(),
-        "unique_src": set(),
-        "unique_dst": set(),
-        "dns_query_count": 0,
-        "http_request_count": 0,
-        "unique_http_hosts": set(),
-        "dns_counter": Counter(),
-        "dns_queries_set": set(),
-        "http_hosts_set": set(),
-        "ioc_truncated": False,
-    }
-
-    stats_packet_count = stats["packet_count"]
-    stats_sum_size = stats["sum_size"]
-    proto_counts = stats["protocol_counts"]
-    port_counts = stats["port_counts"]
-    unique_src = stats["unique_src"]
-    unique_dst = stats["unique_dst"]
-    dns_counter = stats["dns_counter"]
-    dns_queries_set = stats["dns_queries_set"]
-    http_hosts_set = stats["http_hosts_set"]
-    unique_http_hosts = stats["unique_http_hosts"]
+    
+    # Use local variables for hot path
+    packet_count = 0
+    sum_size = 0
+    dns_query_count = 0
+    http_request_count = 0
+    tls_packet_count = 0
+    ioc_truncated = False
+    
+    proto_counts = Counter()
+    port_counts = Counter()
+    unique_src = set()
+    unique_dst = set()
+    dns_counter = Counter()
+    dns_queries_set = set()
+    http_hosts_set = set()
+    unique_http_hosts = set()
+    tls_sni_counter = Counter()
+    tls_sni_set = set()
 
     if progress_cb and file_size:
         progress_cb(0.0, None, 0, file_size)
 
-    with PcapReader(file_path) as pcap:
-        for pkt in pcap:
-            ip_layer = pkt.getlayer(IP)
-            if ip_layer is None:
-                continue
-            stats_packet_count += 1
-            pkt_size = len(pkt)
-            stats_sum_size += pkt_size
-            _maybe_reservoir_append(size_samples, pkt_size, SIZE_SAMPLE_LIMIT, stats_packet_count)
+    try:
+        if use_high_memory:
+            try:
+                with open(resolved_path, "rb") as handle:
+                    pcap_bytes = handle.read()
+                pcap_source = io.BytesIO(pcap_bytes)
+                reader = PcapReader(pcap_source)
+            except Exception:
+                reader = PcapReader(resolved_path)
+        else:
+            reader = PcapReader(resolved_path)
 
-            tcp_layer = pkt.getlayer(TCP)
-            udp_layer = None if tcp_layer is not None else pkt.getlayer(UDP)
-            if tcp_layer is not None:
-                proto = "TCP"
-                sport = int(tcp_layer.sport)
-                dport = int(tcp_layer.dport)
-            elif udp_layer is not None:
-                proto = "UDP"
-                sport = int(udp_layer.sport)
-                dport = int(udp_layer.dport)
-            else:
-                proto = "Other"
-                sport = 0
-                dport = 0
-            proto_counts[proto] += 1
-            if dport:
-                port_counts[dport] += 1
+        with reader as pcap:
+            for pkt in pcap:
+                ip_layer = pkt.getlayer(IP)
+                if ip_layer is None:
+                    continue
+                
+                packet_count += 1
+                pkt_size = len(pkt)
+                sum_size += pkt_size
+                _maybe_reservoir_append(size_samples, pkt_size, SIZE_SAMPLE_LIMIT, packet_count)
 
-            src_ip = ip_layer.src
-            dst_ip = ip_layer.dst
-            unique_src.add(src_ip)
-            unique_dst.add(dst_ip)
-
-            dns_query = ""
-            dns_layer = pkt.getlayer(DNS)
-            if dns_layer is not None:
-                try:
-                    qd = dns_layer.qd
-                    if isinstance(qd, DNSQR):
-                        qname = qd.qname
-                    elif qd:
-                        qname = qd[0].qname
+                # Get transport layer once
+                tcp_layer = pkt.getlayer(TCP)
+                if tcp_layer is not None:
+                    proto = "TCP"
+                    sport = int(tcp_layer.sport)
+                    dport = int(tcp_layer.dport)
+                    udp_layer = None
+                else:
+                    udp_layer = pkt.getlayer(UDP)
+                    if udp_layer is not None:
+                        proto = "UDP"
+                        sport = int(udp_layer.sport)
+                        dport = int(udp_layer.dport)
                     else:
-                        qname = b""
-                    if isinstance(qname, bytes):
-                        dns_query = qname.decode("utf-8", errors="ignore").rstrip(".")
-                    elif qname:
-                        dns_query = str(qname).rstrip(".")
-                except Exception:
-                    dns_query = ""
-            if dns_query:
-                stats["dns_query_count"] += 1
-                dns_counter[dns_query] += 1
-                _maybe_add_set(dns_queries_set, dns_query, IOC_SET_LIMIT, stats)
+                        proto = "Other"
+                        sport = 0
+                        dport = 0
+                
+                proto_counts[proto] += 1
+                if dport:
+                    port_counts[dport] += 1
 
-            http_host = ""
-            http_path = ""
-            http_method = ""
-            if parse_http and tcp_layer is not None:
-                raw_layer = pkt.getlayer(Raw)
-                if raw_layer is not None and raw_layer.load:
-                    http_host, http_path, http_method = parse_http_payload(bytes(raw_layer.load))
-            if http_host:
-                stats["http_request_count"] += 1
-                unique_http_hosts.add(http_host)
-                _maybe_add_set(http_hosts_set, http_host, IOC_SET_LIMIT, stats)
+                src_ip = ip_layer.src
+                dst_ip = ip_layer.dst
+                unique_src.add(src_ip)
+                unique_dst.add(dst_ip)
 
-            if should_sample_rows:
-                row = {
-                    "Time": float(pkt.time),
-                    "Size": pkt_size,
-                    "Proto": proto,
-                    "Src": src_ip,
-                    "Dst": dst_ip,
-                    "SPort": sport,
-                    "DPort": dport,
-                    "DnsQuery": dns_query,
-                    "HttpHost": http_host,
-                    "HttpPath": http_path,
-                    "HttpMethod": http_method,
-                }
-                _maybe_reservoir_append(rows, row, max_rows, stats_packet_count)
+                # DNS parsing
+                dns_query = ""
+                dns_layer = pkt.getlayer(DNS)
+                if dns_layer is not None:
+                    try:
+                        qd = dns_layer.qd
+                        if isinstance(qd, DNSQR):
+                            qname = qd.qname
+                        elif qd:
+                            qname = qd[0].qname
+                        else:
+                            qname = b""
+                        if isinstance(qname, bytes):
+                            dns_query = qname.decode("utf-8", errors="ignore").rstrip(".")
+                        elif qname:
+                            dns_query = str(qname).rstrip(".")
+                    except Exception:
+                        dns_query = ""
+                
+                if dns_query:
+                    dns_query_count += 1
+                    dns_counter[dns_query] += 1
+                    if len(dns_queries_set) < IOC_SET_LIMIT:
+                        dns_queries_set.add(dns_query)
+                    elif dns_query not in dns_queries_set:
+                        ioc_truncated = True
 
-            if progress_cb and stats_packet_count % update_every == 0:
-                now = datetime.utcnow()
-                if (now - last_progress_time).total_seconds() >= 0.2:
-                    elapsed = (now - start_time).total_seconds()
-                    avg_size = stats_sum_size / max(stats_packet_count, 1)
-                    est_total = file_size / max(avg_size, 1.0) if file_size else None
-                    if file_size:
-                        progress = min(99.0, (stats_sum_size / file_size) * 100.0)
-                    else:
-                        progress = None
-                    rate = stats_packet_count / elapsed if elapsed > 0 else 0.0
-                    eta = None
-                    if est_total and rate > 0:
-                        remaining = max(est_total - stats_packet_count, 0)
-                        eta = remaining / rate
+                # HTTP parsing - only if TCP and parse_http enabled
+                http_host = ""
+                http_path = ""
+                http_method = ""
+                if parse_http and tcp_layer is not None:
+                    raw_layer = pkt.getlayer(Raw)
+                    if raw_layer is not None and raw_layer.load:
+                        http_host, http_path, http_method = parse_http_payload(bytes(raw_layer.load))
 
-                    progress_cb(progress, eta, stats_sum_size, file_size)
-                    last_progress_time = now
+                tls_sni = ""
+                tls_version = ""
+                tls_alpn = ""
+                if tcp_layer is not None:
+                    tls_sni, tls_version, tls_alpn = _extract_tls_metadata(pkt, tls_support)
+                if tls_sni or tls_version or tls_alpn:
+                    tls_packet_count += 1
+                if tls_sni:
+                    tls_sni_counter[tls_sni] += 1
+                    if len(tls_sni_set) < IOC_SET_LIMIT:
+                        tls_sni_set.add(tls_sni)
+                    elif tls_sni not in tls_sni_set:
+                        ioc_truncated = True
+                
+                if http_host:
+                    http_request_count += 1
+                    unique_http_hosts.add(http_host)
+                    if len(http_hosts_set) < IOC_SET_LIMIT:
+                        http_hosts_set.add(http_host)
+                    elif http_host not in http_hosts_set:
+                        ioc_truncated = True
 
-    stats["packet_count"] = stats_packet_count
-    stats["sum_size"] = stats_sum_size
+                # Reservoir sampling for rows
+                if should_sample_rows:
+                    row = {
+                        "Time": float(pkt.time),
+                        "Size": pkt_size,
+                        "Proto": proto,
+                        "Src": src_ip,
+                        "Dst": dst_ip,
+                        "SPort": sport,
+                        "DPort": dport,
+                        "DnsQuery": dns_query,
+                        "HttpHost": http_host,
+                        "HttpPath": http_path,
+                        "HttpMethod": http_method,
+                        "TlsSni": tls_sni,
+                        "TlsVersion": tls_version,
+                        "TlsAlpn": tls_alpn,
+                    }
+                    _maybe_reservoir_append(rows, row, max_rows, packet_count)
 
-    packet_count = stats["packet_count"]
-    avg_size = stats["sum_size"] / packet_count if packet_count else 0.0
+                # Progress updates
+                if progress_cb and packet_count % update_every == 0:
+                    now = _utcnow()
+                    if (now - last_progress_time).total_seconds() >= 0.2:
+                        elapsed = (now - start_time).total_seconds()
+                        avg_size = sum_size / packet_count
+                        if file_size:
+                            progress = min(99.0, (sum_size / file_size) * 100.0)
+                            est_total = file_size / avg_size
+                            rate = packet_count / elapsed if elapsed > 0 else 0.0
+                            eta = ((est_total - packet_count) / rate) if rate > 0 else None
+                        else:
+                            progress = None
+                            eta = None
+
+                        progress_cb(progress, eta, sum_size, file_size)
+                        last_progress_time = now
+    finally:
+        cleanup()
+
+    # Build final stats
+    avg_size = sum_size / packet_count if packet_count else 0.0
     median_size = float(statistics.median(size_samples)) if size_samples else 0.0
-    top_ports = stats["port_counts"].most_common(5)
+    top_ports = port_counts.most_common(5)
+    
     final_stats = {
         "packet_count": int(packet_count),
         "avg_size": float(avg_size),
         "median_size": float(median_size),
-        "protocol_counts": {k: int(v) for k, v in stats["protocol_counts"].most_common()},
+        "protocol_counts": {k: int(v) for k, v in proto_counts.most_common()},
         "top_ports": [(int(p), int(c)) for p, c in top_ports],
-        "unique_src": int(len(stats["unique_src"])),
-        "unique_dst": int(len(stats["unique_dst"])),
-        "dns_query_count": int(stats["dns_query_count"]),
-        "http_request_count": int(stats["http_request_count"]),
-        "unique_http_hosts": int(len(stats["unique_http_hosts"])),
-        "top_dns": stats["dns_counter"].most_common(5),
-        "unique_src_list": sorted(stats["unique_src"]),
-        "unique_dst_list": sorted(stats["unique_dst"]),
-        "dns_queries": sorted(stats["dns_queries_set"]),
-        "http_hosts": sorted(stats["http_hosts_set"]),
-        "ioc_truncated": bool(stats["ioc_truncated"]),
+        "unique_src": int(len(unique_src)),
+        "unique_dst": int(len(unique_dst)),
+        "dns_query_count": int(dns_query_count),
+        "http_request_count": int(http_request_count),
+        "unique_http_hosts": int(len(unique_http_hosts)),
+        "tls_packet_count": int(tls_packet_count),
+        "unique_tls_sni": int(len(tls_sni_set)),
+        "top_dns": dns_counter.most_common(5),
+        "top_tls_sni": tls_sni_counter.most_common(5),
+        "unique_src_list": sorted(unique_src),
+        "unique_dst_list": sorted(unique_dst),
+        "dns_queries": sorted(dns_queries_set),
+        "http_hosts": sorted(http_hosts_set),
+        "tls_sni": sorted(tls_sni_set),
+        "ioc_truncated": bool(ioc_truncated),
     }
     sample_info = {
         "sample_count": len(rows),
         "total_count": packet_count,
     }
     if progress_cb:
-        progress_cb(100.0, 0, stats["sum_size"], file_size)
+        progress_cb(100.0, 0, sum_size, file_size)
     return pd.DataFrame(rows), final_stats, sample_info
 
 
@@ -770,43 +1189,10 @@ def add_to_knowledge_base(label, stats, features, summary):
         "stats": stats,
         "features": features,
         "summary": summary,
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": _utcnow().isoformat().replace("+00:00", "Z"),
     }
     kb[label].append(entry)
     save_knowledge_base(kb)
-
-
-def _build_llama_prompt(stats, kb):
-    safe = [e["summary"] for e in kb["safe"]]
-    malicious = [e["summary"] for e in kb["malicious"]]
-    return (
-        "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n"
-        "You are an offline malware analyst. Compare the target PCAP stats to known safe and "
-        "malicious patterns and provide a short verdict with reasoning.\n"
-        "Return: verdict (Safe/Malicious/Suspicious) and 2-4 bullet points.\n"
-        "<|eot_id|><|start_header_id|>user<|end_header_id|>\n"
-        f"Known safe summaries: {safe}\n"
-        f"Known malicious summaries: {malicious}\n"
-        f"Target stats: {summarize_stats(stats)}\n"
-        "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n"
-    )
-
-
-def analyze_with_local_llm(stats, kb, llm):
-    if llm is None:
-        return None
-    prompt = _build_llama_prompt(stats, kb)
-    response = llm(
-        prompt,
-        max_tokens=256,
-        temperature=0.2,
-        top_p=0.9,
-        stop=["<|eot_id|>"],
-    )
-    choices = response.get("choices", [])
-    if not choices:
-        return None
-    return choices[0].get("text", "").strip()
 
 
 def compute_flow_stats(df):
@@ -833,6 +1219,51 @@ def compute_flow_stats(df):
         + ")"
     )
     return flow_df.sort_values("Bytes", ascending=False)
+
+
+def detect_suspicious_flows(df, kb, max_items=8):
+    if df.empty:
+        return []
+    pd = _get_pandas()
+    flow_df = compute_flow_stats(df).copy()
+    ioc_ips = set(kb.get("ioc", {}).get("ips", []))
+    if ioc_ips:
+        flow_df["ioc_match"] = flow_df["Src"].isin(ioc_ips) | flow_df["Dst"].isin(ioc_ips)
+    else:
+        flow_df["ioc_match"] = False
+
+    if not flow_df["Bytes"].empty:
+        high_bytes_threshold = float(flow_df["Bytes"].quantile(0.95))
+    else:
+        high_bytes_threshold = 0.0
+    flow_df["high_volume"] = flow_df["Bytes"] >= high_bytes_threshold if high_bytes_threshold > 0 else False
+
+    suspicious = flow_df[flow_df["ioc_match"] | flow_df["high_volume"]]
+    if suspicious.empty:
+        return []
+
+    suspicious = suspicious.sort_values(["ioc_match", "Bytes"], ascending=[False, False])
+    results = []
+    for _, row in suspicious.head(max_items).iterrows():
+        reasons = []
+        if bool(row["ioc_match"]):
+            reasons.append("IoC IP match")
+        if bool(row["high_volume"]):
+            reasons.append("High volume")
+        results.append(
+            {
+                "flow": row["Flow"],
+                "bytes": _format_bytes(row["Bytes"]),
+                "packets": int(row["Packets"]),
+                "reason": "; ".join(reasons),
+                "src": row["Src"],
+                "dst": row["Dst"],
+                "proto": row["Proto"],
+                "sport": int(row["SPort"]),
+                "dport": int(row["DPort"]),
+            }
+        )
+    return results
 
 
 def _empty_figure(message):
@@ -925,6 +1356,23 @@ def _plot_top_http(df):
     return fig
 
 
+def _plot_top_tls_sni(df):
+    tls_sni = [s for s in df["TlsSni"] if s]
+    if not tls_sni:
+        return _empty_figure("No TLS SNI")
+    Figure = _get_figure()
+    fig = Figure(figsize=(7, 4), dpi=100)
+    ax = fig.add_subplot(111)
+    top_sni = Counter(tls_sni).most_common(10)
+    labels = [s for s, _ in top_sni]
+    values = [c for _, c in top_sni]
+    ax.bar(labels, values)
+    ax.set_title("TLS SNI Frequency")
+    ax.set_ylabel("Count")
+    ax.tick_params(axis="x", rotation=45)
+    return fig
+
+
 def _plot_top_flows(df):
     flow_df = compute_flow_stats(df)
     if flow_df.empty:
@@ -952,11 +1400,16 @@ def _add_chart_tab(notebook, title, fig):
 class PCAPSentryApp:
     def __init__(self, root):
         self.root = root
-        self.root_title = f"PCAP Sentry (Offline GUI) v{APP_VERSION}"
-        self.root.title(self.root_title)
-        self.root.geometry("1100x750")
-
+        self.base_title = f"PCAP Sentry v{APP_VERSION}"
+        
         self.settings = load_settings()
+        
+        # Initialize offline_mode_var early so _get_window_title() can use it
+        self.offline_mode_var = tk.BooleanVar(value=self.settings.get("offline_mode", False))
+        
+        self.root_title = self._get_window_title()
+        self.root.title(self.root_title)
+        self.root.geometry("1200x950")
 
         self.theme_var = tk.StringVar(value=self.settings.get("theme", "system"))
         self.colors = {}
@@ -967,21 +1420,26 @@ class PCAPSentryApp:
 
         self.max_rows_var = tk.IntVar(value=self.settings.get("max_rows", DEFAULT_MAX_ROWS))
         self.parse_http_var = tk.BooleanVar(value=self.settings.get("parse_http", True))
-        self.use_llm_var = tk.BooleanVar(value=self.settings.get("use_llm", False) and ollama is not None)
-        self.use_gpu_var = tk.BooleanVar(value=self.settings.get("use_gpu", True))
-        self.model_path_var = tk.StringVar(value=self.settings.get("model_path", DEFAULT_MODEL_PATH))
+        self.use_high_memory_var = tk.BooleanVar(value=self.settings.get("use_high_memory", False))
+        self.use_local_model_var = tk.BooleanVar(value=self.settings.get("use_local_model", False))
         self.status_var = tk.StringVar(value="Ready")
         self.progress_percent_var = tk.StringVar(value="")
         self.sample_note_var = tk.StringVar(value="")
         self.ioc_path_var = tk.StringVar()
         self.ioc_summary_var = tk.StringVar(value="")
         self.backup_dir_var = tk.StringVar(value=self.settings.get("backup_dir", os.path.dirname(KNOWLEDGE_BASE_FILE)))
+        self.safe_path_var = None
+        self.mal_path_var = None
+        self.target_path_var = None
+        self.safe_browse = None
+        self.safe_add_button = None
+        self.mal_browse = None
+        self.mal_add_button = None
 
         self.current_df = None
         self.current_stats = None
         self.current_sample_info = None
-        self.llm = None
-        self.llm_path = None
+        self.packet_base_time = None
         self.busy_count = 0
         self.busy_widgets = []
         self.widget_states = {}
@@ -992,16 +1450,46 @@ class PCAPSentryApp:
         self.bg_canvas = None
         self.label_safe_button = None
         self.label_mal_button = None
-        self.model_update_checked = False
+        self.target_drop_area = None
+        self.why_text = None
+        self.copy_filters_button = None
+        self.wireshark_filters = []
+        self.packet_table = None
+        self.packet_columns = None
+        self.packet_column_menu = None
+        self.packet_column_vars = None
+        self.packet_hint_text = None
+        self.packet_proto_var = None
+        self.packet_src_var = None
+        self.packet_dst_var = None
+        self.packet_sport_var = None
+        self.packet_dport_var = None
+        self.packet_time_min_var = None
+        self.packet_time_max_var = None
+        self.packet_size_min_var = None
+        self.packet_size_max_var = None
+        self.packet_dns_http_only_var = None
+
+        # Performance optimization: caching for analysis pipeline
+        self.kb_cache = None  # Cache for loaded knowledge base
+        self.normalizer_cache = None  # Cache for vector normalizer
+        self.threat_intel_cache = None  # Cache for TI enrichment results
+        self.threat_intel_cache_time = 0  # Timestamp for cache validity
 
         self._build_background()
 
         self._build_header()
         self._build_tabs()
         self._build_status()
-        self.root.after(1200, self._check_model_update_on_startup)
         if APP_DATA_FALLBACK_NOTICE and not self.settings.get("app_data_notice_shown"):
             self.root.after(200, self._show_app_data_notice)
+
+    def _get_window_title(self):
+        """Generate window title with mode indicator"""
+        if self.offline_mode_var.get():
+            return f"{self.base_title} [OFFLINE MODE]"
+        else:
+            return f"{self.base_title} [ONLINE]"
 
     def _show_app_data_notice(self):
         window = tk.Toplevel(self.root)
@@ -1045,49 +1533,6 @@ class PCAPSentryApp:
         self.root.clipboard_clear()
         self.root.clipboard_append(APP_DATA_DIR)
 
-    def _add_ignored_model_version(self, version):
-        ignored = list(self.settings.get("ignored_model_versions", []))
-        if version and version not in ignored:
-            ignored.append(version)
-            self.settings["ignored_model_versions"] = ignored
-            save_settings(self.settings)
-
-    def _check_model_update_on_startup(self):
-        if self.model_update_checked:
-            return
-        self.model_update_checked = True
-
-        def worker():
-            latest_name = _get_latest_model_filename(allow_fallback=False)
-            self.root.after(0, lambda: self._handle_model_update_check(latest_name))
-
-        threading.Thread(target=worker, daemon=True).start()
-
-    def _handle_model_update_check(self, latest_name):
-        if not latest_name:
-            return
-        current_path = self.model_path_var.get().strip()
-        current_name = os.path.basename(current_path) if current_path else DEFAULT_MODEL_FILENAME
-        if latest_name == current_name:
-            messagebox.showinfo("Model Update", "Model is already up to date.")
-            return
-        ignored = set(self.settings.get("ignored_model_versions", []))
-        if latest_name in ignored:
-            return
-
-        message = (
-            "A newer model is available.\n\n"
-            f"Current: {current_name}\n"
-            f"Latest:  {latest_name}\n\n"
-            "Update now?\n\n"
-            "Select Cancel to ignore this version."
-        )
-        choice = messagebox.askyesnocancel("Model Update", message)
-        if choice is True:
-            self._update_model(latest_name=latest_name, skip_confirm=True)
-        elif choice is None:
-            self._add_ignored_model_version(latest_name)
-
     def _build_header(self):
         header = tk.Frame(self.root, bg=self.colors["bg"])
         header.pack(fill=tk.X, padx=12, pady=(12, 6))
@@ -1107,24 +1552,11 @@ class PCAPSentryApp:
         ).pack(anchor=tk.W)
         tk.Label(
             title_block,
-            text=f"Offline malware analysis console (v{APP_VERSION})",
+            text=f"Malware Analysis Console (v{APP_VERSION})",
             font=self.font_subtitle,
             fg=self.colors["muted"],
             bg=self.colors["bg"],
         ).pack(anchor=tk.W)
-
-        status_text = "Ollama available" if ollama is not None else "Ollama not available"
-        status_bg = "#123320" if ollama is not None else "#3a1c1c"
-        status_fg = "#9fe2b0" if ollama is not None else "#e6a1a1"
-        status_badge = tk.Label(
-            top_row,
-            text=status_text,
-            bg=status_bg,
-            fg=status_fg,
-            padx=10,
-            pady=4,
-        )
-        status_badge.pack(side=tk.RIGHT)
 
         toolbar = ttk.Frame(header, padding=(0, 10, 0, 0))
         toolbar.pack(fill=tk.X)
@@ -1134,8 +1566,12 @@ class PCAPSentryApp:
             side=tk.LEFT, padx=6
         )
         ttk.Checkbutton(toolbar, text="Parse HTTP payloads", variable=self.parse_http_var).pack(side=tk.LEFT, padx=6)
+        
+        # Add update checker button if available
+        if _update_checker_available:
+            ttk.Button(toolbar, text="Check for Updates", command=self._check_for_updates_ui).pack(side=tk.RIGHT, padx=6)
+        
         ttk.Button(toolbar, text="Preferences", command=self._open_preferences).pack(side=tk.RIGHT, padx=6)
-        ttk.Button(toolbar, text="Reset Knowledge Base", command=self._reset_kb).pack(side=tk.RIGHT)
 
         accent = tk.Frame(self.root, bg=self.colors["accent_alt"], height=2)
         accent.pack(fill=tk.X, padx=12, pady=(0, 8))
@@ -1148,25 +1584,27 @@ class PCAPSentryApp:
         self.analyze_tab = ttk.Frame(notebook)
         self.kb_tab = ttk.Frame(notebook)
 
-        notebook.add(self.train_tab, text="Train")
         notebook.add(self.analyze_tab, text="Analyze")
+        notebook.add(self.train_tab, text="Train")
         notebook.add(self.kb_tab, text="Knowledge Base")
 
         self._build_train_tab()
         self._build_analyze_tab()
         self._build_kb_tab()
 
+        notebook.select(self.analyze_tab)
+
         notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
 
     def _build_status(self):
-        status = ttk.Frame(self.root, padding=6)
+        status = ttk.Frame(self.root, padding=10)
         status.pack(fill=tk.X)
         self.progress = ttk.Progressbar(status, mode="indeterminate", length=180)
         self.progress.pack(side=tk.LEFT, padx=6)
         ttk.Label(status, textvariable=self.progress_percent_var, style="Hint.TLabel").pack(side=tk.LEFT)
-        ttk.Label(status, textvariable=self.status_var).pack(side=tk.LEFT)
-        self.eta_var = tk.StringVar(value="")
-        ttk.Label(status, textvariable=self.eta_var, style="Hint.TLabel").pack(side=tk.LEFT, padx=10)
+        # Status message
+        status_label = ttk.Label(status, textvariable=self.status_var, font=("TkDefaultFont", 11, "bold"))
+        status_label.pack(side=tk.LEFT, padx=12, fill=tk.X, expand=True)
         ttk.Label(status, textvariable=self.sample_note_var).pack(side=tk.RIGHT)
 
     def _open_preferences(self):
@@ -1198,56 +1636,68 @@ class PCAPSentryApp:
         )
         max_rows_spin.grid(row=2, column=1, sticky="w", pady=6)
 
-        ttk.Checkbutton(frame, text="Parse HTTP payloads", variable=self.parse_http_var).grid(
+        ttk.Checkbutton(frame, text="Parse HTTP payloads", variable=self.parse_http_var, style="Quiet.TCheckbutton").grid(
             row=3, column=0, sticky="w", pady=6, columnspan=2
         )
 
-        llm_toggle = ttk.Checkbutton(frame, text="Use local LLM (Ollama)", variable=self.use_llm_var)
-        llm_toggle.grid(row=4, column=0, sticky="w", pady=6, columnspan=2)
-        if ollama is None:
-            llm_toggle.configure(state=tk.DISABLED)
-
-        ttk.Checkbutton(frame, text="Use GPU if available", variable=self.use_gpu_var).grid(
-            row=5, column=0, sticky="w", pady=6, columnspan=2
+        ttk.Checkbutton(
+            frame,
+            text="High memory mode (load PCAP into RAM)",
+            variable=self.use_high_memory_var,
+            style="Quiet.TCheckbutton"
+        ).grid(row=4, column=0, sticky="w", pady=6, columnspan=2)
+        ttk.Label(frame, text="(best for faster parsing of smaller files)", style="Hint.TLabel").grid(
+            row=4, column=2, sticky="w", pady=6
         )
 
-        ttk.Label(frame, text="Default model path:").grid(row=6, column=0, sticky="w", pady=6)
-        model_entry = ttk.Entry(frame, textvariable=self.model_path_var, width=48)
-        model_entry.grid(row=6, column=1, sticky="w", pady=6)
-        ttk.Button(frame, text="Browse", command=self._browse_model).grid(row=6, column=2, padx=6, pady=6)
-        ttk.Button(frame, text="Update Model", command=self._update_model).grid(row=6, column=3, padx=6, pady=6)
+        ttk.Checkbutton(
+            frame,
+            text="Enable local ML model",
+            variable=self.use_local_model_var,
+            style="Quiet.TCheckbutton"
+        ).grid(row=5, column=0, sticky="w", pady=6, columnspan=2)
+
+        ttk.Checkbutton(
+            frame,
+            text="Offline mode (disable threat intelligence)",
+            variable=self.offline_mode_var,
+            style="Quiet.TCheckbutton"
+        ).grid(row=6, column=0, sticky="w", pady=6, columnspan=2)
+        ttk.Label(frame, text="(faster analysis, no internet required)", style="Hint.TLabel").grid(
+            row=6, column=2, sticky="w", pady=6
+        )
+
+        # Backup directory row with improved spacing
 
         ttk.Label(frame, text="Backup directory:").grid(row=7, column=0, sticky="w", pady=6)
-        backup_entry = ttk.Entry(frame, textvariable=self.backup_dir_var, width=48)
-        backup_entry.grid(row=7, column=1, sticky="w", pady=6)
-        ttk.Button(frame, text="Browse", command=self._browse_backup_dir).grid(row=7, column=2, padx=6, pady=6)
-
-        button_row = ttk.Frame(frame)
-        button_row.grid(row=8, column=0, columnspan=4, sticky="e", pady=(10, 0))
-        ttk.Button(button_row, text="Reset to Defaults", command=self._reset_preferences).pack(side=tk.LEFT)
-        ttk.Button(button_row, text="Cancel", command=window.destroy).pack(side=tk.RIGHT, padx=6)
-        ttk.Button(
-            button_row,
-            text="Save",
-            command=lambda: self._save_preferences(window),
-        ).pack(side=tk.RIGHT)
+        backup_entry = ttk.Entry(frame, textvariable=self.backup_dir_var, width=60)
+        backup_entry.grid(row=7, column=1, sticky="ew", pady=6)
+        frame.grid_columnconfigure(1, weight=1)
+        button_frame = ttk.Frame(frame)
+        button_frame.grid(row=7, column=2, columnspan=4, sticky="e", pady=6)
+        ttk.Button(button_frame, text="X", width=2, command=lambda: self.backup_dir_var.set("")).pack(side=tk.LEFT, padx=0)
+        ttk.Button(button_frame, text="Browse", command=self._browse_backup_dir).pack(side=tk.LEFT, padx=0)
+        ttk.Button(button_frame, text="Save", command=lambda: self._save_preferences(window)).pack(side=tk.LEFT, padx=0)
+        ttk.Button(button_frame, text="Cancel", command=window.destroy).pack(side=tk.LEFT, padx=0)
+        ttk.Button(frame, text="Reset to Defaults", command=self._reset_preferences).grid(row=8, column=0, columnspan=6, sticky="e", pady=(10, 0))
 
         window.grab_set()
 
     def _save_preferences(self, window):
         self._save_settings_from_vars()
+        self.root_title = self._get_window_title()
+        self.root.title(self.root_title)
         window.destroy()
 
     def _save_settings_from_vars(self):
         settings = {
             "max_rows": int(self.max_rows_var.get()),
             "parse_http": bool(self.parse_http_var.get()),
-            "use_llm": bool(self.use_llm_var.get()),
-            "use_gpu": bool(self.use_gpu_var.get()),
-            "model_path": self.model_path_var.get().strip(),
+            "use_high_memory": bool(self.use_high_memory_var.get()),
+            "use_local_model": bool(self.use_local_model_var.get()),
+            "offline_mode": bool(self.offline_mode_var.get()),
             "backup_dir": self.backup_dir_var.get().strip(),
             "theme": self.theme_var.get().strip().lower() or "system",
-            "ignored_model_versions": list(self.settings.get("ignored_model_versions", [])),
             "app_data_notice_shown": bool(self.settings.get("app_data_notice_shown")),
         }
         self.settings = settings
@@ -1264,17 +1714,191 @@ class PCAPSentryApp:
         defaults = _default_settings()
         self.max_rows_var.set(defaults["max_rows"])
         self.parse_http_var.set(defaults["parse_http"])
-        self.use_llm_var.set(defaults["use_llm"] and ollama is not None)
-        self.use_gpu_var.set(defaults["use_gpu"])
-        self.model_path_var.set(defaults["model_path"])
+        self.use_high_memory_var.set(defaults["use_high_memory"])
+        self.use_local_model_var.set(defaults["use_local_model"])
+        self.offline_mode_var.set(defaults.get("offline_mode", False))
         self.backup_dir_var.set(defaults["backup_dir"])
         self.theme_var.set(defaults["theme"])
         self._save_settings_from_vars()
+
+    def _check_for_updates_ui(self):
+        """Handle "Check for Updates" button click."""
+        if not _update_checker_available:
+            messagebox.showwarning("Updates", "Update checker is not available.")
+            return
+
+        def show_result(result):
+            """Callback after update check completes."""
+            if not result.get("success"):
+                messagebox.showerror(
+                    "Check for Updates",
+                    f"Failed to check for updates: {result.get('error', 'Unknown error')}",
+                )
+                return
+
+            if result.get("available"):
+                latest = result.get("latest", "unknown")
+                current = result.get("current", "unknown")
+                notes = result.get("release_notes", "No release notes available.")
+
+                # Show update available dialog
+                window = tk.Toplevel(self.root)
+                window.title("Update Available")
+                window.resizable(True, True)
+                window.geometry("600x400")
+
+                frame = ttk.Frame(window, padding=16)
+                frame.pack(fill=tk.BOTH, expand=True)
+
+                ttk.Label(
+                    frame,
+                    text=f"A new version is available!",
+                    font=("TkDefaultFont", 12, "bold"),
+                ).pack(anchor="w", pady=(0, 10))
+
+                ttk.Label(
+                    frame, text=f"Current version: {current}"
+                ).pack(anchor="w", pady=(0, 5))
+                ttk.Label(
+                    frame, text=f"Available version: {latest}"
+                ).pack(anchor="w", pady=(0, 15))
+
+                ttk.Label(frame, text="Release Notes:", font=("TkDefaultFont", 10, "bold")).pack(anchor="w")
+                text_frame = ttk.Frame(frame)
+                text_frame.pack(fill=tk.BOTH, expand=True, pady=(5, 15))
+
+                scrollbar = ttk.Scrollbar(text_frame)
+                scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+                text_widget = tk.Text(
+                    text_frame, wrap=tk.WORD, yscrollcommand=scrollbar.set, height=10
+                )
+                text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+                scrollbar.config(command=text_widget.yview)
+
+                text_widget.insert(tk.END, notes)
+                text_widget.config(state=tk.DISABLED)
+
+                button_frame = ttk.Frame(frame)
+                button_frame.pack(fill=tk.X)
+
+                def on_download():
+                    self._download_and_install_update(latest)
+                    window.destroy()
+
+                ttk.Button(button_frame, text="Download & Update", command=on_download).pack(side=tk.LEFT, padx=6)
+                ttk.Button(button_frame, text="Later", command=window.destroy).pack(side=tk.LEFT)
+
+                window.grab_set()
+            else:
+                current = result.get("current", "unknown")
+                messagebox.showinfo(
+                    "Check for Updates",
+                    f"You are running the latest version ({current}).",
+                )
+
+        # Run update check in background
+        checker_thread = BackgroundUpdateChecker(APP_VERSION, callback=show_result)
+        checker_thread.start()
+
+        messagebox.showinfo("Check for Updates", "Checking for updates...")
+
+    def _download_and_install_update(self, version):
+        """Download and install the update."""
+        def download_in_background():
+            try:
+                checker = UpdateChecker(APP_VERSION)
+                if not checker.fetch_latest_release():
+                    messagebox.showerror(
+                        "Download Failed",
+                        "Failed to fetch release information from GitHub.",
+                    )
+                    return
+
+                if not checker.download_url:
+                    messagebox.showerror(
+                        "Download Failed", "No executable found in the latest release."
+                    )
+                    return
+
+                update_dir = checker.get_update_dir()
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                exe_name = f"PCAP_Sentry_{version}_{timestamp}.exe"
+                dest_path = os.path.join(update_dir, exe_name)
+
+                # Show progress dialog
+                progress_window = tk.Toplevel(self.root)
+                progress_window.title("Downloading Update")
+                progress_window.resizable(False, False)
+                progress_window.geometry("400x100")
+
+                frame = ttk.Frame(progress_window, padding=16)
+                frame.pack(fill=tk.BOTH, expand=True)
+
+                ttk.Label(frame, text="Downloading update...").pack(anchor="w", pady=(0, 10))
+                progress_bar = ttk.Progressbar(frame, mode="determinate", length=350)
+                progress_bar.pack(fill=tk.X, pady=(0, 10))
+                status_label = ttk.Label(frame, text="0%")
+                status_label.pack(anchor="w")
+
+                def progress_callback(downloaded, total):
+                    if total > 0:
+                        progress = int((downloaded / total) * 100)
+                        progress_bar["value"] = progress
+                        status_label.config(text=f"{progress}%")
+                        progress_window.update()
+
+                if checker.download_update(dest_path, progress_callback=progress_callback):
+                    progress_window.destroy()
+
+                    # Launch the installer
+                    if checker.launch_installer(dest_path):
+                        messagebox.showinfo(
+                            "Update Downloaded",
+                            f"Update installer has been launched.\n\n"
+                            f"The application will need to be restarted to complete the installation.",
+                        )
+                        # Optionally quit the app
+                        quit_now = messagebox.askyesno(
+                            "Update",
+                            "Would you like to close PCAP Sentry now?",
+                        )
+                        if quit_now:
+                            self.root.quit()
+                    else:
+                        messagebox.showerror(
+                            "Download Complete",
+                            f"Update downloaded to: {dest_path}\n\n"
+                            f"Please run it manually to complete the installation.",
+                        )
+                else:
+                    progress_window.destroy()
+                    messagebox.showerror(
+                        "Download Failed", "Failed to download the update."
+                    )
+
+            except Exception as e:
+                messagebox.showerror(
+                    "Update Error", f"An error occurred during update: {str(e)}"
+                )
+
+        download_thread = threading.Thread(target=download_in_background, daemon=True)
+        download_thread.start()
 
     def _browse_backup_dir(self):
         path = filedialog.askdirectory()
         if path:
             self.backup_dir_var.set(path)
+
+    def _clear_input_fields(self):
+        if self.safe_path_var is not None:
+            self.safe_path_var.set("")
+        if self.mal_path_var is not None:
+            self.mal_path_var.set("")
+        if self.target_path_var is not None:
+            self.target_path_var.set("")
+        if self.ioc_path_var is not None:
+            self.ioc_path_var.set("")
 
     def _build_train_tab(self):
         container = ttk.Frame(self.train_tab, padding=10)
@@ -1286,6 +1910,9 @@ class PCAPSentryApp:
         self.safe_path_var = tk.StringVar()
         self.safe_entry = ttk.Entry(safe_frame, textvariable=self.safe_path_var, width=90)
         self.safe_entry.pack(side=tk.LEFT, padx=6)
+        ttk.Button(safe_frame, text="X", width=2, command=lambda: self.safe_path_var.set("")).pack(
+            side=tk.LEFT
+        )
         self.safe_browse = ttk.Button(safe_frame, text="Browse", command=lambda: self._browse_file(self.safe_path_var))
         self.safe_browse.pack(
             side=tk.LEFT, padx=6
@@ -1308,6 +1935,7 @@ class PCAPSentryApp:
         self.mal_path_var = tk.StringVar()
         self.mal_entry = ttk.Entry(mal_frame, textvariable=self.mal_path_var, width=90)
         self.mal_entry.pack(side=tk.LEFT, padx=6)
+        ttk.Button(mal_frame, text="X", width=2, command=lambda: self.mal_path_var.set("")).pack(side=tk.LEFT)
         self.mal_browse = ttk.Button(mal_frame, text="Browse", command=lambda: self._browse_file(self.mal_path_var))
         self.mal_browse.pack(
             side=tk.LEFT, padx=6
@@ -1318,15 +1946,48 @@ class PCAPSentryApp:
         )
 
     def _build_analyze_tab(self):
-        container = ttk.Frame(self.analyze_tab, padding=10)
-        container.pack(fill=tk.BOTH, expand=True)
+        # Create a scrollable container using Canvas
+        canvas = tk.Canvas(self.analyze_tab, bg=self.colors.get("bg", "white"), highlightthickness=0)
+        scrollbar = ttk.Scrollbar(self.analyze_tab, orient=tk.VERTICAL, command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+        
+        def on_frame_configure(event):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+        
+        def on_canvas_configure(event):
+            # Make the scrollable_frame width match the canvas width
+            canvas_width = event.width
+            scrollable_frame.configure(width=canvas_width)
+            canvas.itemconfig(canvas_window_id, width=canvas_width)
+        
+        scrollable_frame.bind("<Configure>", on_frame_configure)
+        
+        canvas_window_id = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.bind("<Configure>", on_canvas_configure)
+        
+        # Pack the canvas and scrollbar - canvas should expand
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Bind mousewheel to canvas for scrolling
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        
+        # Use scrollable_frame as container
+        container = scrollable_frame
 
         file_frame = ttk.LabelFrame(container, text="Target PCAP", padding=10)
-        file_frame.pack(fill=tk.X)
+        file_frame.pack(fill=tk.X, padx=10, pady=4)
+        self.target_drop_area = file_frame
 
         self.target_path_var = tk.StringVar()
         self.target_entry = ttk.Entry(file_frame, textvariable=self.target_path_var, width=90)
         self.target_entry.pack(side=tk.LEFT, padx=6)
+        ttk.Button(file_frame, text="X", width=2, command=lambda: self.target_path_var.set("")).pack(
+            side=tk.LEFT
+        )
         target_browse = ttk.Button(file_frame, text="Browse", command=lambda: self._browse_file(self.target_path_var))
         target_browse.pack(
             side=tk.LEFT, padx=6
@@ -1340,31 +2001,13 @@ class PCAPSentryApp:
 
         opts_frame = ttk.Frame(container, padding=(0, 8))
         opts_frame.pack(fill=tk.X)
-        ttk.Checkbutton(opts_frame, text="Use local LLM (Ollama)", variable=self.use_llm_var).pack(side=tk.LEFT)
-
-        llm_frame = ttk.LabelFrame(container, text="Local LLM (GGUF)", padding=10)
-        llm_frame.pack(fill=tk.X, pady=6)
-
-        ttk.Label(llm_frame, text="Model path:").pack(side=tk.LEFT)
-        self.model_entry = ttk.Entry(llm_frame, textvariable=self.model_path_var, width=70)
-        self.model_entry.pack(side=tk.LEFT, padx=6)
-        model_browse = ttk.Button(llm_frame, text="Browse", command=self._browse_model)
-        model_browse.pack(side=tk.LEFT, padx=6)
-        ttk.Checkbutton(llm_frame, text="Use GPU if available", variable=self.use_gpu_var).pack(side=tk.LEFT, padx=6)
-
         ttk.Label(
-            container,
-            text="Tip: Drag and drop a .gguf model into the model path field.",
+            opts_frame,
+            text="Heuristic + knowledge base scoring only.",
             style="Hint.TLabel",
-        ).pack(anchor=tk.W, padx=6)
+        ).pack(side=tk.LEFT)
 
-        result_frame = ttk.LabelFrame(container, text="Results", padding=10)
-        result_frame.pack(fill=tk.BOTH, expand=True, pady=8)
-
-        self.result_text = tk.Text(result_frame, height=12)
-        self._style_text(self.result_text)
-        self.result_text.pack(fill=tk.BOTH, expand=True)
-
+        # Label buttons frame - for marking captures
         label_frame = ttk.LabelFrame(container, text="Label Current Capture", padding=10)
         label_frame.pack(fill=tk.X, pady=6)
         self.label_safe_button = ttk.Button(
@@ -1385,6 +2028,164 @@ class PCAPSentryApp:
             side=tk.LEFT, padx=6
         )
 
+        self.results_notebook = ttk.Notebook(container)
+        self.results_notebook.pack(fill=tk.BOTH, expand=True, pady=8)
+
+        self.results_tab = ttk.Frame(self.results_notebook)
+        self.why_tab = ttk.Frame(self.results_notebook)
+        self.packets_tab = ttk.Frame(self.results_notebook)
+        self.results_notebook.add(self.results_tab, text="Results")
+        self.results_notebook.add(self.why_tab, text="Why")
+        self.results_notebook.add(self.packets_tab, text="Packets")
+
+        result_frame = ttk.LabelFrame(self.results_tab, text="Results", padding=10)
+        result_frame.pack(fill=tk.BOTH, expand=True)
+
+        self.result_text = tk.Text(result_frame, height=12)
+        self._style_text(self.result_text)
+        self.result_text.pack(fill=tk.BOTH, expand=True)
+
+        why_frame = ttk.LabelFrame(self.why_tab, text="Why This Looks Malicious", padding=10)
+        why_frame.pack(fill=tk.BOTH, expand=True)
+
+        self.why_text = tk.Text(why_frame, height=12)
+        self._style_text(self.why_text)
+        self.why_text.insert(tk.END, "Run analysis to see explanations.")
+        self.why_text.pack(fill=tk.BOTH, expand=True)
+
+        why_controls = ttk.Frame(self.why_tab)
+        why_controls.pack(fill=tk.X, pady=(6, 0))
+        self.copy_filters_button = ttk.Button(
+            why_controls, text="Copy Wireshark Filters", command=self._copy_wireshark_filters, state=tk.DISABLED
+        )
+        self.copy_filters_button.pack(side=tk.RIGHT)
+
+        packet_filters = ttk.LabelFrame(self.packets_tab, text="Packet Filters", padding=10)
+        packet_filters.pack(fill=tk.X, pady=6)
+
+        self.packet_proto_var = tk.StringVar(value="Any")
+        self.packet_src_var = tk.StringVar()
+        self.packet_dst_var = tk.StringVar()
+        self.packet_sport_var = tk.StringVar()
+        self.packet_dport_var = tk.StringVar()
+        self.packet_time_min_var = tk.StringVar()
+        self.packet_time_max_var = tk.StringVar()
+        self.packet_size_min_var = tk.StringVar()
+        self.packet_size_max_var = tk.StringVar()
+        self.packet_dns_http_only_var = tk.BooleanVar(value=False)
+
+        ttk.Label(packet_filters, text="Protocol:").grid(row=0, column=0, sticky="w")
+        proto_combo = ttk.Combobox(
+            packet_filters,
+            textvariable=self.packet_proto_var,
+            values=["Any", "TCP", "UDP", "Other"],
+            width=8,
+        )
+        proto_combo.state(["readonly"])
+        proto_combo.grid(row=0, column=1, sticky="w", padx=(4, 12))
+
+        ttk.Label(packet_filters, text="Src IP:").grid(row=0, column=2, sticky="w")
+        ttk.Entry(packet_filters, textvariable=self.packet_src_var, width=18).grid(
+            row=0, column=3, sticky="w", padx=(4, 12)
+        )
+        ttk.Label(packet_filters, text="Dst IP:").grid(row=0, column=4, sticky="w")
+        ttk.Entry(packet_filters, textvariable=self.packet_dst_var, width=18).grid(
+            row=0, column=5, sticky="w", padx=(4, 12)
+        )
+
+        ttk.Label(packet_filters, text="Src Port:").grid(row=1, column=0, sticky="w", pady=6)
+        ttk.Entry(packet_filters, textvariable=self.packet_sport_var, width=10).grid(
+            row=1, column=1, sticky="w", padx=(4, 12), pady=6
+        )
+        ttk.Label(packet_filters, text="Dst Port:").grid(row=1, column=2, sticky="w", pady=6)
+        ttk.Entry(packet_filters, textvariable=self.packet_dport_var, width=10).grid(
+            row=1, column=3, sticky="w", padx=(4, 12), pady=6
+        )
+        time_frame = ttk.Frame(packet_filters)
+        time_frame.grid(row=1, column=4, columnspan=4, sticky="w", pady=6)
+        ttk.Label(time_frame, text="Time (s):").pack(side=tk.LEFT)
+        ttk.Entry(time_frame, textvariable=self.packet_time_min_var, width=6).pack(side=tk.LEFT, padx=(4, 2))
+        ttk.Label(time_frame, text="to").pack(side=tk.LEFT, padx=(2, 2))
+        ttk.Entry(time_frame, textvariable=self.packet_time_max_var, width=6).pack(side=tk.LEFT, padx=(2, 0))
+
+        ttk.Label(packet_filters, text="Size (bytes):").grid(row=2, column=0, sticky="w")
+        ttk.Entry(packet_filters, textvariable=self.packet_size_min_var, width=8).grid(
+            row=2, column=1, sticky="w", padx=(4, 4)
+        )
+        ttk.Label(packet_filters, text="to").grid(row=2, column=2, sticky="w")
+        ttk.Entry(packet_filters, textvariable=self.packet_size_max_var, width=8).grid(
+            row=2, column=3, sticky="w", padx=(4, 12)
+        )
+        ttk.Checkbutton(
+            packet_filters,
+            text="DNS/HTTP only",
+            variable=self.packet_dns_http_only_var,
+            style="Quiet.TCheckbutton",
+        ).grid(row=2, column=4, sticky="w")
+
+        ttk.Button(packet_filters, text="Apply", command=self._apply_packet_filters).grid(
+            row=2, column=6, sticky="e", padx=(12, 4)
+        )
+        ttk.Button(packet_filters, text="Reset", command=self._reset_packet_filters).grid(
+            row=2, column=7, sticky="w"
+        )
+
+        packet_filters.grid_columnconfigure(8, weight=1)
+
+
+        # Place the packet table directly in the packets_tab for guaranteed visibility
+        packet_table_frame = ttk.Frame(self.packets_tab)
+        packet_table_frame.pack(fill=tk.BOTH, expand=True, pady=6)
+        packet_cols = (
+            "UTC Time",
+            "RelTime",
+            "Proto",
+            "Src",
+            "SPort",
+            "Dst",
+            "DPort",
+            "Size",
+            "DnsQuery",
+            "HttpMethod",
+            "HttpHost",
+            "HttpPath",
+            "TlsSni",
+            "TlsVersion",
+            "TlsAlpn",
+        )
+        self.packet_table = ttk.Treeview(
+            packet_table_frame,
+            columns=packet_cols,
+            show="headings",
+            height=10,
+            style="Packet.Treeview",
+        )
+        self.packet_columns = list(packet_cols)
+        self.packet_table.configure(displaycolumns=self.packet_columns)
+        for col in packet_cols:
+            heading = self._packet_column_label(col)
+            self.packet_table.heading(col, text=heading)
+            self.packet_table.column(col, width=90, anchor=tk.W, stretch=False)
+
+        packet_table_frame.columnconfigure(0, weight=1)
+        packet_table_frame.rowconfigure(0, weight=1)
+        self.packet_table.grid(row=0, column=0, sticky="nsew")
+
+        packet_scroll = ttk.Scrollbar(packet_table_frame, orient=tk.VERTICAL, command=self.packet_table.yview)
+        packet_scroll.grid(row=0, column=1, sticky="ns")
+        packet_scroll_x = ttk.Scrollbar(packet_table_frame, orient=tk.HORIZONTAL, command=self.packet_table.xview)
+        packet_scroll_x.grid(row=1, column=0, sticky="ew")
+        self.packet_table.configure(yscrollcommand=packet_scroll.set, xscrollcommand=packet_scroll_x.set)
+        self._init_packet_column_menu()
+        self.packet_table.bind("<Button-3>", self._show_packet_column_menu)
+
+        hint_frame = ttk.LabelFrame(self.packets_tab, text="C2 / Exfil Hints", padding=10)
+        hint_frame.pack(fill=tk.BOTH, expand=False, pady=6)
+        self.packet_hint_text = tk.Text(hint_frame, height=6)
+        self._style_text(self.packet_hint_text)
+        self.packet_hint_text.insert(tk.END, "Run analysis to see packet-level hints.")
+        self.packet_hint_text.pack(fill=tk.BOTH, expand=True)
+
         flow_frame = ttk.LabelFrame(container, text="Flow Summary", padding=10)
         flow_frame.pack(fill=tk.BOTH, expand=True, pady=8)
 
@@ -1398,20 +2199,18 @@ class PCAPSentryApp:
         self.charts_button = ttk.Button(container, text="Open Charts", command=self._open_charts, state=tk.DISABLED)
         self.charts_button.pack(anchor=tk.E)
 
-        self.busy_widgets.extend(
-            [
-                self.safe_browse,
-                self.safe_add_button,
-                self.mal_browse,
-                self.mal_add_button,
-                target_browse,
-                self.analyze_button,
-                model_browse,
-                self.charts_button,
-                self.label_safe_button,
-                self.label_mal_button,
-            ]
-        )
+        widgets = [
+            self.safe_browse,
+            self.safe_add_button,
+            self.mal_browse,
+            self.mal_add_button,
+            target_browse,
+            self.analyze_button,
+            self.charts_button,
+            self.label_safe_button,
+            self.label_mal_button,
+        ]
+        self.busy_widgets.extend([widget for widget in widgets if widget is not None])
 
         self._setup_drag_drop()
 
@@ -1424,6 +2223,7 @@ class PCAPSentryApp:
         self.kb_summary_var = tk.StringVar(value="")
         ttk.Label(header, textvariable=self.kb_summary_var).pack(side=tk.LEFT)
         ttk.Button(header, text="Refresh", command=self._refresh_kb).pack(side=tk.RIGHT)
+        ttk.Button(header, text="Reset Knowledge Base", command=self._reset_kb).pack(side=tk.RIGHT, padx=6)
         ttk.Button(header, text="Restore", command=self._restore_kb).pack(side=tk.RIGHT, padx=6)
         ttk.Button(header, text="Backup", command=self._backup_kb).pack(side=tk.RIGHT, padx=6)
 
@@ -1432,25 +2232,409 @@ class PCAPSentryApp:
         ttk.Label(ioc_frame, text="IoC file:").pack(side=tk.LEFT)
         ioc_entry = ttk.Entry(ioc_frame, textvariable=self.ioc_path_var, width=70)
         ioc_entry.pack(side=tk.LEFT, padx=6)
+        ttk.Button(ioc_frame, text="X", width=2, command=lambda: self.ioc_path_var.set("")).pack(side=tk.LEFT)
         ttk.Button(ioc_frame, text="Browse", command=self._browse_ioc).pack(side=tk.LEFT, padx=6)
         ttk.Button(ioc_frame, text="Import", command=self._load_ioc_file).pack(side=tk.LEFT, padx=6)
         ttk.Button(ioc_frame, text="Clear", command=self._clear_iocs).pack(side=tk.LEFT, padx=6)
-        ttk.Label(ioc_frame, textvariable=self.ioc_summary_var, style="Hint.TLabel").pack(side=tk.LEFT, padx=6)
 
-        self.kb_text = tk.Text(container)
-        self._style_text(self.kb_text)
-        self.kb_text.pack(fill=tk.BOTH, expand=True, pady=8)
-        self._refresh_kb()
+    def _reset_packet_filters(self):
+        if self.packet_proto_var is None:
+            return
+        self.packet_proto_var.set("Any")
+        self.packet_src_var.set("")
+        self.packet_dst_var.set("")
+        self.packet_sport_var.set("")
+        self.packet_dport_var.set("")
+        self.packet_time_min_var.set("")
+        self.packet_time_max_var.set("")
+        self.packet_size_min_var.set("")
+        self.packet_size_max_var.set("")
+        self.packet_dns_http_only_var.set(False)
+        self._apply_packet_filters()
+
+    def _apply_packet_filters(self):
+        if self.current_df is None or self.packet_table is None:
+            print("[DEBUG] No current_df or packet_table available.")
+            return
+
+        df = self.current_df.copy()
+        print(f"[DEBUG] DataFrame columns: {list(df.columns)}")
+        print(f"[DEBUG] DataFrame row count before filter: {len(df)}")
+        if df.empty:
+            print("[DEBUG] DataFrame is empty before filtering.")
+            self._update_packet_table(df)
+            return
+
+        # Always use the original base time from the full DataFrame
+        if self.packet_base_time is not None and "Time" in df.columns:
+            df["RelTime"] = df["Time"] - self.packet_base_time
+        else:
+            df["RelTime"] = 0.0
+
+        # Apply packet filters
+        proto_filter = self.packet_proto_var.get() if self.packet_proto_var else "Any"
+        if proto_filter != "Any" and "Proto" in df.columns:
+            df = df[df["Proto"] == proto_filter]
+
+        src_filter = self.packet_src_var.get() if self.packet_src_var else ""
+        if src_filter and "Src" in df.columns:
+            df = df[df["Src"].astype(str).str.contains(src_filter, na=False)]
+
+        dst_filter = self.packet_dst_var.get() if self.packet_dst_var else ""
+        if dst_filter and "Dst" in df.columns:
+            df = df[df["Dst"].astype(str).str.contains(dst_filter, na=False)]
+
+        sport_filter = self.packet_sport_var.get() if self.packet_sport_var else ""
+        if sport_filter and "SPort" in df.columns:
+            try:
+                sport_val = int(sport_filter)
+                df = df[df["SPort"] == sport_val]
+            except ValueError:
+                pass
+
+        dport_filter = self.packet_dport_var.get() if self.packet_dport_var else ""
+        if dport_filter and "DPort" in df.columns:
+            try:
+                dport_val = int(dport_filter)
+                df = df[df["DPort"] == dport_val]
+            except ValueError:
+                pass
+
+        time_min = self.packet_time_min_var.get() if self.packet_time_min_var else ""
+        if time_min and "RelTime" in df.columns:
+            try:
+                time_min_val = float(time_min)
+                df = df[df["RelTime"] >= time_min_val]
+            except ValueError:
+                pass
+
+        time_max = self.packet_time_max_var.get() if self.packet_time_max_var else ""
+        if time_max and "RelTime" in df.columns:
+            try:
+                time_max_val = float(time_max)
+                df = df[df["RelTime"] <= time_max_val]
+            except ValueError:
+                pass
+
+        size_min = self.packet_size_min_var.get() if self.packet_size_min_var else ""
+        if size_min and "Size" in df.columns:
+            try:
+                size_min_val = int(size_min)
+                df = df[df["Size"] >= size_min_val]
+            except ValueError:
+                pass
+
+        size_max = self.packet_size_max_var.get() if self.packet_size_max_var else ""
+        if size_max and "Size" in df.columns:
+            try:
+                size_max_val = int(size_max)
+                df = df[df["Size"] <= size_max_val]
+            except ValueError:
+                pass
+
+        dns_http_only = self.packet_dns_http_only_var.get() if self.packet_dns_http_only_var else False
+        if dns_http_only:
+            dns_filter = (df["DnsQuery"].astype(str) != "") | (df["HttpHost"].astype(str) != "")
+            df = df[dns_filter]
+
+        print(f"[DEBUG] DataFrame row count after filter: {len(df)}")
+        self._update_packet_table(df)
+
+    def _update_packet_table(self, df):
+        if self.packet_table is None:
+            return
+        for row in self.packet_table.get_children():
+            self.packet_table.delete(row)
+
+        if df is None or df.empty:
+            print("[DEBUG] _update_packet_table: DataFrame is empty at insert stage.")
+            return
+
+        print(f"[DEBUG] _update_packet_table: self.packet_table id={id(self.packet_table)}")
+        print(f"[DEBUG] _update_packet_table: DataFrame row count before insert: {len(df)}")
+        columns = [
+            "UTC Time",
+            "RelTime",
+            "Proto",
+            "Src",
+            "SPort",
+            "Dst",
+            "DPort",
+            "Size",
+            "DnsQuery",
+            "HttpMethod",
+            "HttpHost",
+            "HttpPath",
+            "TlsSni",
+            "TlsVersion",
+            "TlsAlpn",
+        ]
+        # Ensure all expected columns exist in the DataFrame
+        for col in [c for c in columns if c not in ("UTC Time", "RelTime")]:
+            if col not in df.columns:
+                df[col] = ""
+        # Debug: print first 3 rows' keys and values
+        for i, (_, row) in enumerate(df.head(3).iterrows()):
+            print(f"[DEBUG] Row {i} keys: {list(row.keys())}")
+            print(f"[DEBUG] Row {i} values: {list(row.values)}")
+        rows_for_size = []
+        row_count = 0
+        for idx, (_, row) in enumerate(df.head(500).iterrows()):
+            values = [self._format_packet_table_value(row, col) for col in columns]
+            print(f"[DEBUG] Insert row {idx}: {values}")
+            self.packet_table.insert("", tk.END, values=values)
+            rows_for_size.append(values)
+            row_count += 1
+        print(f"[DEBUG] Inserted {row_count} rows into packet table.")
+        self._autosize_packet_table(columns, rows_for_size)
+
+    def _format_packet_table_value(self, row, col):
+        # Always use 'Time' for 'UTC Time' display
+        if col == "UTC Time":
+            try:
+                time_val = row.get("Time", None)
+                if time_val is not None:
+                    value = datetime.fromtimestamp(float(time_val), timezone.utc)
+                    return value.strftime("%Y-%m-%d %H:%M:%SZ")
+                else:
+                    return ""
+            except Exception:
+                return ""
+        value = row.get(col, "")
+        if col == "RelTime":
+            try:
+                return f"{float(value):.3f}"
+            except Exception:
+                return ""
+        return "" if value is None else str(value)
+
+    def _autosize_packet_table(self, columns, rows):
+        if self.packet_table is None:
+            return
+
+        try:
+            font = tkfont.nametofont(self.packet_table.cget("font"))
+        except Exception:
+            return
+
+        padding = 14
+        min_width = 70
+        max_widths = {
+            "UTC Time": 170,
+            "RelTime": 90,
+            "Src": 200,
+            "Dst": 200,
+            "DnsQuery": 260,
+            "HttpMethod": 120,
+            "HttpHost": 260,
+            "HttpPath": 360,
+            "TlsSni": 260,
+            "TlsVersion": 120,
+            "TlsAlpn": 200,
+        }
+
+        for index, col in enumerate(columns):
+            width = font.measure(col) + padding
+            for row in rows:
+                if index >= len(row):
+                    continue
+                candidate = font.measure(str(row[index])) + padding
+                if candidate > width:
+                    width = candidate
+            width = max(width, min_width)
+            width = min(width, max_widths.get(col, 220))
+            self.packet_table.column(col, width=width, anchor=tk.W, stretch=False)
+
+    def _init_packet_column_menu(self):
+        if self.packet_table is None:
+            return
+        self.packet_column_menu = tk.Menu(self.root, tearoff=0)
+        self.packet_column_vars = {}
+        for col in self.packet_columns or []:
+            self.packet_column_vars[col] = tk.BooleanVar(value=True)
+
+    def _rebuild_packet_column_menu(self):
+        if self.packet_column_menu is None or self.packet_column_vars is None:
+            return
+        self.packet_column_menu.delete(0, tk.END)
+        for col in self.packet_columns or []:
+            label = self._packet_column_label(col)
+            self.packet_column_menu.add_checkbutton(
+                label=label,
+                variable=self.packet_column_vars[col],
+                command=lambda name=col: self._toggle_packet_column(name),
+            )
+
+    def _toggle_packet_column(self, column):
+        if self.packet_table is None or self.packet_column_vars is None:
+            return
+        visible = [
+            col
+            for col in self.packet_columns or []
+            if self.packet_column_vars[col].get()
+        ]
+        if not visible:
+            self.packet_column_vars[column].set(True)
+            return
+        self.packet_table.configure(displaycolumns=visible)
+
+    def _show_packet_column_menu(self, event):
+        if self.packet_table is None or self.packet_column_menu is None:
+            return
+        if self.packet_table.identify_region(event.x, event.y) != "heading":
+            return
+        self._rebuild_packet_column_menu()
+        try:
+            self.packet_column_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            self.packet_column_menu.grab_release()
+
+    def _packet_column_label(self, column):
+        labels = {
+            "Proto": "Protocol",
+            "DnsQuery": "DNS Query",
+            "HttpMethod": "HTTP Method",
+            "HttpHost": "HTTP Host",
+            "HttpPath": "HTTP Path",
+            "TlsSni": "TLS SNI",
+            "TlsVersion": "TLS Ver",
+            "TlsAlpn": "ALPN",
+        }
+        return labels.get(column, column)
+
+    def _update_packet_hints(self, df, stats):
+        if self.packet_hint_text is None:
+            return
+
+        hint_lines = ["Focus areas for C2 / exfil review:"]
+
+        flow_df = compute_flow_stats(df)
+        if not flow_df.empty:
+            flow_df["Duration"] = flow_df["Duration"].fillna(0.0)
+            long_lived = flow_df[flow_df["Duration"] >= 60.0]
+            if not long_lived.empty:
+                top_flow = long_lived.sort_values("Bytes", ascending=False).head(1)
+                row = top_flow.iloc[0]
+                hint_lines.append(
+                    f"- Long-lived flow: {row['Flow']} ({row['Duration']:.1f}s, {_format_bytes(row['Bytes'])})"
+                )
+
+            if not flow_df["Bytes"].empty:
+                high_bytes_threshold = float(flow_df["Bytes"].quantile(0.95))
+                large_flows = flow_df[flow_df["Bytes"] >= high_bytes_threshold]
+                if not large_flows.empty:
+                    row = large_flows.sort_values("Bytes", ascending=False).iloc[0]
+                    hint_lines.append(
+                        f"- Large transfer: {row['Flow']} ({_format_bytes(row['Bytes'])})"
+                    )
+
+        beacon_flow = None
+        if not df.empty:
+            flow_cols = ["Src", "Dst", "Proto", "SPort", "DPort"]
+            grouped = df.groupby(flow_cols, dropna=False)
+            for keys, group in grouped:
+                if len(group) < 6:
+                    continue
+                times = sorted(group["Time"].tolist())
+                gaps = [b - a for a, b in zip(times, times[1:]) if b - a > 0]
+                if len(gaps) < 5:
+                    continue
+                avg_gap = sum(gaps) / len(gaps)
+                if avg_gap <= 0:
+                    continue
+                std_gap = statistics.pstdev(gaps)
+                cv = std_gap / avg_gap if avg_gap else 0.0
+                if cv < 0.2:
+                    flow_str = f"{keys[0]}:{keys[3]} -> {keys[1]}:{keys[4]} ({keys[2]})"
+                    beacon_flow = (flow_str, avg_gap)
+                    break
+
+        if beacon_flow:
+            hint_lines.append(f"- Beaconing-like cadence: {beacon_flow[0]} (~{beacon_flow[1]:.2f}s interval)")
+        else:
+            hint_lines.append("- Beaconing cadence: not obvious in top flows")
+
+        top_ports = stats.get("top_ports", [])
+        if top_ports:
+            common_ports = {22, 53, 80, 123, 443, 445, 3389}
+            unusual_ports = [str(port) for port, _ in top_ports if port not in common_ports]
+            if unusual_ports:
+                hint_lines.append(f"- Unusual top ports: {', '.join(unusual_ports)}")
+
+        if stats.get("dns_query_count", 0) == 0 and stats.get("http_request_count", 0) == 0:
+            hint_lines.append("- No DNS/HTTP observed: focus on raw TCP/UDP flows")
+
+        tls_count = stats.get("tls_packet_count", 0)
+        if tls_count:
+            top_sni = stats.get("top_tls_sni", [])
+            if top_sni:
+                sni_text = ", ".join(f"{host} ({count})" for host, count in top_sni)
+                hint_lines.append(f"- TLS SNI observed: {sni_text}")
+            else:
+                hint_lines.append(f"- TLS packets observed: {tls_count}")
+
+        self.packet_hint_text.delete("1.0", tk.END)
+        self.packet_hint_text.insert(tk.END, "\n".join(hint_lines))
+
+    def _build_wireshark_filters(self, stats, ioc_matches, verdict, suspicious_flows=None):
+        if verdict == "Likely Safe":
+            return []
+
+        filters = []
+        domains = ioc_matches.get("domains", [])
+        ips = ioc_matches.get("ips", [])
+        top_ports = stats.get("top_ports", [])
+
+        for domain in domains[:3]:
+            filters.append(f"dns.qry.name == \"{domain}\"")
+            filters.append(f"http.host == \"{domain}\"")
+
+        for ip in ips[:3]:
+            filters.append(f"ip.addr == {ip}")
+
+        if top_ports:
+            port_values = [str(port) for port, _ in top_ports[:3]]
+            if port_values:
+                filters.append(f"tcp.port in {{{', '.join(port_values)}}} or udp.port in {{{', '.join(port_values)}}}")
+
+        if stats.get("http_request_count", 0):
+            filters.append("http.request")
+        if stats.get("dns_query_count", 0):
+            filters.append("dns")
+
+        for item in (suspicious_flows or [])[:3]:
+            src = item.get("src")
+            dst = item.get("dst")
+            proto = str(item.get("proto", "")).lower()
+            sport = item.get("sport")
+            dport = item.get("dport")
+            if not src or not dst:
+                continue
+            if proto in ("tcp", "udp"):
+                parts = [f"ip.src == {src}", f"ip.dst == {dst}"]
+                if isinstance(sport, int) and sport > 0:
+                    parts.append(f"{proto}.srcport == {sport}")
+                if isinstance(dport, int) and dport > 0:
+                    parts.append(f"{proto}.dstport == {dport}")
+                filters.append(" and ".join(parts))
+            else:
+                filters.append(f"ip.src == {src} and ip.dst == {dst}")
+
+        return filters
+
+    def _copy_wireshark_filters(self):
+        if not self.wireshark_filters:
+            messagebox.showinfo("Wireshark Filters", "No filters available for this capture.")
+            return
+        text = "\n".join(self.wireshark_filters)
+        self.root.clipboard_clear()
+        self.root.clipboard_append(text)
+        messagebox.showinfo("Wireshark Filters", "Filters copied to clipboard.")
 
     def _browse_file(self, var):
         path = filedialog.askopenfilename(filetypes=[("PCAP files", "*.pcap"), ("All files", "*.*")])
         if path:
             var.set(path)
-
-    def _browse_model(self):
-        path = filedialog.askopenfilename(filetypes=[("GGUF model", "*.gguf"), ("All files", "*.*")])
-        if path:
-            self.model_path_var.set(path)
 
     def _browse_ioc(self):
         path = filedialog.askopenfilename(filetypes=[("IoC files", "*.json;*.txt"), ("All files", "*.*")])
@@ -1469,44 +2653,34 @@ class PCAPSentryApp:
                 self.widget_states = {w: str(w["state"]) for w in self.busy_widgets}
                 for widget in self.busy_widgets:
                     widget.configure(state=tk.DISABLED)
-                self._show_overlay(message)
             else:
                 self.status_var.set(message)
-                self._update_overlay_message(message)
         else:
             self.busy_count = max(0, self.busy_count - 1)
             if self.busy_count == 0:
                 self._reset_progress()
                 self.status_var.set("Ready")
                 self.root.configure(cursor="")
+                self.root_title = self._get_window_title()
                 self.root.title(self.root_title)
                 for widget in self.busy_widgets:
                     prior = self.widget_states.get(widget, "normal")
                     widget.configure(state=prior)
-                self._hide_overlay()
 
     def _reset_progress(self):
         self.progress.stop()
         self.progress.configure(mode="indeterminate", maximum=100)
         self.progress["value"] = 0
         self.progress_percent_var.set("")
-        self.eta_var.set("")
-        if self.overlay_progress is not None:
-            self.overlay_progress.stop()
-            self.overlay_progress.configure(mode="indeterminate", maximum=100)
-            self.overlay_progress["value"] = 0
-            self.overlay_progress.start(10)
 
-    def _format_eta(self, seconds):
-        if seconds is None:
-            return ""
-        seconds = max(0, int(seconds))
-        hours = seconds // 3600
-        minutes = (seconds % 3600) // 60
-        secs = seconds % 60
-        if hours:
-            return f"{hours:d}:{minutes:02d}:{secs:02d}"
-        return f"{minutes:02d}:{secs:02d}"
+
+    def _set_determinate_progress(self, percent):
+        """Set progress bar to determinate mode with specific percentage."""
+        self.progress.stop()
+        self.progress.configure(mode="determinate", maximum=100)
+        self.progress["value"] = percent
+        self.progress_percent_var.set(f"{int(percent)}%")
+        self.root.update_idletasks()
 
     def _set_progress(self, percent, eta_seconds=None, label=None, processed=None, total=None):
         if percent is None:
@@ -1517,19 +2691,11 @@ class PCAPSentryApp:
         percent_value = min(max(percent, 0.0), 100.0)
         self.progress["value"] = percent_value
         self.progress_percent_var.set(f"{percent_value:.0f}%")
-        eta_text = self._format_eta(eta_seconds)
-        self.eta_var.set(f"ETA {eta_text}" if eta_text else "")
         if label:
             status_text = f"{label} {percent:.0f}%"
             if processed is not None and total:
                 status_text = f"{label} {percent:.0f}% ({_format_bytes(processed)} / {_format_bytes(total)})"
             self.status_var.set(status_text)
-            if self.overlay_label is not None:
-                self.overlay_label.configure(text=status_text)
-        if self.overlay_progress is not None:
-            self.overlay_progress.stop()
-            self.overlay_progress.configure(mode="determinate", maximum=100)
-            self.overlay_progress["value"] = min(max(percent, 0.0), 100.0)
 
     def _apply_theme(self):
         theme = self._resolve_theme()
@@ -1593,6 +2759,12 @@ class PCAPSentryApp:
 
         style.configure("TCheckbutton", background=self.colors["bg"], foreground=self.colors["text"])
         style.map("TCheckbutton", foreground=[("disabled", self.colors["muted"])])
+        style.configure("Quiet.TCheckbutton", background=self.colors["bg"], foreground=self.colors["text"])
+        style.map(
+            "Quiet.TCheckbutton",
+            background=[("active", self.colors["bg"]), ("focus", self.colors["bg"])],
+            foreground=[("active", self.colors["text"]), ("disabled", self.colors["muted"])],
+        )
 
         style.configure("TLabelframe", background=self.colors["bg"], foreground=self.colors["text"])
         style.configure("TLabelframe.Label", background=self.colors["bg"], foreground=self.colors["text"])
@@ -1635,6 +2807,31 @@ class PCAPSentryApp:
             "Treeview",
             background=[("selected", self.colors["accent_alt"])],
             foreground=[("selected", self.colors["text"])],
+        )
+        style.configure(
+            "Packet.Treeview",
+            background=self.colors["panel"],
+            fieldbackground=self.colors["panel"],
+            foreground=self.colors["text"],
+            bordercolor=self.colors["border"],
+        )
+        style.configure(
+            "Packet.Treeview.Heading",
+            background=self.colors["bg"],
+            foreground=self.colors["text"],
+            bordercolor=self.colors["border"],
+            relief="flat",
+        )
+        style.map(
+            "Packet.Treeview",
+            background=[("selected", self.colors["accent_alt"])],
+            foreground=[("selected", self.colors["text"])],
+        )
+        style.map(
+            "Packet.Treeview.Heading",
+            background=[("active", self.colors["bg"]), ("pressed", self.colors["bg"])],
+            bordercolor=[("active", self.colors["accent_alt"]), ("pressed", self.colors["accent_alt"])],
+            relief=[("active", "solid"), ("pressed", "solid")],
         )
 
         style.configure(
@@ -1747,27 +2944,58 @@ class PCAPSentryApp:
                 self.bg_canvas.create_text(x, y, anchor="w", text=hex_text, fill=hex_color, font=("Consolas", 9))
 
     def _setup_drag_drop(self):
-        if DND_FILES is None or TkinterDnD is None:
+        if not _check_tkinterdnd2():
             return
+        
+        DND_FILES, TkinterDnD = _get_tkinterdnd2()
 
         def bind_drop(widget, setter):
-            widget.drop_target_register(DND_FILES)
-            widget.dnd_bind("<<Drop>>", lambda e: setter(self._extract_drop_path(e.data)))
+            if widget is None:
+                return
+            try:
+                widget.drop_target_register(DND_FILES)
+                widget.dnd_bind("<<Drop>>", lambda e: setter(self._extract_drop_path(e.data)))
+            except tk.TclError:
+                return
 
         bind_drop(self.safe_entry, self.safe_path_var.set)
         bind_drop(self.mal_entry, self.mal_path_var.set)
         bind_drop(self.target_entry, self.target_path_var.set)
-        bind_drop(self.model_entry, self.model_path_var.set)
+        if self.target_drop_area is not None:
+            bind_drop(self.target_drop_area, self.target_path_var.set)
+        bind_drop(self.analyze_tab, self.target_path_var.set)
+        bind_drop(self.result_text, self.target_path_var.set)
+        bind_drop(self.flow_table, self.target_path_var.set)
 
     def _extract_drop_path(self, data):
         if not data:
             return ""
-        text = data.strip()
-        if text.startswith("{") and text.endswith("}"):
-            text = text[1:-1]
-        if " " in text:
-            text = text.split()[0]
-        return text
+
+        def normalize(text):
+            if not text:
+                return ""
+            text = text.strip().strip("\"")
+            if text.startswith("{") and text.endswith("}"):
+                text = text[1:-1]
+            if text.startswith("file://"):
+                from urllib.parse import unquote, urlparse
+
+                parsed = urlparse(text)
+                path = unquote(parsed.path or "")
+                if sys.platform.startswith("win") and path.startswith("/"):
+                    path = path[1:]
+                text = path or text
+            return text
+
+        try:
+            parts = self.root.tk.splitlist(data)
+            for part in parts:
+                candidate = normalize(part)
+                if candidate:
+                    return candidate
+        except Exception:
+            pass
+        return normalize(data)
 
     def _style_text(self, widget):
         widget.configure(
@@ -1781,63 +3009,13 @@ class PCAPSentryApp:
         )
 
     def _show_overlay(self, message):
-        if self.overlay is not None:
-            self._update_overlay_message(message)
-            return
-
-        overlay = tk.Toplevel(self.root)
-        overlay.transient(self.root)
-        overlay.title("Working")
-        overlay.resizable(False, False)
-        overlay.attributes("-topmost", True)
-        overlay.configure(bg=self.colors["bg"])
-
-        frame = ttk.Frame(overlay, padding=16)
-        frame.pack(fill=tk.BOTH, expand=True)
-
-        label = ttk.Label(frame, text=message)
-        label.pack(pady=(0, 8))
-
-        progress = ttk.Progressbar(frame, mode="indeterminate", length=240)
-        progress.pack()
-        progress.start(10)
-
-        percent_label = ttk.Label(frame, textvariable=self.progress_percent_var, style="Hint.TLabel")
-        percent_label.pack(pady=(6, 0))
-
-        overlay.update_idletasks()
-        x = self.root.winfo_x() + (self.root.winfo_width() - overlay.winfo_width()) // 2
-        y = self.root.winfo_y() + (self.root.winfo_height() - overlay.winfo_height()) // 2
-        overlay.geometry(f"+{max(x, 0)}+{max(y, 0)}")
-
-        self.overlay = overlay
-        self.overlay_label = label
-        self.overlay_progress = progress
-        self.overlay_percent_label = percent_label
-
-        try:
-            overlay.grab_set()
-        except tk.TclError:
-            pass
+        pass
 
     def _update_overlay_message(self, message):
-        if self.overlay_label is not None:
-            self.overlay_label.configure(text=message)
+        pass
 
     def _hide_overlay(self):
-        if self.overlay is None:
-            return
-        try:
-            self.overlay.grab_release()
-        except tk.TclError:
-            pass
-        if self.overlay_progress is not None:
-            self.overlay_progress.stop()
-        self.overlay.destroy()
-        self.overlay = None
-        self.overlay_label = None
-        self.overlay_progress = None
-        self.overlay_percent_label = None
+        pass
 
     def _run_task(self, func, on_success, on_error=None, message="Working...", progress_label=None):
         self._set_busy(True, message)
@@ -1911,106 +3089,6 @@ class PCAPSentryApp:
 
         self.root.after(100, check)
 
-    def _download_default_model(self, progress_cb=None, filename=None):
-        target_name = filename or DEFAULT_MODEL_FILENAME
-        url = _model_download_url_for(target_name)
-        dest_path = os.path.join(_get_default_models_dir(), target_name)
-        return _download_file(url, dest_path, progress_cb=progress_cb)
-
-    def _update_model(self, latest_name=None, skip_confirm=False):
-        current_path = self.model_path_var.get().strip()
-        current_name = os.path.basename(current_path) if current_path else DEFAULT_MODEL_FILENAME
-        target_name = latest_name or _get_latest_model_filename()
-
-        if target_name == current_name:
-            messagebox.showinfo("Update Model", "Model is already up to date.")
-            return
-
-        if not skip_confirm:
-            message = (
-                "Update the GGUF model?\n\n"
-                f"Current: {current_name}\n"
-                f"New:     {target_name}\n\n"
-                "This will download and replace the model file."
-            )
-            if not messagebox.askyesno("Update Model", message):
-                return
-
-        def task(progress_cb=None):
-            dest_path = os.path.join(_get_default_models_dir(), target_name)
-            if os.path.exists(dest_path):
-                try:
-                    os.remove(dest_path)
-                except Exception:
-                    pass
-            return self._download_default_model(progress_cb=progress_cb, filename=target_name)
-
-        def done(path):
-            self.model_path_var.set(path)
-            self._save_settings_from_vars()
-            size_text = _format_bytes(os.path.getsize(path)) if os.path.exists(path) else ""
-            suffix = f" ({size_text})" if size_text else ""
-            messagebox.showinfo("Update Model", f"Model download complete{suffix}.")
-
-        def err(exc):
-            messagebox.showerror("Update Model", str(exc))
-
-        self._run_task(task, done, on_error=err, message="Updating model...", progress_label="Updating model")
-
-    def _ensure_model_available(self, on_ready, on_skip):
-        model_path = self.model_path_var.get().strip()
-        if model_path and os.path.exists(model_path):
-            on_ready()
-            return
-
-        wants_download = messagebox.askyesno(
-            "Model missing",
-            "The GGUF model is missing. Download the default model now?",
-        )
-        if not wants_download:
-            on_skip()
-            return
-
-        def task(progress_cb=None):
-            return self._download_default_model(progress_cb=progress_cb)
-
-        def done(path):
-            self.model_path_var.set(path)
-            self._save_settings_from_vars()
-            size_text = _format_bytes(os.path.getsize(path)) if os.path.exists(path) else ""
-            suffix = f" ({size_text})" if size_text else ""
-            if size_text:
-                self.status_var.set(f"Download complete {size_text}")
-            on_ready()
-
-        def err(exc):
-            messagebox.showerror("Download failed", str(exc))
-            on_skip()
-
-        self._run_task(task, done, on_error=err, message="Downloading model...", progress_label="Downloading model")
-
-    def _get_llm(self):
-        if Llama is None:
-            raise RuntimeError("llama-cpp-python is not installed.")
-        model_path = self.model_path_var.get().strip()
-        if not model_path:
-            raise RuntimeError("Model path is empty.")
-        if not os.path.exists(model_path):
-            raise RuntimeError("Model file not found.")
-        if self.llm is not None and self.llm_path == model_path:
-            return self.llm
-
-        n_threads = max(2, os.cpu_count() or 2)
-        n_gpu_layers = -1 if self.use_gpu_var.get() else 0
-        self.llm = Llama(
-            model_path=model_path,
-            n_ctx=4096,
-            n_threads=n_threads,
-            n_gpu_layers=n_gpu_layers,
-        )
-        self.llm_path = model_path
-        return self.llm
-
     def _reset_kb(self):
         if os.path.exists(KNOWLEDGE_BASE_FILE):
             wants_backup = messagebox.askyesno(
@@ -2035,7 +3113,7 @@ class PCAPSentryApp:
 
     def _backup_kb(self):
         kb = load_knowledge_base()
-        default_name = f"pcap_knowledge_base_backup_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
+        default_name = f"pcap_knowledge_base_backup_{_utcnow().strftime('%Y%m%d_%H%M%S')}.json"
         initial_dir = self.backup_dir_var.get().strip() or os.path.dirname(KNOWLEDGE_BASE_FILE)
         path = filedialog.asksaveasfilename(
             title="Backup Knowledge Base",
@@ -2096,25 +3174,34 @@ class PCAPSentryApp:
             return load_iocs_from_file(path)
 
         def done(iocs):
-            kb = load_knowledge_base()
-            merge_iocs_into_kb(kb, iocs)
-            save_knowledge_base(kb)
-            self._refresh_kb()
-            messagebox.showinfo("IoC Feed", "IoCs imported successfully.")
+            try:
+                kb = load_knowledge_base()
+                merge_iocs_into_kb(kb, iocs)
+                save_knowledge_base(kb)
+                self._refresh_kb()
+                self.ioc_path_var.set("")
+                messagebox.showinfo("IoC Feed", "IoCs imported successfully.")
+            except Exception as e:
+                _write_error_log(f"Error importing IoCs", e, sys.exc_info()[2])
+                messagebox.showerror("Error", f"Failed to import IoCs: {str(e)}")
 
         self._run_task(task, done, message="Importing IoCs...")
 
     def _clear_iocs(self):
-        kb = load_knowledge_base()
-        kb["ioc"] = {"ips": [], "domains": [], "hashes": []}
-        save_knowledge_base(kb)
-        self._refresh_kb()
-        messagebox.showinfo("IoC Feed", "IoCs cleared.")
+        try:
+            kb = load_knowledge_base()
+            kb["ioc"] = {"ips": [], "domains": [], "hashes": []}
+            save_knowledge_base(kb)
+            self._refresh_kb()
+            messagebox.showinfo("IoC Feed", "IoCs cleared.")
+        except Exception as e:
+            _write_error_log(f"Error clearing IoCs", e, sys.exc_info()[2])
+            messagebox.showerror("Error", f"Failed to clear IoCs: {str(e)}")
 
     def _train(self, label):
         path = self.safe_path_var.get() if label == "safe" else self.mal_path_var.get()
         if not path:
-            messagebox.showwarning("Missing file", "Please select a PCAP file.")
+            messagebox.showwarning("Missing file", "Please select a PCAP or ZIP file.")
             return
 
         def task(progress_cb=None):
@@ -2123,18 +3210,34 @@ class PCAPSentryApp:
                 max_rows=self.max_rows_var.get(),
                 parse_http=self.parse_http_var.get(),
                 progress_cb=progress_cb,
+                use_high_memory=self.use_high_memory_var.get(),
             )
 
         def done(result):
-            df, stats, _ = result
-            if stats.get("packet_count", 0) == 0:
-                messagebox.showwarning("No data", "No IP packets found in this capture.")
-                return
-            features = build_features(stats)
-            summary = summarize_stats(stats)
-            add_to_knowledge_base(label, stats, features, summary)
-            messagebox.showinfo("Training", f"Added {label} PCAP to knowledge base.")
-            self._refresh_kb()
+            try:
+                df, stats, _ = result
+                if stats.get("packet_count", 0) == 0:
+                    messagebox.showwarning("No data", "No IP packets found in this capture.")
+                    return
+                features = build_features(stats)
+                summary = summarize_stats(stats)
+                add_to_knowledge_base(label, stats, features, summary)
+                if self.use_local_model_var.get():
+                    kb = load_knowledge_base()
+                    model_bundle, err = _train_local_model(kb)
+                    if model_bundle is None:
+                        messagebox.showinfo("Local Model", err or "Local model training skipped.")
+                    else:
+                        _save_local_model(model_bundle)
+                messagebox.showinfo("Training", f"Added {label} PCAP to knowledge base.")
+                self._refresh_kb()
+                if label == "safe":
+                    self.safe_path_var.set("")
+                else:
+                    self.mal_path_var.set("")
+            except Exception as e:
+                _write_error_log(f"Error training with {label} PCAP", e, sys.exc_info()[2])
+                messagebox.showerror("Error", f"Failed to train with PCAP: {str(e)}")
 
         self._run_task(task, done, message="Parsing PCAP...", progress_label="Parsing PCAP")
 
@@ -2142,16 +3245,31 @@ class PCAPSentryApp:
         if self.current_stats is None:
             messagebox.showwarning("Missing data", "Analyze a PCAP first.")
             return
-        features = build_features(self.current_stats)
-        summary = summarize_stats(self.current_stats)
-        add_to_knowledge_base(label, self.current_stats, features, summary)
-        self._refresh_kb()
-        messagebox.showinfo("Knowledge Base", f"Current capture saved as {label}.")
+        try:
+            # Ensure the app data directory exists
+            data_dir = _get_app_data_dir()
+            os.makedirs(data_dir, exist_ok=True)
+            
+            features = build_features(self.current_stats)
+            summary = summarize_stats(self.current_stats)
+            add_to_knowledge_base(label, self.current_stats, features, summary)
+            if self.use_local_model_var.get():
+                kb = load_knowledge_base()
+                model_bundle, err = _train_local_model(kb)
+                if model_bundle is None:
+                    messagebox.showinfo("Local Model", err or "Local model training skipped.")
+                else:
+                    _save_local_model(model_bundle)
+            self._refresh_kb()
+            messagebox.showinfo("Knowledge Base", f"Current capture saved as {label}.")
+        except Exception as e:
+            _write_error_log(f"Error labeling current capture as {label}", e, sys.exc_info()[2])
+            messagebox.showerror("Error", f"Failed to label capture: {str(e)}")
 
     def _analyze(self):
         path = self.target_path_var.get()
         if not path:
-            messagebox.showwarning("Missing file", "Please select a PCAP file.")
+            messagebox.showwarning("Missing file", "Please select a PCAP or ZIP file.")
             return
 
         def task(progress_cb=None):
@@ -2160,37 +3278,71 @@ class PCAPSentryApp:
                 max_rows=self.max_rows_var.get(),
                 parse_http=self.parse_http_var.get(),
                 progress_cb=progress_cb,
+                use_high_memory=self.use_high_memory_var.get(),
             )
 
         def done(result):
             df, stats, sample_info = result
             if stats.get("packet_count", 0) == 0:
                 messagebox.showwarning("No data", "No IP packets found in this capture.")
+                self.label_safe_button.configure(state=tk.DISABLED)
+                self.label_mal_button.configure(state=tk.DISABLED)
                 return
 
             self.current_df = df
             self.current_stats = stats
             self.current_sample_info = sample_info
-            if self.label_safe_button is not None:
-                self.label_safe_button.configure(state=tk.NORMAL)
-            if self.label_mal_button is not None:
-                self.label_mal_button.configure(state=tk.NORMAL)
+            # Store the base time for packet filtering
+            if not df.empty and "Time" in df.columns:
+                self.packet_base_time = float(df["Time"].min())
+            else:
+                self.packet_base_time = None
 
-            self.sample_note_var.set("")
-            if sample_info["sample_count"] < sample_info["total_count"]:
-                self.sample_note_var.set(
-                    f"Charts use {sample_info['sample_count']} of {sample_info['total_count']} packets."
-                )
+            # Enrich stats with threat intelligence data for better ML features (single pass)
+            threat_intel_findings = {}
+            if not self.offline_mode_var.get() and _check_threat_intel():
+                self._set_determinate_progress(35)
+                self.status_var.set("Enriching with threat intelligence...")
+                self.root.update_idletasks()
+                try:
+                    from threat_intelligence import ThreatIntelligence
+                    ti = ThreatIntelligence()
+                    if ti.is_available():
+                        print("[DEBUG] Enriching stats with threat intelligence...")
+                        threat_intel_findings = ti.enrich_stats(stats)
+                        stats.update(threat_intel_findings)  # Merge findings into stats
+                        self.current_stats = stats
+                except Exception as e:
+                    print(f"[DEBUG] Threat intelligence enrichment failed: {e}")
 
+            t1 = time.time()
+            self._set_determinate_progress(50)
+            self.status_var.set("Building features...")
+            self.root.update_idletasks()
+            
             features = build_features(stats)
             vector = _vector_from_features(features)
-            kb = load_knowledge_base()
-            safe_scores = [similarity_score(features, e["features"]) for e in kb["safe"]]
-            mal_scores = [similarity_score(features, e["features"]) for e in kb["malicious"]]
+            kb = self._get_knowledge_base()  # Use cached KB instead of reloading
+            t2 = time.time()
+            print(f"[TIMING] Feature building: {t2-t1:.2f}s")
+            
+            self._set_determinate_progress(60)
+            self.status_var.set("Computing risk scores...")
+            self.root.update_idletasks()
+            
+            # OPTIMIZATION: Use top-K similar entries instead of scoring all KB entries
+            safe_entries, safe_scores = get_top_k_similar_entries(features, kb["safe"], k=5)
+            mal_entries, mal_scores = get_top_k_similar_entries(features, kb["malicious"], k=5)
 
+            t3 = time.time()
+            print(f"[TIMING] Score calculation: {t3-t2:.2f}s")
+            
             baseline = compute_baseline_from_kb(kb)
             anomaly_result, anomaly_reasons = anomaly_score(vector, baseline)
-            classifier_result = classify_vector(vector, kb)
+            classifier_result = classify_vector(vector, kb, normalizer_cache=self.normalizer_cache)
+            # OPTIMIZATION: Cache the normalizer for subsequent analyses with same KB
+            if classifier_result and self.normalizer_cache is None and "normalizer" in classifier_result:
+                self.normalizer_cache = classifier_result.get("normalizer")
 
             ioc_matches = match_iocs(stats, kb.get("ioc", {}))
             ioc_count = len(ioc_matches["ips"]) + len(ioc_matches["domains"])
@@ -2277,12 +3429,241 @@ class PCAPSentryApp:
                 else:
                     output_lines.append("Verdict: Suspicious / Inconclusive")
 
-            if self.use_llm_var.get():
-                output_lines.append("\nLLM Verdict")
-                output_lines.append("(running local model...)")
+            if self.use_local_model_var.get():
+                output_lines.append("")
+                output_lines.append("Local Model Verdict")
+                if not _check_sklearn():
+                    output_lines.append("Local model unavailable (scikit-learn not installed).")
+                else:
+                    model_bundle = _load_local_model()
+                    if model_bundle is None:
+                        output_lines.append("Local model not trained yet. Add labeled PCAPs.")
+                    else:
+                        label, proba = _predict_local_model(model_bundle, features)
+                        backend = model_bundle.get("backend", "cpu")
+                        if label:
+                            output_lines.append(f"Verdict: Likely {label.title()}")
+                        if proba is not None:
+                            output_lines.append(f"Malicious confidence: {proba:.2%}")
+                        output_lines.append(f"Backend: {backend.upper()}")
+
+            # Add threat intelligence findings if available
+            if threat_intel_findings.get("threat_intel"):
+                output_lines.append("")
+                output_lines.append("Online Threat Intelligence")
+                intel_data = threat_intel_findings["threat_intel"]
+
+                if intel_data.get("risky_ips"):
+                    output_lines.append("Flagged IPs (from public threat feeds):")
+                    for ip_info in intel_data["risky_ips"][:5]:
+                        output_lines.append(f"  - {ip_info['ip']}: risk score {ip_info['risk_score']:.0f}/100")
+                        if ip_info.get("sources", {}).get("otx"):
+                            otx_info = ip_info["sources"]["otx"]
+                            if otx_info.get("pulse_count"):
+                                output_lines.append(f"    (AlienVault OTX: {otx_info['pulse_count']} pulses)")
+
+                if intel_data.get("risky_domains"):
+                    output_lines.append("Flagged Domains (from public threat feeds):")
+                    for domain_info in intel_data["risky_domains"][:5]:
+                        output_lines.append(f"  - {domain_info['domain']}: risk score {domain_info['risk_score']:.0f}/100")
+                        if domain_info.get("sources", {}).get("urlhaus"):
+                            urlhaus = domain_info["sources"]["urlhaus"]
+                            if urlhaus.get("found"):
+                                output_lines.append(f"    (URLhaus: {urlhaus.get('url_count', 0)} malicious URLs)")
+
+            t4 = time.time()
+            self._set_determinate_progress(80)
+            self.status_var.set("Detecting suspicious flows...")
+            self.root.update_idletasks()
+            
+            suspicious_flows = detect_suspicious_flows(df, kb)
+            t5 = time.time()
+            print(f"[TIMING] Suspicious flows detection: {t5-t4:.2f}s")
+            
+            output_lines.append("")
+            output_lines.append("Suspicious Flows (heuristic)")
+            if not suspicious_flows:
+                output_lines.append("No suspicious flows detected.")
+            else:
+                for item in suspicious_flows:
+                    output_lines.append(
+                        f"- {item['flow']} | {item['reason']} | {item['bytes']} | {item['packets']} pkts"
+                    )
+
+            wireshark_filters = self._build_wireshark_filters(
+                stats, ioc_matches, verdict, suspicious_flows=suspicious_flows
+            )
+            if wireshark_filters:
+                output_lines.append("- Wireshark filters: see Why tab")
+
+            why_lines = [
+                "Summary",
+                f"- Verdict: {verdict} (risk {risk_score}/100)",
+                "",
+                "What this means:",
+            ]
+            
+            # Add simple explanation based on verdict
+            if verdict == "Likely Malicious":
+                why_lines.append("This traffic exhibits strong indicators of malware or unauthorized access.")
+                why_lines.append("Review IOC matches, suspicious ports, and unusual traffic patterns below.")
+            elif verdict == "Suspicious (IoC Match)":
+                why_lines.append("This traffic matches known malicious IPs or domains from threat feeds.")
+                why_lines.append("The behavior and connections are flagged as potentially harmful.")
+            elif verdict == "Suspicious":
+                why_lines.append("This traffic shows unusual patterns that warrant further investigation.")
+                why_lines.append("While not definitively malicious, review the signals below for concerns.")
+            elif verdict == "Likely Safe":
+                why_lines.append("This traffic appears to be normal and benign.")
+                why_lines.append("No significant malicious indicators were detected.")
+            
+            why_lines.append("")
+            why_lines.append("Signals that drove the score:")
+
+            if classifier_result is None:
+                why_lines.append("- Classifier: not enough labeled data")
+            else:
+                why_lines.append(
+                    f"- Classifier risk: {classifier_result['score']} (closer to malware centroid)")
+
+            if anomaly_result is None:
+                why_lines.append("- Baseline anomaly: no safe baseline available")
+            else:
+                reasons = ", ".join(anomaly_reasons) if anomaly_reasons else "no standout outliers"
+                why_lines.append(f"- Baseline anomaly: {anomaly_result} ({reasons})")
+
+            if ioc_available:
+                if ioc_count:
+                    why_lines.append(
+                        f"- IoC matches: {ioc_count} (domains: {len(ioc_matches['domains'])}, ips: {len(ioc_matches['ips'])})"
+                    )
+                else:
+                    why_lines.append("- IoC matches: none")
+            else:
+                why_lines.append("- IoC feed: not loaded")
+
+            why_lines.append("")
+            why_lines.append("Traffic clues to review:")
+
+            top_ports = stats.get("top_ports", [])
+            if top_ports:
+                port_text = ", ".join(f"{port} ({count})" for port, count in top_ports)
+                why_lines.append(f"- Top destination ports: {port_text}")
+                common_ports = {22, 53, 80, 123, 443, 445, 3389}
+                unusual_ports = [str(port) for port, _ in top_ports if port not in common_ports]
+                if unusual_ports:
+                    why_lines.append(f"  Non-standard ports among top ports: {', '.join(unusual_ports)}")
+
+            dns_count = stats.get("dns_query_count", 0)
+            if dns_count:
+                top_dns = stats.get("top_dns", [])
+                if top_dns:
+                    dns_text = ", ".join(f"{domain} ({count})" for domain, count in top_dns)
+                    why_lines.append(f"- Top DNS queries: {dns_text}")
+                else:
+                    why_lines.append(f"- DNS queries observed: {dns_count}")
+
+            http_count = stats.get("http_request_count", 0)
+            http_hosts = stats.get("http_hosts", [])
+            if http_count:
+                if http_hosts:
+                    why_lines.append(f"- HTTP hosts: {', '.join(http_hosts[:5])}")
+                else:
+                    why_lines.append(f"- HTTP requests observed: {http_count}")
+
+            tls_count = stats.get("tls_packet_count", 0)
+            tls_sni = stats.get("tls_sni", [])
+            if tls_count:
+                if tls_sni:
+                    why_lines.append(f"- TLS SNI observed: {', '.join(tls_sni[:5])}")
+                else:
+                    why_lines.append(f"- TLS packets observed: {tls_count}")
+
+            avg_size = stats.get("avg_size", 0.0)
+            median_size = stats.get("median_size", 0.0)
+            why_lines.append(f"- Avg packet size: {avg_size:.1f} bytes; median: {median_size:.1f} bytes")
+            if median_size and median_size < 120:
+                why_lines.append("  Many small packets can indicate beaconing or C2 check-ins.")
+            elif avg_size and avg_size > 1200:
+                why_lines.append("  Larger packets can indicate bulk data transfer or exfiltration.")
+
+            # Add threat intelligence findings to why
+            if threat_intel_findings.get("threat_intel"):
+                intel_data = threat_intel_findings["threat_intel"]
+                if intel_data.get("risky_ips") or intel_data.get("risky_domains"):
+                    why_lines.append("")
+                    why_lines.append("Online threat intelligence (public feeds):")
+                    if intel_data.get("risky_ips"):
+                        for ip_info in intel_data["risky_ips"][:3]:
+                            why_lines.append(f"  - {ip_info['ip']} flagged by threat feeds (risk: {ip_info['risk_score']:.0f}/100)")
+                    if intel_data.get("risky_domains"):
+                        for domain_info in intel_data["risky_domains"][:3]:
+                            why_lines.append(f"  - {domain_info['domain']} flagged by threat feeds (risk: {domain_info['risk_score']:.0f}/100)")
+
+            why_lines.append("")
+            why_lines.append("Suspicious flows to review:")
+            if not suspicious_flows:
+                why_lines.append("- None flagged by heuristics.")
+            else:
+                for item in suspicious_flows:
+                    why_lines.append(
+                        f"- {item['flow']} | {item['reason']} | {item['bytes']} | {item['packets']} pkts"
+                    )
+
+            if wireshark_filters:
+                unique_filters = list(dict.fromkeys(wireshark_filters))
+                self.wireshark_filters = unique_filters
+                why_lines.append("")
+                why_lines.append("Wireshark filters to start with:")
+                for filt in unique_filters:
+                    why_lines.append(f"- {filt}")
+            else:
+                self.wireshark_filters = []
+
+            if self.why_text is not None:
+                self.why_text.delete("1.0", tk.END)
+                self.why_text.insert(tk.END, "\n".join(why_lines))
+
+            if self.copy_filters_button is not None:
+                if self.wireshark_filters:
+                    self.copy_filters_button.configure(state=tk.NORMAL)
+                else:
+                    self.copy_filters_button.configure(state=tk.DISABLED)
 
             self.result_text.delete("1.0", tk.END)
             self.result_text.insert(tk.END, "\n".join(output_lines))
+
+            print(f"[DEBUG] _analyze: self.packet_table id={id(self.packet_table)} before apply_packet_filters")
+            # Select Results tab before updating table
+            if hasattr(self, 'results_notebook') and hasattr(self, 'results_tab'):
+                try:
+                    self.results_notebook.select(self.results_tab)
+                    self.results_tab.update_idletasks()
+                    self.results_tab.update()
+                    print(f"[DEBUG] Selected results_tab")
+                except Exception as e:
+                    print(f"[DEBUG] Could not switch to results tab: {e}")
+            if self.packet_table is not None:
+                try:
+                    parent = self.packet_table.nametowidget(self.packet_table.winfo_parent())
+                    print(f"[DEBUG] packet_table parent: {parent}")
+                    print(f"[DEBUG] packet_table is mapped: {self.packet_table.winfo_ismapped()}")
+                except Exception as e:
+                    print(f"[DEBUG] Could not get packet_table parent or visibility: {e}")
+            self._apply_packet_filters()
+            self._update_packet_hints(df, stats)
+            
+            self._set_determinate_progress(100)
+            self.status_var.set("Done")
+            self.root.update_idletasks()
+            
+            # Switch to Results tab to show analysis
+            if hasattr(self, 'results_notebook') and hasattr(self, 'results_tab'):
+                try:
+                    self.results_notebook.select(self.results_tab)
+                    print(f"[DEBUG] Selected results_tab for final view")
+                except Exception as e:
+                    print(f"[DEBUG] Could not switch to results tab: {e}")
 
             for row in self.flow_table.get_children():
                 self.flow_table.delete(row)
@@ -2300,26 +3681,14 @@ class PCAPSentryApp:
                 )
 
             self.charts_button.configure(state=tk.NORMAL)
-
-            if self.use_llm_var.get():
-                def run_llm():
-                    self._run_task(
-                        lambda: analyze_with_local_llm(stats, kb, self._get_llm()),
-                        lambda response: self._append_llm_response(response),
-                        message="Running local LLM...",
-                    )
-
-                def skip_llm():
-                    self._append_llm_response("LLM analysis skipped.")
-
-                self._ensure_model_available(run_llm, skip_llm)
+            self.label_safe_button.configure(state=tk.NORMAL)
+            self.label_mal_button.configure(state=tk.NORMAL)
+            self.target_path_var.set("")
+            
+            t_end = time.time()
+            print(f"[TIMING] Total result processing: {t_end-t_start:.2f}s")
 
         self._run_task(task, done, message="Analyzing PCAP...", progress_label="Analyzing PCAP")
-
-    def _append_llm_response(self, response):
-        if not response:
-            response = "LLM analysis unavailable."
-        self.result_text.insert(tk.END, f"\n{response}\n")
 
     def _open_charts(self):
         if self.current_df is None:
@@ -2336,29 +3705,52 @@ class PCAPSentryApp:
         _add_chart_tab(notebook, "Protocols", _plot_proto_pie(self.current_df))
         _add_chart_tab(notebook, "DNS", _plot_top_dns(self.current_df))
         _add_chart_tab(notebook, "HTTP", _plot_top_http(self.current_df))
+        _add_chart_tab(notebook, "TLS", _plot_top_tls_sni(self.current_df))
         _add_chart_tab(notebook, "Flows", _plot_top_flows(self.current_df))
+
+    def _get_knowledge_base(self):
+        """Get knowledge base with caching to avoid repeated JSON loads"""
+        if self.kb_cache is None:
+            self.kb_cache = load_knowledge_base()
+        return self.kb_cache
+
+    def _invalidate_caches(self):
+        """Invalidate all performance caches when KB changes"""
+        self.kb_cache = None
+        self.normalizer_cache = None
+        self.threat_intel_cache = None
 
     def _refresh_kb(self):
         kb = load_knowledge_base()
+        self.kb_cache = kb  # Update cache with fresh KB
         self.kb_summary_var.set(f"Safe entries: {len(kb['safe'])} | Malware entries: {len(kb['malicious'])}")
         ioc = kb.get("ioc", {})
         ioc_counts = f"IoCs: {len(ioc.get('domains', []))} domains, {len(ioc.get('ips', []))} ips"
         self.ioc_summary_var.set(ioc_counts)
-        self.kb_text.delete("1.0", tk.END)
-        if kb["safe"] or kb["malicious"] or any(ioc.get(key) for key in ("domains", "ips", "hashes")):
-            self.kb_text.insert(tk.END, json.dumps(kb, indent=2))
-        else:
-            self.kb_text.insert(tk.END, "Knowledge base is empty.")
+        # Invalidate classifier cache when KB changes
+        self.normalizer_cache = None
+        # Only update kb_text if it exists (may not be initialized in all contexts)
+        if hasattr(self, 'kb_text') and self.kb_text:
+            self.kb_text.delete("1.0", tk.END)
+            if kb["safe"] or kb["malicious"] or any(ioc.get(key) for key in ("domains", "ips", "hashes")):
+                self.kb_text.insert(tk.END, json.dumps(kb, indent=2))
+            else:
+                self.kb_text.insert(tk.END, "Knowledge base is empty.")
 
     def _on_tab_changed(self, _event):
         self.sample_note_var.set("")
 
 
 def main():
-    if TkinterDnD is None:
-        root = tk.Tk()
-    else:
+    _init_error_logs()
+    sys.excepthook = _handle_exception
+    if _check_tkinterdnd2():
+        DND_FILES, TkinterDnD = _get_tkinterdnd2()
         root = TkinterDnD.Tk()
+    else:
+        root = tk.Tk()
+    root.report_callback_exception = _handle_exception
+    _set_app_icon(root)
     app = PCAPSentryApp(root)
     root.mainloop()
 
