@@ -38,6 +38,11 @@ PCAP Sentry parses network captures (`.pcap` / `.pcapng`), summarizes traffic st
 1. Download **PCAP_Sentry_Setup.exe** from the [Releases](https://github.com/industrial-dave/PCAP-Sentry/releases) page.
 2. Run the installer and follow the prompts.
 3. Optional: choose **Install Ollama** and select one or more models to pull.
+	- The Ollama Models page supports selecting multiple models via checkboxes.
+	- The page includes a link to the Ollama model library with descriptions.
+	- Installer progress is shown for runtime setup and each selected model.
+	- Ollama is started headless for model pulls; the desktop UI is not required.
+	- In Preferences, Stop Ollama on exit is enabled by default and can be changed.
 4. Launch PCAP Sentry from the Start Menu or desktop shortcut.
 
 ### Option 2: Run from Source

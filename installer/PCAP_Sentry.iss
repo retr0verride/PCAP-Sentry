@@ -68,6 +68,7 @@ var
   OllamaModelSizesMB: array of Integer;
   OllamaSpaceNote: TNewStaticText;
   OllamaModelsHint: TNewStaticText;
+  OllamaModelsLink: TNewStaticText;
   TasksClickHandlerSet: Boolean;
   CommandRunId: Integer;
 
@@ -148,6 +149,39 @@ begin
   UpdateOllamaSpaceNote;
 end;
 
+procedure EnsureOllamaDesktopNotRunning;
+var
+  ResultCode: Integer;
+begin
+  Exec(
+    ExpandConstant('{cmd}'),
+    '/C taskkill /F /T /IM "Ollama app.exe" >nul 2>nul',
+    '',
+    SW_HIDE,
+    ewWaitUntilTerminated,
+    ResultCode
+  );
+end;
+
+procedure EnsureOllamaHeadlessRunning;
+var
+  ResultCode: Integer;
+  OllamaExe: String;
+begin
+  EnsureOllamaDesktopNotRunning;
+  OllamaExe := GetOllamaExePath;
+  Exec(
+    OllamaExe,
+    'serve',
+    '',
+    SW_HIDE,
+    ewNoWait,
+    ResultCode
+  );
+
+  Sleep(600);
+  EnsureOllamaDesktopNotRunning;
+end;
 procedure AddOllamaModel(const ModelId, LabelText: String; SizeMB: Integer; DefaultChecked: Boolean);
 var
   Index: Integer;
@@ -160,15 +194,22 @@ begin
   OllamaModelSizesMB[GetArrayLength(OllamaModelSizesMB) - 1] := SizeMB;
 end;
 
+procedure OpenOllamaModelsLibrary(Sender: TObject);
+var
+  ErrorCode: Integer;
+begin
+  if not ShellExec('', 'https://ollama.com/library', '', '', SW_SHOWNORMAL, ewNoWait, ErrorCode) then
+    MsgBox('Unable to open the model library page. Please open https://ollama.com/library in your browser.', mbInformation, MB_OK);
+end;
+
 procedure InitializeWizard;
 begin
   OllamaModelsPage := CreateInputOptionPage(
     wpSelectTasks,
     'Ollama Models',
-    'Select models to install/update',
-    'Choose one or more Ollama models.' + #13#10 +
-    'Selected models will be installed or updated.',
-    True,
+    'Select Ollama models',
+    'Choose one or more models to install or update.',
+    False,
     False
   );
 
@@ -181,6 +222,7 @@ begin
   AddOllamaModel('qwen2.5:14b', 'qwen2.5:14b (larger)', 8192, False);
   AddOllamaModel('gemma2:9b', 'gemma2:9b (medium)', 4096, False);
   AddOllamaModel('deepseek-r1:7b', 'deepseek-r1:7b (reasoning)', 4096, False);
+  AddOllamaModel('deepseek-r1:14b', 'deepseek-r1:14b (larger reasoning)', 8192, False);
   AddOllamaModel('phi3.5', 'phi3.5 (small, fast)', 2048, False);
   AddOllamaModel('tinyllama', 'tinyllama (very small)', 512, False);
   AddOllamaModel('codestral', 'codestral (code-focused)', 4096, False);
@@ -197,7 +239,17 @@ begin
   OllamaModelsHint.Left := ScaleX(0);
   OllamaModelsHint.Top := ScaleY(0);
   OllamaModelsHint.Width := OllamaModelsPage.SurfaceWidth;
-  OllamaModelsHint.Caption := 'Selected models will be installed/updated.';
+  OllamaModelsHint.Caption := 'Need help choosing? Open the model list with descriptions:';
+
+  OllamaModelsLink := TNewStaticText.Create(WizardForm);
+  OllamaModelsLink.Parent := OllamaModelsPage.Surface;
+  OllamaModelsLink.Left := ScaleX(0);
+  OllamaModelsLink.Top := OllamaModelsHint.Top + OllamaModelsHint.Height + ScaleY(2);
+  OllamaModelsLink.Caption := 'https://ollama.com/library';
+  OllamaModelsLink.Font.Style := [fsUnderline];
+  OllamaModelsLink.Font.Color := clBlue;
+  OllamaModelsLink.Cursor := crHand;
+  OllamaModelsLink.OnClick := @OpenOllamaModelsLibrary;
 
   UpdateOllamaSpaceNote;
 
@@ -702,6 +754,13 @@ begin
         TotalSteps
       );
 
+      SetOllamaInstallProgress(
+        'Starting Ollama in headless mode ...',
+        1,
+        TotalSteps
+      );
+      EnsureOllamaHeadlessRunning;
+
       if not ApplySelectedOllamaModels(TotalSteps) then
       begin
         MsgBox(
@@ -714,6 +773,7 @@ begin
       end;
 
       SetOllamaInstallProgress('Ollama setup complete.', TotalSteps, TotalSteps);
+      EnsureOllamaDesktopNotRunning;
     end;
   end;
 end;

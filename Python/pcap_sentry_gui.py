@@ -399,6 +399,7 @@ def _default_settings():
         "llm_provider": "disabled",
         "llm_model": "llama3",
         "llm_endpoint": "http://localhost:11434",
+        "stop_ollama_on_exit": True,
         "theme": "system",
         "offline_mode": False,
         "app_data_notice_shown": False,
@@ -2276,6 +2277,7 @@ class PCAPSentryApp:
         self.llm_provider_var = tk.StringVar(value=self.settings.get("llm_provider", "disabled"))
         self.llm_model_var = tk.StringVar(value=self.settings.get("llm_model", "llama3"))
         self.llm_endpoint_var = tk.StringVar(value=self.settings.get("llm_endpoint", "http://localhost:11434"))
+        self.stop_ollama_on_exit_var = tk.BooleanVar(value=self.settings.get("stop_ollama_on_exit", False))
         self.llm_test_status_var = tk.StringVar(value="Not tested")
         self.llm_test_status_label = None
         self.llm_header_indicator = None
@@ -2382,7 +2384,40 @@ class PCAPSentryApp:
         _backup_knowledge_base()
         # Persist LLM status and all settings
         self._save_settings_from_vars()
+        self._stop_ollama_on_exit_if_configured()
         self.root.destroy()
+
+    def _stop_ollama_on_exit_if_configured(self):
+        if not bool(self.stop_ollama_on_exit_var.get()):
+            return
+
+        provider = self.llm_provider_var.get().strip().lower()
+        if provider != "ollama":
+            return
+
+        endpoint = self.llm_endpoint_var.get().strip() or "http://localhost:11434"
+        endpoint_norm = self._normalize_ollama_endpoint(endpoint).rstrip("/").lower()
+        if endpoint_norm not in ("http://localhost:11434", "http://127.0.0.1:11434"):
+            return
+
+        try:
+            creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/IM", "Ollama app.exe"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                creationflags=creationflags,
+            )
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/IM", "ollama.exe"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                creationflags=creationflags,
+            )
+        except Exception as exc:
+            _write_error_log("Failed to stop Ollama on exit", exc)
         
 
     def _get_window_title(self):
@@ -2787,9 +2822,21 @@ class PCAPSentryApp:
             "For OpenAI-compatible servers, use the server base URL (no /v1). If this points to a cloud service, data is sent off-device.",
             row=12, column=2, sticky="w")
 
-        ttk.Label(frame, text="Test LLM:").grid(row=13, column=0, sticky="w", pady=6)
+        stop_ollama_on_exit_check = ttk.Checkbutton(
+            frame,
+            text="Stop Ollama when PCAP Sentry closes",
+            variable=self.stop_ollama_on_exit_var,
+            style="Quiet.TCheckbutton",
+        )
+        stop_ollama_on_exit_check.grid(row=13, column=0, sticky="w", pady=6, columnspan=2)
+        self._help_icon_grid(frame,
+            "When enabled (and provider is Ollama), PCAP Sentry will stop local Ollama processes on exit. "
+            "This only applies to local default endpoints (localhost:11434 / 127.0.0.1:11434).",
+            row=13, column=2, sticky="w")
+
+        ttk.Label(frame, text="Test LLM:").grid(row=14, column=0, sticky="w", pady=6)
         test_frame = ttk.Frame(frame)
-        test_frame.grid(row=13, column=1, sticky="w", pady=6)
+        test_frame.grid(row=14, column=1, sticky="w", pady=6)
         ttk.Button(test_frame, text="Test Connection", style="Secondary.TButton",
                    command=self._test_llm_connection).pack(side=tk.LEFT)
         self.llm_test_status_label = tk.Label(
@@ -2801,13 +2848,15 @@ class PCAPSentryApp:
             padx=8,
         )
         self.llm_test_status_label.pack(side=tk.LEFT)
-        self._help_icon_grid(frame, "Sends a small test request to verify the current LLM settings.", row=13, column=2, sticky="w")
+        self._help_icon_grid(frame, "Sends a small test request to verify the current LLM settings.", row=14, column=2, sticky="w")
 
         def _set_llm_fields_state(*_):
             state = "normal" if self.llm_provider_var.get() != "disabled" else "disabled"
             llm_model_combo.configure(state=state)
             llm_endpoint_entry.configure(state=state)
             refresh_btn.configure(state=state)
+            ollama_state = "normal" if self.llm_provider_var.get().strip().lower() == "ollama" else "disabled"
+            stop_ollama_on_exit_check.configure(state=ollama_state)
             can_uninstall = (
                 state == "normal"
                 and self.llm_provider_var.get().strip().lower() == "ollama"
@@ -2828,12 +2877,12 @@ class PCAPSentryApp:
 
         # Backup directory row with improved spacing
 
-        ttk.Label(frame, text="Backup directory:").grid(row=14, column=0, sticky="w", pady=6)
+        ttk.Label(frame, text="Backup directory:").grid(row=15, column=0, sticky="w", pady=6)
         backup_entry = ttk.Entry(frame, textvariable=self.backup_dir_var, width=60)
-        backup_entry.grid(row=14, column=1, sticky="ew", pady=6)
+        backup_entry.grid(row=15, column=1, sticky="ew", pady=6)
         frame.grid_columnconfigure(1, weight=1)
         button_frame = ttk.Frame(frame)
-        button_frame.grid(row=14, column=2, columnspan=4, sticky="e", pady=6)
+        button_frame.grid(row=15, column=2, columnspan=4, sticky="e", pady=6)
         ttk.Button(button_frame, text="\u2715", width=2, style="Secondary.TButton",
                    command=lambda: self.backup_dir_var.set("")).pack(side=tk.LEFT, padx=2)
         ttk.Button(button_frame, text="Browse", style="Secondary.TButton",
@@ -2842,7 +2891,7 @@ class PCAPSentryApp:
         ttk.Button(button_frame, text="Cancel", style="Secondary.TButton",
                    command=window.destroy).pack(side=tk.LEFT, padx=2)
         ttk.Button(frame, text="Reset to Defaults", style="Danger.TButton",
-             command=self._reset_preferences).grid(row=15, column=0, columnspan=6, sticky="e", pady=(12, 0))
+               command=self._reset_preferences).grid(row=16, column=0, columnspan=6, sticky="e", pady=(12, 0))
 
         window.grab_set()
 
@@ -2865,6 +2914,7 @@ class PCAPSentryApp:
             "llm_provider": self.llm_provider_var.get().strip().lower() or "disabled",
             "llm_model": self.llm_model_var.get().strip() or "llama3",
             "llm_endpoint": self.llm_endpoint_var.get().strip() or "http://localhost:11434",
+            "stop_ollama_on_exit": bool(self.stop_ollama_on_exit_var.get()),
             "theme": self.theme_var.get().strip().lower() or "system",
             "app_data_notice_shown": bool(self.settings.get("app_data_notice_shown")),
         }
@@ -2893,6 +2943,7 @@ class PCAPSentryApp:
         self.llm_provider_var.set(defaults.get("llm_provider", "disabled"))
         self.llm_model_var.set(defaults.get("llm_model", "llama3"))
         self.llm_endpoint_var.set(defaults.get("llm_endpoint", "http://localhost:11434"))
+        self.stop_ollama_on_exit_var.set(defaults.get("stop_ollama_on_exit", False))
         self.theme_var.set(defaults["theme"])
         self._save_settings_from_vars()
 
@@ -5755,6 +5806,19 @@ class PCAPSentryApp:
                 combo["values"] = []
             return
 
+        def _dedupe_names(names):
+            unique = []
+            seen = set()
+            for name in names:
+                key = str(name).strip()
+                if not key:
+                    continue
+                if key in seen:
+                    continue
+                seen.add(key)
+                unique.append(key)
+            return unique
+
         def worker():
             try:
                 if provider == "ollama":
@@ -5766,6 +5830,7 @@ class PCAPSentryApp:
             return []
 
         def apply(names):
+            names = _dedupe_names(names)
             if combo is not None:
                 combo["values"] = names
                 if names and not self.llm_model_var.get().strip():

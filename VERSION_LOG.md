@@ -14,6 +14,14 @@
 
 ## 2026.02.13-16 - 2026-02-13
 - Move model uninstall to Preferences; simplify installer model flow
+- Add deepseek-r1:14b to installer model presets
+- Remove redundant model-selection copy and streamline installer wording
+- Add installer link to Ollama model library with descriptions
+- Enable selecting multiple installer models via checkboxes
+- Keep installer progress visible through runtime + per-model pulls
+- Start Ollama in headless mode during installer model setup and avoid opening desktop UI
+- Add optional "Stop Ollama on exit" setting (enabled by default)
+- Update README and USER_MANUAL for installer model workflow changes
 ## 2026.02.13-15 - 2026-02-13
 - Minor tweaks and improvements
 ## 2026.02.13-14 - 2026-02-13

@@ -33,6 +33,7 @@
 13. [Preferences & Settings](#13-preferences--settings)
 14. [Updating PCAP Sentry](#14-updating-pcap-sentry)
 15. [Troubleshooting](#15-troubleshooting)
+   - [Headless Ollama Install Flow (Troubleshooting)](#headless-ollama-install-flow-troubleshooting)
 16. [FAQ](#16-faq)
 17. [Appendix](#17-appendix)
 
@@ -545,6 +546,7 @@ Your LLM connection status (provider, model, endpoint) is now saved automaticall
 | 🤖 **LLM provider** | Disabled | Select `disabled`, `ollama`, or `openai_compat`. Auto-detected on startup if a local LLM server is found. |
 | 🧠 **LLM model** | llama3 | Model name dropdown — click **↻** to detect available models from the running server. You can also type a custom model name. |
 | 🔗 **LLM endpoint** | http://localhost:11434 | Base URL for the LLM API. For Ollama use `http://localhost:11434`. For OpenAI-compatible servers, use the server base URL (no `/v1` suffix). |
+| 🛑 **Stop Ollama on exit** | On | When enabled and using local Ollama, PCAP Sentry stops local Ollama processes on app close. |
 | 🧪 **Test Connection** | — | Sends a test request to verify the LLM is reachable with the current settings. Shows OK/FAIL status. |
 | 📁 **Backup directory** | Default | Directory where KB backups are stored. |
 
@@ -579,10 +581,21 @@ If a server is found, the provider, endpoint, and first available model are auto
 
 If you choose the **Install/manage Ollama** option during PCAP Sentry setup, the installer shows an **Ollama Models** page where you can:
 
-- **Install/Update selected models** (default behavior)
-- **Remove selected models** (check **Remove selected models instead of install/update**)
+- **Install or update selected models** (default behavior)
+- **Remove selected models** (check **Remove selected models instead of install or update**)
+
+You can select multiple models at once using the checkboxes on that page.
+
+The page also includes a direct link to the Ollama model library with model descriptions:
+- https://ollama.com/library
+
+Example preset options include `llama3.2`, `qwen2.5:14b`, `deepseek-r1:7b`, and `deepseek-r1:14b`.
 
 The installer now shows live progress while installing Ollama and while processing each selected model.
+
+During installer-based setup, Ollama is started in headless server mode for model pulls; the desktop UI is not required.
+
+If anything fails in this flow, see [Headless Ollama Install Flow (Troubleshooting)](#headless-ollama-install-flow-troubleshooting).
 
 ### OpenAI-Compatible Server Setup (Optional)
 
@@ -698,6 +711,20 @@ PCAP Sentry uses date-based versioning: `YYYY.MM.DD` (e.g., `2026.02.13`). If mu
 - If the endpoint includes `/v1`, remove it — PCAP Sentry adds the correct API path automatically.
 - Check the header indicator: **✔ LLM** (green/blue) means connected, **✘ LLM** (red) means failed.
 - Error logs are written to `%LOCALAPPDATA%\PCAP_Sentry\` for detailed troubleshooting.
+
+### Headless Ollama Install Flow (Troubleshooting)
+
+- Installer mode starts Ollama headless (`ollama serve`) and does not require the desktop UI.
+- Verify the local API is reachable:
+   - `ollama list`
+   - `curl http://localhost:11434/api/tags`
+- If `curl` fails, check Windows Defender Firewall and allow local loopback access for Ollama.
+- In PCAP Sentry Preferences, use:
+   - **LLM provider** = `ollama`
+   - **LLM endpoint** = `http://localhost:11434`
+- If needed, restart headless server manually:
+   - `taskkill /F /IM "Ollama app.exe"`
+   - `ollama serve`
 
 ### ML Model Not Working
 
