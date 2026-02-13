@@ -316,23 +316,27 @@ def _get_app_base_dir():
     return os.path.dirname(os.path.abspath(__file__))
 
 
-def _get_app_icon_path():
+def _get_app_icon_path(prefer_png=False):
     base_dir = _get_app_base_dir()
     candidates = []
     frozen_dir = getattr(sys, "_MEIPASS", None)
+    ext = "pcap_sentry_48.png" if prefer_png else "pcap_sentry.ico"
     if frozen_dir:
-        candidates.append(os.path.join(frozen_dir, "assets", "pcap_sentry.ico"))
-        candidates.append(os.path.join(frozen_dir, "pcap_sentry.ico"))
+        candidates.append(os.path.join(frozen_dir, "assets", ext))
+        candidates.append(os.path.join(frozen_dir, ext))
     candidates.extend(
         [
-            os.path.join(base_dir, "assets", "pcap_sentry.ico"),
-            os.path.abspath(os.path.join(base_dir, "..", "assets", "pcap_sentry.ico")),
-            os.path.join(base_dir, "pcap_sentry.ico"),
+            os.path.join(base_dir, "assets", ext),
+            os.path.abspath(os.path.join(base_dir, "..", "assets", ext)),
+            os.path.join(base_dir, ext),
         ]
     )
     for path in candidates:
         if os.path.exists(path):
             return path
+    # Fallback: try ICO if PNG was requested but not found
+    if prefer_png:
+        return _get_app_icon_path(prefer_png=False)
     return None
 
 
@@ -2530,9 +2534,9 @@ class PCAPSentryApp:
         title_row = ttk.Frame(title_block)
         title_row.pack(anchor=tk.W)
 
-        # Load the app icon as the brand image
+        # Load the app icon as the brand image (prefer PNG for clarity)
         self._header_icon_image = None
-        icon_path = _get_app_icon_path()
+        icon_path = _get_app_icon_path(prefer_png=True)
         if icon_path:
             try:
                 from PIL import Image, ImageTk

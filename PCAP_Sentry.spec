@@ -91,7 +91,7 @@ binaries = _unique(binaries)
 hiddenimports = _unique(hiddenimports)
 
 
-for icon_name in ("pcap_sentry.ico", "custom.ico"):
+for icon_name in ("pcap_sentry.ico", "pcap_sentry_48.png", "custom.ico"):
     icon_path = os.path.join("assets", icon_name)
     if os.path.exists(icon_path):
         datas.append((icon_path, "assets"))
