@@ -368,6 +368,90 @@ begin
   Result := 'ollama.exe';
 end;
 
+function GetOllamaUninstallerPath: String;
+var
+  Candidate: String;
+begin
+  Candidate := ExpandConstant('{localappdata}\Programs\Ollama\Uninstall Ollama.exe');
+  if FileExists(Candidate) then
+  begin
+    Result := Candidate;
+    exit;
+  end;
+
+  Candidate := ExpandConstant('{pf}\Ollama\unins000.exe');
+  if FileExists(Candidate) then
+  begin
+    Result := Candidate;
+    exit;
+  end;
+
+  Candidate := ExpandConstant('{pf}\Ollama\Uninstall Ollama.exe');
+  if FileExists(Candidate) then
+  begin
+    Result := Candidate;
+    exit;
+  end;
+
+  Result := '';
+end;
+
+function UninstallOllamaRuntime: Boolean;
+var
+  UninstallerPath: String;
+  ResultCode: Integer;
+begin
+  Result := True;
+  UninstallerPath := GetOllamaUninstallerPath;
+  if UninstallerPath = '' then
+    exit;
+
+  if Exec(
+      UninstallerPath,
+      '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART',
+      '',
+      SW_HIDE,
+      ewWaitUntilTerminated,
+      ResultCode
+    ) and ((ResultCode = 0) or (ResultCode = 3010)) then
+  begin
+    exit;
+  end;
+
+  Result :=
+    Exec(
+      UninstallerPath,
+      '',
+      '',
+      SW_SHOWNORMAL,
+      ewWaitUntilTerminated,
+      ResultCode
+    ) and ((ResultCode = 0) or (ResultCode = 3010));
+end;
+
+procedure ForceStopPCAPSentryProcesses;
+var
+  ResultCode: Integer;
+begin
+  Exec(
+    ExpandConstant('{cmd}'),
+    '/C taskkill /F /T /IM PCAP_Sentry.exe >nul 2>nul',
+    '',
+    SW_HIDE,
+    ewWaitUntilTerminated,
+    ResultCode
+  );
+
+  Exec(
+    ExpandConstant('{cmd}'),
+    '/C wmic process where "name=''python.exe'' and CommandLine like ''%%pcap_sentry_gui.py%%''" call terminate >nul 2>nul',
+    '',
+    SW_HIDE,
+    ewWaitUntilTerminated,
+    ResultCode
+  );
+end;
+
 function CountSelectedOllamaModels: Integer;
 var
   I: Integer;
@@ -550,10 +634,39 @@ end;
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   KeepKB: Integer;
+  RemoveOllama: Integer;
   LocalDir, KBFile, KBBackupDir: String;
 begin
+  if CurUninstallStep = usUninstall then
+  begin
+    ForceStopPCAPSentryProcesses;
+  end;
+
   if CurUninstallStep = usPostUninstall then
   begin
+    if GetOllamaUninstallerPath <> '' then
+    begin
+      RemoveOllama := MsgBox(
+        'Ollama runtime appears to be installed.' + #13#10 + #13#10 +
+        'Do you also want to uninstall Ollama?',
+        mbConfirmation,
+        MB_YESNO
+      );
+
+      if RemoveOllama = IDYES then
+      begin
+        if not UninstallOllamaRuntime then
+        begin
+          MsgBox(
+            'Ollama uninstall could not be completed automatically.' + #13#10 +
+            'You can uninstall it manually from Windows Apps & Features.',
+            mbInformation,
+            MB_OK
+          );
+        end;
+      end;
+    end;
+
     LocalDir := ExpandConstant(LocalAppDataFolder);
 
     { Check if knowledge base exists }
