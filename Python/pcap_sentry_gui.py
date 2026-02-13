@@ -2897,7 +2897,7 @@ class PCAPSentryApp:
         frame.grid_columnconfigure(1, weight=1)
         button_frame = ttk.Frame(frame)
         button_frame.grid(row=15, column=2, columnspan=4, sticky="e", pady=6)
-        ttk.Button(button_frame, text="\u2715", width=2, style="Secondary.TButton",
+        ttk.Button(button_frame, text="\u2715", width=3, style="ClearField.TButton",
                    command=lambda: self.backup_dir_var.set("")).pack(side=tk.LEFT, padx=2)
         ttk.Button(button_frame, text="Browse", style="Secondary.TButton",
                    command=self._browse_backup_dir).pack(side=tk.LEFT, padx=2)
@@ -3521,8 +3521,8 @@ class PCAPSentryApp:
         self.safe_path_var = tk.StringVar()
         self.safe_entry = ttk.Entry(safe_frame, textvariable=self.safe_path_var, width=90)
         self.safe_entry.pack(side=tk.LEFT, padx=6)
-        ttk.Button(safe_frame, text="\u2715", width=2, style="Secondary.TButton",
-                   command=lambda: self.safe_path_var.set("")).pack(side=tk.LEFT)
+        ttk.Button(safe_frame, text="\u2715", width=3, style="ClearField.TButton",
+                   command=lambda: self.safe_path_var.set("")).pack(side=tk.LEFT, padx=(2, 0))
         self.safe_browse = ttk.Button(safe_frame, text="Browse", style="Secondary.TButton",
                                       command=lambda: self._browse_file(self.safe_path_var))
         self.safe_browse.pack(side=tk.LEFT, padx=6)
@@ -3548,8 +3548,8 @@ class PCAPSentryApp:
         self.mal_path_var = tk.StringVar()
         self.mal_entry = ttk.Entry(mal_frame, textvariable=self.mal_path_var, width=90)
         self.mal_entry.pack(side=tk.LEFT, padx=6)
-        ttk.Button(mal_frame, text="\u2715", width=2, style="Secondary.TButton",
-                   command=lambda: self.mal_path_var.set("")).pack(side=tk.LEFT)
+        ttk.Button(mal_frame, text="\u2715", width=3, style="ClearField.TButton",
+                   command=lambda: self.mal_path_var.set("")).pack(side=tk.LEFT, padx=(2, 0))
         self.mal_browse = ttk.Button(mal_frame, text="Browse", style="Secondary.TButton",
                                       command=lambda: self._browse_file(self.mal_path_var))
         self.mal_browse.pack(side=tk.LEFT, padx=6)
@@ -3612,8 +3612,8 @@ class PCAPSentryApp:
         self.target_path_var = tk.StringVar()
         self.target_entry = ttk.Entry(file_frame, textvariable=self.target_path_var, width=90)
         self.target_entry.pack(side=tk.LEFT, padx=6)
-        ttk.Button(file_frame, text="\u2715", width=2, style="Secondary.TButton",
-                   command=lambda: self.target_path_var.set("")).pack(side=tk.LEFT)
+        ttk.Button(file_frame, text="\u2715", width=3, style="ClearField.TButton",
+                   command=lambda: self.target_path_var.set("")).pack(side=tk.LEFT, padx=(2, 0))
         target_browse = ttk.Button(file_frame, text="Browse", style="Secondary.TButton",
                                    command=lambda: self._browse_file(self.target_path_var))
         target_browse.pack(side=tk.LEFT, padx=6)
@@ -5014,6 +5014,24 @@ class PCAPSentryApp:
             background=[("active", self.colors["danger"]), ("disabled", border)],
             foreground=[("active", "#ffffff"), ("disabled", muted)],
             bordercolor=[("active", self.colors["danger"])],
+        )
+
+        # Clear-field button (small red circle with ✕)
+        style.configure(
+            "ClearField.TButton",
+            background=self.colors["danger"],
+            foreground="#ffffff",
+            bordercolor=self.colors["danger"],
+            focusthickness=0,
+            padding=(4, 2),
+            font=("Segoe UI", 9, "bold"),
+            relief="flat",
+        )
+        style.map(
+            "ClearField.TButton",
+            background=[("active", self.colors["danger_hover"]), ("disabled", border)],
+            foreground=[("disabled", muted)],
+            bordercolor=[("active", self.colors["danger_hover"])],
         )
 
         # Success button (e.g. Mark as Safe)
