@@ -68,6 +68,12 @@ python Python/pcap_sentry_gui.py
 - **[Update System](UPDATER.md)** — Technical details on the built-in update mechanism
 - **[Version Log](VERSION_LOG.md)** — Changelog
 
+## Security Automation
+
+- **CodeQL scanning** runs on pushes, pull requests, and a weekly schedule via `.github/workflows/codeql.yml`.
+- **Release checksums** are generated and uploaded as `SHA256SUMS.txt` for each published GitHub release via `.github/workflows/release-checksums.yml`.
+- Users can verify downloaded artifacts against the published SHA-256 checksum file.
+
 ## Project Structure
 
 ```

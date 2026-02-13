@@ -1,0 +1,58 @@
+name: Release Checksums
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to process (for example v2026.02.13-16)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  checksums:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Resolve release tag
+        id: tag
+        shell: bash
+        run: |
+          if [[ -n "${{ github.event.release.tag_name }}" ]]; then
+            echo "tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+          elif [[ -n "${{ inputs.tag }}" ]]; then
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install GitHub CLI
+        run: |
+          type -p gh >/dev/null || (sudo apt update && sudo apt install gh -y)
+
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p release-assets
+          gh release download "${{ steps.tag.outputs.tag }}" --dir release-assets
+
+      - name: Build SHA256SUMS
+        shell: bash
+        run: |
+          cd release-assets
+          if ! ls -1 | grep -q .; then
+            echo "No assets found on release ${{ steps.tag.outputs.tag }}"
+            exit 1
+          fi
+          sha256sum * | sort -k2 > SHA256SUMS.txt
+
+      - name: Upload SHA256SUMS to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ steps.tag.outputs.tag }}" "release-assets/SHA256SUMS.txt" --clobber
