@@ -1,5 +1,8 @@
 # Version Log
 
+
+## 2026.02.13-2 - 2026-02-13
+- Minor tweaks and improvements
 ## 2026.02.13-1 - 2026-02-13
 - Bug fixes: KB cache invalidation, NaN packet filter, domain validation, duplicate tab select, unused import cleanup, missing offline_mode default.
 - Corrected user manual data paths to match actual code behavior.
