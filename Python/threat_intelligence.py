@@ -152,7 +152,8 @@ class ThreatIntelligence:
     def _check_otx_ip(self, ip: str) -> Optional[Dict]:
         """Check IP against AlienVault OTX (free, no API key required)"""
         try:
-            url = f"{self.otx_base_url}/indicators/IPv4/{ip}/reputation"
+            safe_ip = urllib.parse.quote(ip, safe='')
+            url = f"{self.otx_base_url}/indicators/IPv4/{safe_ip}/reputation"
             headers = {"Accept": "application/json"}
             response = requests.get(url, headers=headers, timeout=5)
 

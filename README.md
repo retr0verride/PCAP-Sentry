@@ -30,6 +30,8 @@ PCAP Sentry parses network captures (`.pcap` / `.pcapng`), summarizes traffic st
 | 🧠 | **Learns from your data** via a trainable knowledge base and optional ML model |
 | 💬 | **Chat interface** powered by a local LLM (Ollama, offline) or OpenAI-compatible endpoint (local or cloud) |
 | ♻️ | **LLM status is now saved and restored automatically** |
+| 🔒 | **Security hardened** with path-traversal guards, input sanitization, model-name validation, and response-size limits |
+| ⚡ | **Optimized analysis engine** with cached vector computations, mask-based filtering, and centralized LLM retry logic |
 
 ## Quick Start
 

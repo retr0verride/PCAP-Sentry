@@ -171,14 +171,14 @@ IOC_SET_LIMIT = 50000
 
 
 def _compute_app_version():
-    today = __import__("datetime").date.today()
+    today = datetime.now(timezone.utc).date()
     date_str = today.strftime("%Y.%m.%d")
     try:
         since = today.strftime("%Y-%m-%dT00:00:00")
-        result = __import__("subprocess").run(
+        result = subprocess.run(
             ["git", "log", "--oneline", f"--since={since}"],
             capture_output=True, text=True, timeout=3,
-            cwd=__import__("os").path.dirname(__import__("os").path.abspath(__file__)),
+            cwd=os.path.dirname(os.path.abspath(__file__)),
         )
         count = len(result.stdout.strip().splitlines()) if result.returncode == 0 and result.stdout.strip() else 0
     except Exception:
@@ -634,8 +634,15 @@ def _normalize_vector(vector, normalizer):
     ]
 
 
-def compute_baseline_from_kb(kb):
+def _vectorize_kb(kb):
+    """Pre-compute feature vectors for all KB entries (call once per analysis)."""
     safe_vectors = [_vector_from_features(entry["features"]) for entry in kb.get("safe", [])]
+    mal_vectors = [_vector_from_features(entry["features"]) for entry in kb.get("malicious", [])]
+    return {"safe": safe_vectors, "malicious": mal_vectors}
+
+
+def compute_baseline_from_kb(kb, kb_vectors=None):
+    safe_vectors = kb_vectors["safe"] if kb_vectors else [_vector_from_features(entry["features"]) for entry in kb.get("safe", [])]
     if not safe_vectors:
         return None
     normalizer = _compute_normalizer(safe_vectors)
@@ -664,15 +671,15 @@ def anomaly_score(vector, baseline):
     return round(score, 1), reasons
 
 
-def classify_vector(vector, kb, normalizer_cache=None):
+def classify_vector(vector, kb, normalizer_cache=None, kb_vectors=None):
     safe_entries = kb.get("safe", [])
     mal_entries = kb.get("malicious", [])
     if not safe_entries or not mal_entries:
         return None
 
-    # OPTIMIZATION: Use cached normalizer if provided, otherwise compute
-    safe_vectors = [_vector_from_features(entry["features"]) for entry in safe_entries]
-    mal_vectors = [_vector_from_features(entry["features"]) for entry in mal_entries]
+    # Use pre-computed vectors if available, otherwise compute on the fly
+    safe_vectors = kb_vectors["safe"] if kb_vectors else [_vector_from_features(entry["features"]) for entry in safe_entries]
+    mal_vectors = kb_vectors["malicious"] if kb_vectors else [_vector_from_features(entry["features"]) for entry in mal_entries]
 
     if normalizer_cache is not None:
         normalizer = normalizer_cache
@@ -1425,8 +1432,12 @@ def _extract_first_pcap_from_zip(zip_path):
             raise ValueError("Zip file does not contain a .pcap/.pcapng file.")
         member = candidates[0]
         temp_dir = tempfile.mkdtemp()
+        # Zip Slip protection: ensure extracted path stays within temp_dir
+        extracted_path = os.path.realpath(os.path.join(temp_dir, member))
+        if not extracted_path.startswith(os.path.realpath(temp_dir) + os.sep):
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            raise ValueError("Zip entry has an unsafe path (possible Zip Slip attack).")
         zf.extract(member, path=temp_dir)
-        extracted_path = os.path.join(temp_dir, member)
         file_size = zf.getinfo(member).file_size
         return extracted_path, temp_dir, file_size
 
@@ -1833,18 +1844,21 @@ def _fast_parse_pcap_path(file_path, max_rows=DEFAULT_MAX_ROWS, parse_http=True,
                     except Exception:
                         pass
 
+                # -- Compute TCP data offset once for HTTP + TLS --
+                tcp_data_offset = None
+                if ip_proto == 6 and data_len > transport_start + 12:
+                    tcp_data_offset = (raw_data[transport_start + 12] >> 4) * 4
+
                 # -- HTTP (parse directly from raw bytes – no Scapy needed) --
-                if parse_http and ip_proto == 6 and data_len >= transport_start + 14:
-                    tcp_data_offset = (raw_data[transport_start + 12] >> 4) * 4 if data_len > transport_start + 12 else 20
+                if parse_http and tcp_data_offset is not None and data_len >= transport_start + 14:
                     payload_start = transport_start + tcp_data_offset
                     if data_len > payload_start + 14:
                         http_host, http_path, http_method = parse_http_payload(
-                            bytes(raw_data[payload_start:])
+                            bytes(raw_data[payload_start:payload_start + 2048])
                         )
 
                 # -- TLS (only inspect likely TLS handshake packets) --
-                if ip_proto == 6 and tls_support[0] is not None:
-                    tcp_data_offset = (raw_data[transport_start + 12] >> 4) * 4 if data_len > transport_start + 12 else 20
+                if tcp_data_offset is not None and tls_support[0] is not None:
                     payload_start = transport_start + tcp_data_offset
                     if data_len > payload_start + 5:
                         content_type = raw_data[payload_start]
@@ -3356,19 +3370,7 @@ class PCAPSentryApp:
             "stream": False,
         }
         data = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
-        try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                raw = resp.read().decode("utf-8")
-        except urllib.error.HTTPError as exc:
-            body = ""
-            try:
-                body = exc.read().decode("utf-8", errors="replace")
-            except Exception:
-                pass
-            raise RuntimeError(f"LLM connection failed ({url}): HTTP {exc.code} {exc.reason}. {body}".strip())
-        except urllib.error.URLError as exc:
-            raise RuntimeError(f"LLM connection failed ({url}): {exc}")
+        raw = self._llm_http_request(url, data, timeout=30)
 
         response = json.loads(raw)
         content = response.get("message", {}).get("content", "")
@@ -3407,6 +3409,41 @@ class PCAPSentryApp:
             base = base[:-3]
         return base
 
+    _LLM_MAX_RESPONSE_BYTES = 10 * 1024 * 1024  # 10 MB safety cap
+
+    @staticmethod
+    def _llm_http_request(url, data, timeout=30, max_retries=2):
+        """Send an HTTP POST to an LLM endpoint with automatic retry on transient errors."""
+        max_bytes = PCAPSentryApp._LLM_MAX_RESPONSE_BYTES
+        last_exc = None
+        for attempt in range(1 + max_retries):
+            req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
+            try:
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    raw = resp.read(max_bytes + 1)
+                    if len(raw) > max_bytes:
+                        raise RuntimeError(f"LLM response exceeded {max_bytes // (1024*1024)} MB limit.")
+                    return raw.decode("utf-8")
+            except urllib.error.HTTPError as exc:
+                body = ""
+                try:
+                    body = exc.read().decode("utf-8", errors="replace")
+                except Exception:
+                    pass
+                # Retry on 5xx server errors only
+                if exc.code >= 500 and attempt < max_retries:
+                    time.sleep(1.0 * (attempt + 1))
+                    last_exc = RuntimeError(f"LLM connection failed ({url}): HTTP {exc.code} {exc.reason}. {body}".strip())
+                    continue
+                raise RuntimeError(f"LLM connection failed ({url}): HTTP {exc.code} {exc.reason}. {body}".strip())
+            except (urllib.error.URLError, OSError) as exc:
+                if attempt < max_retries:
+                    time.sleep(1.0 * (attempt + 1))
+                    last_exc = RuntimeError(f"LLM connection failed ({url}): {exc}")
+                    continue
+                raise RuntimeError(f"LLM connection failed ({url}): {exc}")
+        raise last_exc  # should not reach here
+
     def _request_openai_compat_chat(self, messages, temperature=0.3):
         endpoint = self._normalize_openai_endpoint(self.llm_endpoint_var.get() or "http://localhost:1234")
         model = self.llm_model_var.get().strip() or "local-model"
@@ -3418,19 +3455,7 @@ class PCAPSentryApp:
             "max_tokens": 400,
         }
         data = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
-        try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                raw = resp.read().decode("utf-8")
-        except urllib.error.HTTPError as exc:
-            body = ""
-            try:
-                body = exc.read().decode("utf-8", errors="replace")
-            except Exception:
-                pass
-            raise RuntimeError(f"LLM connection failed ({url}): HTTP {exc.code} {exc.reason}. {body}".strip())
-        except urllib.error.URLError as exc:
-            raise RuntimeError(f"LLM connection failed ({url}): {exc}")
+        raw = self._llm_http_request(url, data, timeout=30)
 
         response = json.loads(raw)
         choices = response.get("choices", [])
@@ -4269,7 +4294,7 @@ class PCAPSentryApp:
             "  Restore: Load a previously saved KB backup\n"
             "  Reset: Erase all learned patterns (cannot be undone!)")
         ttk.Button(header, text="Refresh", style="Secondary.TButton", command=self._refresh_kb).pack(side=tk.RIGHT)
-        ttk.Button(header, text="Reset Knowledge Base", style="Danger.TButton", command=self._reset_kb).pack(side=tk.RIGHT, padx=6)
+        ttk.Button(header, text="Reset Knowledge Base", style="DangerMuted.TButton", command=self._reset_kb).pack(side=tk.RIGHT, padx=6)
         ttk.Button(header, text="Restore", style="Secondary.TButton", command=self._restore_kb).pack(side=tk.RIGHT, padx=6)
         ttk.Button(header, text="Backup", style="Secondary.TButton", command=self._backup_kb).pack(side=tk.RIGHT, padx=6)
 
@@ -4313,35 +4338,32 @@ class PCAPSentryApp:
         if self.current_df is None or self.packet_table is None:
             return
 
-        df = self.current_df.copy()
+        df = self.current_df
         if df.empty:
             self._update_packet_table(df)
             return
 
-        # Always use the original base time from the full DataFrame
-        if self.packet_base_time is not None and "Time" in df.columns:
-            df["RelTime"] = df["Time"] - self.packet_base_time
-        else:
-            df["RelTime"] = 0.0
+        pd = _get_pandas()
+        mask = pd.Series(True, index=df.index)
 
-        # Apply packet filters
+        # Apply packet filters using a combined mask (avoids full DataFrame copy)
         proto_filter = self.packet_proto_var.get() if self.packet_proto_var else "Any"
         if proto_filter != "Any" and "Proto" in df.columns:
-            df = df[df["Proto"] == proto_filter]
+            mask &= df["Proto"] == proto_filter
 
         src_filter = self.packet_src_var.get() if self.packet_src_var else ""
         if src_filter and "Src" in df.columns:
-            df = df[df["Src"].astype(str).str.contains(src_filter, na=False)]
+            mask &= df["Src"].astype(str).str.contains(src_filter, na=False, regex=False)
 
         dst_filter = self.packet_dst_var.get() if self.packet_dst_var else ""
         if dst_filter and "Dst" in df.columns:
-            df = df[df["Dst"].astype(str).str.contains(dst_filter, na=False)]
+            mask &= df["Dst"].astype(str).str.contains(dst_filter, na=False, regex=False)
 
         sport_filter = self.packet_sport_var.get() if self.packet_sport_var else ""
         if sport_filter and "SPort" in df.columns:
             try:
                 sport_val = int(sport_filter)
-                df = df[df["SPort"] == sport_val]
+                mask &= df["SPort"] == sport_val
             except ValueError:
                 pass
 
@@ -4349,23 +4371,25 @@ class PCAPSentryApp:
         if dport_filter and "DPort" in df.columns:
             try:
                 dport_val = int(dport_filter)
-                df = df[df["DPort"] == dport_val]
+                mask &= df["DPort"] == dport_val
             except ValueError:
                 pass
 
+        base_time = self.packet_base_time if self.packet_base_time is not None else 0.0
+
         time_min = self.packet_time_min_var.get() if self.packet_time_min_var else ""
-        if time_min and "RelTime" in df.columns:
+        if time_min and "Time" in df.columns:
             try:
                 time_min_val = float(time_min)
-                df = df[df["RelTime"] >= time_min_val]
+                mask &= (df["Time"] - base_time) >= time_min_val
             except ValueError:
                 pass
 
         time_max = self.packet_time_max_var.get() if self.packet_time_max_var else ""
-        if time_max and "RelTime" in df.columns:
+        if time_max and "Time" in df.columns:
             try:
                 time_max_val = float(time_max)
-                df = df[df["RelTime"] <= time_max_val]
+                mask &= (df["Time"] - base_time) <= time_max_val
             except ValueError:
                 pass
 
@@ -4373,7 +4397,7 @@ class PCAPSentryApp:
         if size_min and "Size" in df.columns:
             try:
                 size_min_val = int(size_min)
-                df = df[df["Size"] >= size_min_val]
+                mask &= df["Size"] >= size_min_val
             except ValueError:
                 pass
 
@@ -4381,16 +4405,22 @@ class PCAPSentryApp:
         if size_max and "Size" in df.columns:
             try:
                 size_max_val = int(size_max)
-                df = df[df["Size"] <= size_max_val]
+                mask &= df["Size"] <= size_max_val
             except ValueError:
                 pass
 
         dns_http_only = self.packet_dns_http_only_var.get() if self.packet_dns_http_only_var else False
         if dns_http_only:
-            dns_filter = (df["DnsQuery"].fillna("").astype(str) != "") | (df["HttpHost"].fillna("").astype(str) != "")
-            df = df[dns_filter]
+            mask &= (df["DnsQuery"].fillna("").astype(str) != "") | (df["HttpHost"].fillna("").astype(str) != "")
 
-        self._update_packet_table(df)
+        # Copy only the filtered subset, not the entire DataFrame
+        result = df.loc[mask].copy()
+        if self.packet_base_time is not None and "Time" in result.columns:
+            result["RelTime"] = result["Time"] - self.packet_base_time
+        else:
+            result["RelTime"] = 0.0
+
+        self._update_packet_table(result)
 
     def _update_packet_table(self, df):
         if self.packet_table is None:
@@ -4423,7 +4453,7 @@ class PCAPSentryApp:
             if col not in df.columns:
                 df[col] = ""
         rows_for_size = []
-        for _, row in df.head(500).iterrows():
+        for row in df.head(500).to_dict("records"):
             values = [self._format_packet_table_value(row, col) for col in columns]
             self.packet_table.insert("", tk.END, values=values)
             rows_for_size.append(values)
@@ -4949,6 +4979,22 @@ class PCAPSentryApp:
             "Danger.TButton",
             background=[("active", self.colors["danger_hover"]), ("disabled", self.colors["border"])],
             foreground=[("disabled", self.colors["muted"])],
+        )
+
+        # Muted danger button (less prominent destructive actions)
+        style.configure(
+            "DangerMuted.TButton",
+            background=self.colors["panel_alt"],
+            foreground=self.colors["danger"],
+            bordercolor=self.colors["border"],
+            focusthickness=0,
+            padding=(12, 6),
+            font=("Segoe UI", 10),
+        )
+        style.map(
+            "DangerMuted.TButton",
+            background=[("active", self.colors["danger"]), ("disabled", self.colors["border"])],
+            foreground=[("active", "#ffffff"), ("disabled", self.colors["muted"])],
         )
 
         # Success button (e.g. Mark as Safe)
@@ -5539,11 +5585,10 @@ class PCAPSentryApp:
             return self._request_openai_compat_label(stats, summary)
         raise ValueError(f"Unsupported LLM provider: {provider}")
 
-    def _request_ollama_label(self, stats, summary):
-        endpoint = self._normalize_ollama_endpoint(self.llm_endpoint_var.get() or "http://localhost:11434")
-        model = self.llm_model_var.get().strip() or "llama3"
-        url = endpoint.rstrip("/") + "/api/generate"
-        summary_stats = {
+    @staticmethod
+    def _build_llm_summary_stats(stats):
+        """Build the summary-stats dict sent to LLM providers (single source of truth)."""
+        return {
             "packet_count": stats.get("packet_count"),
             "avg_size": stats.get("avg_size"),
             "median_size": stats.get("median_size"),
@@ -5557,6 +5602,37 @@ class PCAPSentryApp:
             "top_dns": stats.get("top_dns", []),
             "top_tls_sni": stats.get("top_tls_sni", []),
         }
+
+    @staticmethod
+    def _parse_llm_label_response(content):
+        """Parse and validate LLM label JSON response (shared by Ollama & OpenAI paths)."""
+        try:
+            parsed = json.loads(content)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"LLM response was not valid JSON: {exc}")
+
+        if not isinstance(parsed, dict):
+            raise ValueError("LLM response was not a JSON object.")
+
+        label = str(parsed.get("label", "")).strip().lower()
+        if label not in ("safe", "malicious"):
+            raise ValueError("LLM label must be 'safe' or 'malicious'.")
+
+        confidence = parsed.get("confidence", None)
+        if confidence is not None:
+            try:
+                confidence = float(confidence)
+            except (TypeError, ValueError):
+                confidence = None
+
+        rationale = str(parsed.get("rationale", "")).strip()
+        return {"label": label, "confidence": confidence, "rationale": rationale}
+
+    def _request_ollama_label(self, stats, summary):
+        endpoint = self._normalize_ollama_endpoint(self.llm_endpoint_var.get() or "http://localhost:11434")
+        model = self.llm_model_var.get().strip() or "llama3"
+        url = endpoint.rstrip("/") + "/api/generate"
+        summary_stats = self._build_llm_summary_stats(stats)
         prompt = (
             "You are a cybersecurity assistant. Decide whether the capture should be labeled "
             "'safe' or 'malicious' for a training knowledge base. "
@@ -5571,62 +5647,17 @@ class PCAPSentryApp:
             "format": "json",
         }
         data = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
-        try:
-            with urllib.request.urlopen(req, timeout=20) as resp:
-                raw = resp.read().decode("utf-8")
-        except urllib.error.HTTPError as exc:
-            body = ""
-            try:
-                body = exc.read().decode("utf-8", errors="replace")
-            except Exception:
-                pass
-            raise RuntimeError(f"LLM connection failed ({url}): HTTP {exc.code} {exc.reason}. {body}".strip())
-        except urllib.error.URLError as exc:
-            raise RuntimeError(f"LLM connection failed ({url}): {exc}")
+        raw = self._llm_http_request(url, data, timeout=20)
 
         response = json.loads(raw)
         content = response.get("response", "")
         if not content:
             raise ValueError("LLM response was empty.")
 
-        try:
-            parsed = json.loads(content)
-        except json.JSONDecodeError as exc:
-            raise ValueError(f"LLM response was not valid JSON: {exc}")
-
-        if not isinstance(parsed, dict):
-            raise ValueError("LLM response was not a JSON object.")
-
-        label = str(parsed.get("label", "")).strip().lower()
-        if label not in ("safe", "malicious"):
-            raise ValueError("LLM label must be 'safe' or 'malicious'.")
-
-        confidence = parsed.get("confidence", None)
-        if confidence is not None:
-            try:
-                confidence = float(confidence)
-            except (TypeError, ValueError):
-                confidence = None
-
-        rationale = str(parsed.get("rationale", "")).strip()
-        return {"label": label, "confidence": confidence, "rationale": rationale}
+        return self._parse_llm_label_response(content)
 
     def _request_openai_compat_label(self, stats, summary):
-        summary_stats = {
-            "packet_count": stats.get("packet_count"),
-            "avg_size": stats.get("avg_size"),
-            "median_size": stats.get("median_size"),
-            "protocol_counts": stats.get("protocol_counts", {}),
-            "top_ports": stats.get("top_ports", []),
-            "unique_src": stats.get("unique_src"),
-            "unique_dst": stats.get("unique_dst"),
-            "dns_query_count": stats.get("dns_query_count"),
-            "http_request_count": stats.get("http_request_count"),
-            "tls_packet_count": stats.get("tls_packet_count"),
-            "top_dns": stats.get("top_dns", []),
-            "top_tls_sni": stats.get("top_tls_sni", []),
-        }
+        summary_stats = self._build_llm_summary_stats(stats)
         messages = [
             {
                 "role": "system",
@@ -5641,27 +5672,7 @@ class PCAPSentryApp:
             },
         ]
         content = self._request_openai_compat_chat(messages, temperature=0.2)
-        try:
-            parsed = json.loads(content)
-        except json.JSONDecodeError as exc:
-            raise ValueError(f"LLM response was not valid JSON: {exc}")
-
-        if not isinstance(parsed, dict):
-            raise ValueError("LLM response was not a JSON object.")
-
-        label = str(parsed.get("label", "")).strip().lower()
-        if label not in ("safe", "malicious"):
-            raise ValueError("LLM label must be 'safe' or 'malicious'.")
-
-        confidence = parsed.get("confidence", None)
-        if confidence is not None:
-            try:
-                confidence = float(confidence)
-            except (TypeError, ValueError):
-                confidence = None
-
-        rationale = str(parsed.get("rationale", "")).strip()
-        return {"label": label, "confidence": confidence, "rationale": rationale}
+        return self._parse_llm_label_response(content)
 
     def _confirm_llm_label(self, intended_label, stats, summary, on_apply):
         if not self._llm_is_enabled():
@@ -5851,6 +5862,11 @@ class PCAPSentryApp:
         model_name = self.llm_model_var.get().strip()
         if not model_name:
             messagebox.showwarning("Ollama", "Select or enter an Ollama model name first.")
+            return
+
+        # Validate model name: only allow safe characters (alphanumeric, :, -, _, ., /)
+        if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.:\-/]*', model_name):
+            messagebox.showwarning("Ollama", "Invalid model name. Only letters, digits, '.', ':', '-', '_', '/' are allowed.")
             return
 
         confirm = messagebox.askyesno(
@@ -7245,12 +7261,15 @@ class PCAPSentryApp:
                 return {}
 
             if use_multithreading:
+                # ── Pre-compute KB vectors once for reuse ──
+                kb_vectors = _vectorize_kb(kb)
+
                 # ── Parallel Phase 2: Threat intel + IoC + baseline + flows ──
                 _report(32, "Running threat intelligence & IoC matching...")
                 with ThreadPoolExecutor(max_workers=4) as pool:
                     f_ti = pool.submit(_do_threat_intel)
                     f_ioc = pool.submit(match_iocs, stats, kb.get("ioc", {}))
-                    f_base = pool.submit(compute_baseline_from_kb, kb)
+                    f_base = pool.submit(compute_baseline_from_kb, kb, kb_vectors)
                     f_flows = pool.submit(lambda: (
                         compute_flow_stats(df),
                         None,  # placeholder
@@ -7278,7 +7297,7 @@ class PCAPSentryApp:
                 with ThreadPoolExecutor(max_workers=3) as pool:
                     f_safe = pool.submit(lambda: get_top_k_similar_entries(features, kb["safe"], k=5))
                     f_mal = pool.submit(lambda: get_top_k_similar_entries(features, kb["malicious"], k=5))
-                    f_classify = pool.submit(lambda: classify_vector(vector, kb, normalizer_cache=normalizer_cache))
+                    f_classify = pool.submit(lambda: classify_vector(vector, kb, normalizer_cache=normalizer_cache, kb_vectors=kb_vectors))
 
                     _, safe_scores = f_safe.result()
                     _, mal_scores = f_mal.result()
@@ -7289,6 +7308,9 @@ class PCAPSentryApp:
                 t_p3 = time.time()
                 print(f"[TIMING] Phase 3 parallel (scoring): {t_p3-t_p2:.2f}s")
             else:
+                # ── Pre-compute KB vectors once for reuse ──
+                kb_vectors = _vectorize_kb(kb)
+
                 # ── Sequential path ──
                 _report(32, "Running threat intelligence...")
                 threat_intel_findings = _do_threat_intel()
@@ -7298,7 +7320,7 @@ class PCAPSentryApp:
                 _report(38, "Matching indicators of compromise...")
                 ioc_matches = match_iocs(stats, kb.get("ioc", {}))
                 _report(42, "Computing baseline statistics...")
-                baseline = compute_baseline_from_kb(kb)
+                baseline = compute_baseline_from_kb(kb, kb_vectors=kb_vectors)
                 _report(46, "Analyzing network flows...")
                 flow_df_early = compute_flow_stats(df)
                 _report(48, "Detecting suspicious flows...")
@@ -7311,7 +7333,7 @@ class PCAPSentryApp:
                 _, safe_scores = get_top_k_similar_entries(features, kb["safe"], k=5)
                 _, mal_scores = get_top_k_similar_entries(features, kb["malicious"], k=5)
                 _report(60, "Classifying traffic patterns...")
-                classifier_result = classify_vector(vector, kb, normalizer_cache=normalizer_cache)
+                classifier_result = classify_vector(vector, kb, normalizer_cache=normalizer_cache, kb_vectors=kb_vectors)
                 _report(64, "Computing anomaly scores...")
                 anomaly_result, anomaly_reasons = anomaly_score(vector, baseline)
                 t_p3 = time.time()

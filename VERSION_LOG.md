@@ -1,53 +1,36 @@
 # Version Log
 
 
+## 2026.02.13-29 - 2026-02-13
 
+### Installer – Ollama Progress Overhaul
+- Real-time download progress with MB transferred and percentage display
+- Win32 process management for reliable Ollama lifecycle control
+- Cancel support with confirmation dialog during model pulls
+- Movable wizard window while operations are in progress
+- Log file paths shown in error and cancellation dialogs for troubleshooting
 
+### Performance Optimizations
+- Deduplicated TCP data-offset calculation in PCAP parser (computed once, reused for HTTP and TLS)
+- Capped HTTP payload extraction at 2 KB to avoid excess memory use
+- Extracted shared `_build_llm_summary_stats()` helper to eliminate duplicate stat-building code
+- Extracted shared `_parse_llm_label_response()` helper for consistent JSON label parsing across LLM providers
+- Replaced `iterrows()` with `to_dict("records")` in packet table updates for faster row insertion
+- Switched to mask-based filtering in `_apply_packet_filters` instead of full DataFrame copy
+- Added `_vectorize_kb()` for one-time cached KB vector computation during analysis
+- Centralized LLM HTTP calls into `_llm_http_request()` with automatic retry on transient errors
+- Simplified `_compute_app_version()` to use already-imported modules
 
+### Security Hardening
+- **Zip Slip protection**: path traversal guard on ZIP extraction using `os.path.realpath()` validation
+- **Regex injection prevention**: packet filters now use literal string matching (`regex=False`)
+- **Model name validation**: Ollama model names validated with `re.fullmatch()` before subprocess use
+- **URL encoding**: IP addresses URL-encoded in OTX threat intelligence lookups
+- **Response size cap**: LLM HTTP responses limited to 10 MB to prevent memory exhaustion
 
+### UI Polish
+- Subdued "Reset Knowledge Base" button style (red text on panel background, solid red on hover)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## 2026.02.13-28 - 2026-02-13
-- Minor tweaks and improvements
-## 2026.02.13-27 - 2026-02-13
-- Minor tweaks and improvements
-## 2026.02.13-26 - 2026-02-13
-- Minor tweaks and improvements
-## 2026.02.13-25 - 2026-02-13
-- Minor tweaks and improvements
-## 2026.02.13-24 - 2026-02-13
-- Minor tweaks and improvements
-## 2026.02.13-23 - 2026-02-13
-- Minor tweaks and improvements
-## 2026.02.13-22 - 2026-02-13
-- Minor tweaks and improvements
-## 2026.02.13-21 - 2026-02-13
-- Minor tweaks and improvements
-## 2026.02.13-20 - 2026-02-13
-- Minor tweaks and improvements
-## 2026.02.13-19 - 2026-02-13
-- Minor tweaks and improvements
-## 2026.02.13-18 - 2026-02-13
-- Minor tweaks and improvements
-## 2026.02.13-17 - 2026-02-13
-- Minor tweaks and improvements
 ## 2026.02.13-16 - 2026-02-13
 - Move model uninstall to Preferences; simplify installer model flow
 - Add deepseek-r1:14b to installer model presets

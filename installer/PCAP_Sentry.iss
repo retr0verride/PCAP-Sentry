@@ -3,14 +3,14 @@
 #define IncludeVCRedist
 #endif
 
-#define AppVer "2026.02.13-28"
+#define AppVer "2026.02.13-29"
 
 [Setup]
 AppId={{91EFC8EF-E9F8-42FC-9D82-479C14FBE67D}
 AppName=PCAP Sentry
 AppVersion={#AppVer}
 AppVerName=PCAP Sentry {#AppVer}
-VersionInfoVersion=2026.2.13.28
+VersionInfoVersion=2026.2.13.29
 AppPublisher=industrial-dave
 AppSupportURL=https://github.com/industrial-dave/PCAP-Sentry
 DefaultDirName={autopf}\PCAP Sentry
@@ -71,9 +71,28 @@ var
   OllamaModelsLink: TNewStaticText;
   TasksClickHandlerSet: Boolean;
   CommandRunId: Integer;
+  OllamaCancelRequested: Boolean;
+  OllamaInProgress: Boolean;
+  ActiveProcessHandle: Integer;
+  SavedBackEnabled: Boolean;
+  SavedNextEnabled: Boolean;
+  SavedCancelEnabled: Boolean;
+  SavedWizardEnabled: Boolean;
+  LastOllamaLogPath: String;
+
+const
+  WAIT_TIMEOUT = 258;
 
 function GetDiskFreeSpaceEx(lpDirectoryName: string; var FreeBytesAvailableToCaller, TotalNumberOfBytes, TotalNumberOfFreeBytes: Int64): Boolean;
   external 'GetDiskFreeSpaceExW@kernel32.dll stdcall';
+function WaitForSingleObject(hHandle: Integer; dwMilliseconds: Integer): Cardinal;
+  external 'WaitForSingleObject@kernel32.dll stdcall';
+function GetExitCodeProcess(hProcess: Integer; var ExitCode: Cardinal): Boolean;
+  external 'GetExitCodeProcess@kernel32.dll stdcall';
+function TerminateProcess(hProcess: Integer; uExitCode: Integer): Boolean;
+  external 'TerminateProcess@kernel32.dll stdcall';
+function CloseHandle(hObject: Integer): Boolean;
+  external 'CloseHandle@kernel32.dll stdcall';
 
 function FormatSizeMB(SizeMB: Integer): String;
 var
@@ -149,6 +168,134 @@ end;
 procedure HandleSelectionChange(Sender: TObject);
 begin
   UpdateOllamaSpaceNote;
+end;
+
+procedure UpdateLastOllamaLog(const LogText: String);
+begin
+  if LastOllamaLogPath = '' then
+    LastOllamaLogPath := ExpandConstant('{tmp}\pcap_sentry_ollama_last.log');
+  SaveStringToFile(LastOllamaLogPath, LogText, False);
+end;
+
+function TryExtractPercentFromText(const Text: String; var Percent: Integer): Boolean;
+var
+  I: Integer;
+  J: Integer;
+  NumText: String;
+begin
+  Result := False;
+  Percent := -1;
+  for I := Length(Text) downto 1 do
+  begin
+    if Text[I] = '%' then
+    begin
+      J := I - 1;
+      while (J >= 1) and (Text[J] >= '0') and (Text[J] <= '9') do
+        J := J - 1;
+      NumText := Copy(Text, J + 1, I - J - 1);
+      if NumText <> '' then
+      begin
+        Percent := StrToIntDef(NumText, -1);
+        Result := (Percent >= 0) and (Percent <= 100);
+        exit;
+      end;
+    end;
+  end;
+end;
+
+function ParseNumberWithUnit(const Text: String; StartIndex: Integer; var ValueMB: Integer): Integer;
+var
+  I: Integer;
+  NumText: String;
+  UnitText: String;
+  NumValue: Double;
+begin
+  Result := StartIndex;
+  NumText := '';
+  UnitText := '';
+
+  I := StartIndex;
+  while (I <= Length(Text)) and ((Text[I] = ' ') or (Text[I] = '\t')) do
+    I := I + 1;
+
+  while (I <= Length(Text)) and ((Text[I] >= '0') and (Text[I] <= '9') or (Text[I] = '.')) do
+  begin
+    NumText := NumText + Text[I];
+    I := I + 1;
+  end;
+
+  while (I <= Length(Text)) and (Text[I] = ' ') do
+    I := I + 1;
+
+  while (I <= Length(Text)) and (Text[I] >= 'A') and (Text[I] <= 'z') do
+  begin
+    UnitText := UnitText + Text[I];
+    I := I + 1;
+  end;
+
+  if NumText = '' then
+    exit;
+
+  NumValue := StrToFloatDef(NumText, -1.0);
+  if NumValue < 0 then
+    exit;
+
+  UnitText := Lowercase(UnitText);
+  if (UnitText = 'gb') or (UnitText = 'gib') then
+    ValueMB := Round(NumValue * 1024)
+  else if (UnitText = 'mb') or (UnitText = 'mib') then
+    ValueMB := Round(NumValue)
+  else if (UnitText = 'kb') or (UnitText = 'kib') then
+    ValueMB := Round(NumValue / 1024)
+  else
+    ValueMB := Round(NumValue);
+
+  Result := I;
+end;
+
+function TryExtractSizeProgressFromText(const Text: String; var CurrentMB, TotalMB: Integer): Boolean;
+var
+  SlashPos: Integer;
+  LeftPos: Integer;
+  RightPos: Integer;
+  LeftText: String;
+  RightText: String;
+begin
+  Result := False;
+  CurrentMB := -1;
+  TotalMB := -1;
+  SlashPos := Pos('/', Text);
+  if SlashPos <= 0 then
+    exit;
+
+  LeftText := Copy(Text, 1, SlashPos - 1);
+  RightText := Copy(Text, SlashPos + 1, Length(Text) - SlashPos);
+
+  LeftPos := ParseNumberWithUnit(LeftText, 1, CurrentMB);
+  RightPos := ParseNumberWithUnit(RightText, 1, TotalMB);
+
+  Result := (LeftPos > 1) and (RightPos > 1) and (CurrentMB >= 0) and (TotalMB > 0);
+end;
+
+procedure PrepareOllamaWizardUi;
+begin
+  SavedWizardEnabled := WizardForm.Enabled;
+  SavedBackEnabled := WizardForm.BackButton.Enabled;
+  SavedNextEnabled := WizardForm.NextButton.Enabled;
+  SavedCancelEnabled := WizardForm.CancelButton.Enabled;
+  WizardForm.Enabled := True;
+  WizardForm.BackButton.Enabled := False;
+  WizardForm.NextButton.Enabled := False;
+  WizardForm.CancelButton.Enabled := True;
+  WizardForm.ProgressGauge.Style := npbstNormal;
+end;
+
+procedure RestoreOllamaWizardUi;
+begin
+  WizardForm.Enabled := SavedWizardEnabled;
+  WizardForm.BackButton.Enabled := SavedBackEnabled;
+  WizardForm.NextButton.Enabled := SavedNextEnabled;
+  WizardForm.CancelButton.Enabled := SavedCancelEnabled;
 end;
 
 procedure EnsureOllamaDesktopNotRunning;
@@ -267,19 +414,29 @@ end;
 function RunCommandWithProgress(
   const FileName, Params, WaitCaption: String;
   BasePosition, MaxValue: Integer;
+  UseOutputProgress: Boolean;
   var ResultCode: Integer
 ): Boolean;
 var
-  DoneFile: String;
   WrappedCommand: String;
-  ExitText: AnsiString;
+  LogFile: String;
+  LogText: String;
+  ExitCode: Cardinal;
   PulsePosition: Integer;
+  Percent: Integer;
+  LastPercent: Integer;
+  Handle: Integer;
+  CaptionText: String;
+  CurrentMB: Integer;
+  TotalMB: Integer;
+  LastSizeText: String;
 begin
   CommandRunId := CommandRunId + 1;
-  DoneFile := ExpandConstant('{tmp}\pcap_sentry_cmd_exit_' + IntToStr(CommandRunId) + '.txt');
-  WrappedCommand :=
-    AddQuotes(FileName) + ' ' + Params + ' >nul 2>nul' +
-    ' & echo %ERRORLEVEL% > ' + AddQuotes(DoneFile);
+  LogFile := ExpandConstant('{tmp}\pcap_sentry_cmd_out_' + IntToStr(CommandRunId) + '.log');
+  if UseOutputProgress then
+    WrappedCommand := AddQuotes(FileName) + ' ' + Params + ' > ' + AddQuotes(LogFile) + ' 2>&1'
+  else
+    WrappedCommand := AddQuotes(FileName) + ' ' + Params + ' >nul 2>nul';
 
   SetOllamaInstallProgress(WaitCaption, BasePosition, MaxValue);
 
@@ -289,34 +446,77 @@ begin
       '',
       SW_HIDE,
       ewNoWait,
-      ResultCode
+      Handle
     ) then
   begin
     Result := False;
     exit;
   end;
 
-  PulsePosition := BasePosition;
-  while not FileExists(DoneFile) do
+  ActiveProcessHandle := Handle;
+  PulsePosition := BasePosition * 100;
+  LastPercent := -1;
+  Percent := -1;
+  LastSizeText := '';
+
+  while WaitForSingleObject(Handle, 200) = WAIT_TIMEOUT do
   begin
-    if BasePosition < MaxValue then
+    if OllamaCancelRequested then
     begin
-      if PulsePosition = BasePosition then
-        PulsePosition := BasePosition + 1
-      else
-        PulsePosition := BasePosition;
-      WizardForm.ProgressGauge.Position := PulsePosition;
+      TerminateProcess(Handle, 1);
+      CloseHandle(Handle);
+      ActiveProcessHandle := 0;
+      ResultCode := 1;
+      Abort;
     end;
+
+    if UseOutputProgress and FileExists(LogFile) then
+    begin
+      if LoadStringFromFile(LogFile, LogText) then
+      begin
+        UpdateLastOllamaLog(LogText);
+        if TryExtractSizeProgressFromText(LogText, CurrentMB, TotalMB) then
+        begin
+          CaptionText := WaitCaption + ' (' + IntToStr(CurrentMB) + ' MB / ' + IntToStr(TotalMB) + ' MB)';
+          if CaptionText <> LastSizeText then
+          begin
+            WizardForm.StatusLabel.Caption := CaptionText;
+            LastSizeText := CaptionText;
+          end;
+        end
+        else if TryExtractPercentFromText(LogText, Percent) and (Percent <> LastPercent) then
+        begin
+          WizardForm.ProgressGauge.Position := BasePosition * 100 + Percent;
+          CaptionText := WaitCaption + ' (' + IntToStr(Percent) + '%)';
+          WizardForm.StatusLabel.Caption := CaptionText;
+          LastPercent := Percent;
+        end;
+      end;
+    end
+    else
+    begin
+      if BasePosition < MaxValue then
+      begin
+        PulsePosition := PulsePosition + 5;
+        if PulsePosition > (BasePosition + 1) * 100 then
+          PulsePosition := BasePosition * 100;
+        WizardForm.ProgressGauge.Position := PulsePosition;
+      end;
+    end;
+
     WizardForm.Update;
-    Sleep(300);
+    Sleep(150);
   end;
 
-  if LoadStringFromFile(DoneFile, ExitText) then
-    ResultCode := StrToIntDef(Trim(ExitText), 1)
+  if GetExitCodeProcess(Handle, ExitCode) then
+    ResultCode := ExitCode
   else
     ResultCode := 1;
 
-  DeleteFile(DoneFile);
+  CloseHandle(Handle);
+  ActiveProcessHandle := 0;
+  if FileExists(LogFile) then
+    DeleteFile(LogFile);
   Result := ResultCode = 0;
 end;
 
@@ -524,16 +724,19 @@ begin
 end;
 
 procedure SetOllamaInstallProgress(const CaptionText: String; Position, MaxValue: Integer);
+var
+  ScaledMax: Integer;
 begin
   WizardForm.StatusLabel.Caption := CaptionText;
   if MaxValue > 0 then
   begin
-    WizardForm.ProgressGauge.Max := MaxValue;
+    ScaledMax := MaxValue * 100;
+    WizardForm.ProgressGauge.Max := ScaledMax;
     if Position < 0 then
       Position := 0;
     if Position > MaxValue then
       Position := MaxValue;
-    WizardForm.ProgressGauge.Position := Position;
+    WizardForm.ProgressGauge.Position := Position * 100;
   end;
   WizardForm.Update;
 end;
@@ -542,6 +745,7 @@ function InstallOllamaRuntime(TotalSteps: Integer): Boolean;
 var
   ResultCode: Integer;
   InstallerPath: String;
+  DownloadPage: TDownloadWizardPage;
 begin
   Result := True;
   if IsOllamaAvailable then
@@ -553,6 +757,7 @@ begin
       'Installing Ollama runtime (1/' + IntToStr(TotalSteps) + ') ...',
       0,
       TotalSteps,
+      False,
       ResultCode
     ) and (ResultCode = 0) then
   begin
@@ -561,18 +766,31 @@ begin
   end;
 
   InstallerPath := ExpandConstant('{tmp}\OllamaSetup.exe');
-  if not RunCommandWithProgress(
-      'powershell.exe',
-      '-NoProfile -ExecutionPolicy Bypass -Command "Invoke-WebRequest -Uri ''https://ollama.com/download/OllamaSetup.exe'' -OutFile ''' + InstallerPath + '''"',
-      'Downloading Ollama installer ...',
-      0,
-      TotalSteps,
-      ResultCode
-    ) then
-  begin
-    Result := False;
-    exit;
+  DownloadPage := CreateDownloadPage(
+    'Downloading Ollama',
+    'Fetching the Ollama installer...',
+    nil
+  );
+  DownloadPage.Add('https://ollama.com/download/OllamaSetup.exe', '', InstallerPath);
+  DownloadPage.Show;
+  try
+    try
+      DownloadPage.Download;
+    except
+      if DownloadPage.AbortedByUser then
+      begin
+        OllamaCancelRequested := True;
+        Abort;
+      end;
+      Result := False;
+      exit;
+    end;
+  finally
+    DownloadPage.Hide;
   end;
+
+  if OllamaCancelRequested then
+    Abort;
 
   if not RunCommandWithProgress(
       InstallerPath,
@@ -580,6 +798,7 @@ begin
       'Installing Ollama runtime ...',
       0,
       TotalSteps,
+      False,
       ResultCode
     ) or (ResultCode <> 0) then
   begin
@@ -626,6 +845,7 @@ begin
         'Downloading Ollama model ' + IntToStr(SelectedIndex) + '/' + IntToStr(SelectedCount) + ': ' + OllamaModelIds[I] + ' ...',
         CurrentStep,
         TotalSteps,
+        True,
         ResultCode
       ) or (ResultCode <> 0) then
     begin
@@ -727,56 +947,110 @@ begin
   begin
     if WizardIsTaskSelected('installollama') then
     begin
+      OllamaInProgress := True;
+      OllamaCancelRequested := False;
+      PrepareOllamaWizardUi;
       SelectedModels := CountSelectedOllamaModels;
       TotalSteps := 1 + SelectedModels;
 
       if SelectedModels = 0 then
-        exit;
-
-      SetOllamaInstallProgress(
-        'Installing Ollama runtime (1/' + IntToStr(TotalSteps) + ') ...',
-        0,
-        TotalSteps
-      );
-
-      if not InstallOllamaRuntime(TotalSteps) then
       begin
-        MsgBox(
-          'Ollama installation failed.' + #13#10 +
-          'You can install it later from https://ollama.com/download and then run model pulls manually.',
-          mbError,
-          MB_OK
-        );
+        RestoreOllamaWizardUi;
+        OllamaInProgress := False;
         exit;
       end;
 
-      SetOllamaInstallProgress(
-        'Ollama runtime installed (1/' + IntToStr(TotalSteps) + ')',
-        1,
-        TotalSteps
-      );
+      try
+        try
+          SetOllamaInstallProgress(
+            'Installing Ollama runtime (1/' + IntToStr(TotalSteps) + ') ...',
+            0,
+            TotalSteps
+          );
 
-      SetOllamaInstallProgress(
-        'Starting Ollama in headless mode ...',
-        1,
-        TotalSteps
-      );
-      EnsureOllamaHeadlessRunning;
+          if not InstallOllamaRuntime(TotalSteps) then
+          begin
+            if LastOllamaLogPath = '' then
+              LastOllamaLogPath := ExpandConstant('{tmp}\pcap_sentry_ollama_last.log');
+            MsgBox(
+              'Ollama installation failed.' + #13#10 +
+              'You can install it later from https://ollama.com/download and then run model pulls manually.' + #13#10 + #13#10 +
+              'Last output log: ' + LastOllamaLogPath,
+              mbError,
+              MB_OK
+            );
+            exit;
+          end;
 
-      if not ApplySelectedOllamaModels(TotalSteps) then
-      begin
-        MsgBox(
-          'One or more Ollama model downloads failed.' + #13#10 +
-          'You can retry manually in a terminal, for example: ollama pull llama3.2',
-          mbError,
-          MB_OK
-        );
-        exit;
+          SetOllamaInstallProgress(
+            'Ollama runtime installed (1/' + IntToStr(TotalSteps) + ')',
+            1,
+            TotalSteps
+          );
+
+          SetOllamaInstallProgress(
+            'Starting Ollama in headless mode ...',
+            1,
+            TotalSteps
+          );
+          EnsureOllamaHeadlessRunning;
+
+          if not ApplySelectedOllamaModels(TotalSteps) then
+          begin
+            if LastOllamaLogPath = '' then
+              LastOllamaLogPath := ExpandConstant('{tmp}\pcap_sentry_ollama_last.log');
+            MsgBox(
+              'One or more Ollama model downloads failed.' + #13#10 +
+              'You can retry manually in a terminal, for example: ollama pull llama3.2' + #13#10 + #13#10 +
+              'Last output log: ' + LastOllamaLogPath,
+              mbError,
+              MB_OK
+            );
+            exit;
+          end;
+
+          SetOllamaInstallProgress('Ollama setup complete.', TotalSteps, TotalSteps);
+          EnsureOllamaDesktopNotRunning;
+        except
+          if OllamaCancelRequested then
+          begin
+            if LastOllamaLogPath = '' then
+              LastOllamaLogPath := ExpandConstant('{tmp}\pcap_sentry_ollama_last.log');
+            MsgBox(
+              'Ollama setup was cancelled. You can rerun setup later to finish.' + #13#10 + #13#10 +
+              'Last output log: ' + LastOllamaLogPath,
+              mbInformation,
+              MB_OK
+            );
+            SetOllamaInstallProgress('Ollama setup cancelled.', 0, TotalSteps);
+            exit;
+          end;
+          raise;
+        end;
+      finally
+        RestoreOllamaWizardUi;
+        OllamaInProgress := False;
       end;
-
-      SetOllamaInstallProgress('Ollama setup complete.', TotalSteps, TotalSteps);
-      EnsureOllamaDesktopNotRunning;
     end;
+  end;
+end;
+
+procedure CancelButtonClick(CurPageID: Integer; var Cancel, Confirm: Boolean);
+begin
+  if OllamaInProgress then
+  begin
+    if MsgBox(
+        'Cancel Ollama setup?' + #13#10 +
+        'This will stop downloads and may leave Ollama partially installed.',
+        mbConfirmation,
+        MB_YESNO
+      ) = IDYES then
+    begin
+      OllamaCancelRequested := True;
+    end;
+    Confirm := False;
+    Cancel := False;
+    exit;
   end;
 end;
 
