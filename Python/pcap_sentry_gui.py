@@ -2395,6 +2395,7 @@ class PCAPSentryApp:
 
         # Backup knowledge base on close
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+        self.root.after(200, self._check_internet_and_set_offline)
         self.root.after(400, self._auto_detect_llm)
 
     def _on_close(self):
@@ -2833,15 +2834,18 @@ class PCAPSentryApp:
             "verdict alongside the heuristic/knowledge-base scoring. Requires scikit-learn to be "
             "installed and at least some labeled training data in the knowledge base.", row=6, column=2, sticky="w")
 
-        ttk.Checkbutton(
+        offline_check = ttk.Checkbutton(
             frame,
-            text="Offline mode (disable threat intelligence)",
+            text="Offline mode (disable threat intelligence & cloud LLMs)",
             variable=self.offline_mode_var,
             style="Quiet.TCheckbutton"
-        ).grid(row=8, column=0, sticky="w", pady=6, columnspan=2)
-        self._help_icon_grid(frame, "Disables online threat intelligence lookups (AlienVault OTX, AbuseIPDB, etc.). "
+        )
+        offline_check.grid(row=8, column=0, sticky="w", pady=6, columnspan=2)
+        self._help_icon_grid(frame, "Disables online threat intelligence lookups (AlienVault OTX, AbuseIPDB, etc.) "
+            "and hides cloud LLM providers from the dropdown. "
             "Analysis will be faster and work without an internet connection, but you lose the "
-            "ability to check IPs/domains against live public threat feeds.", row=8, column=2, sticky="w")
+            "ability to check IPs/domains against live public threat feeds "
+            "and cannot use cloud-based LLM providers.", row=8, column=2, sticky="w")
 
         ttk.Checkbutton(
             frame,
@@ -2900,13 +2904,19 @@ class PCAPSentryApp:
 
         _llm_server_var = tk.StringVar(value=_resolve_display_name())
 
+        def _get_server_values():
+            """Return LLM server names, filtering out cloud providers when offline."""
+            if self.offline_mode_var.get():
+                return [n for n in _LLM_SERVERS if n not in _CLOUD_PROVIDERS]
+            return list(_LLM_SERVERS.keys())
+
         ttk.Label(frame, text="LLM server:").grid(row=10, column=0, sticky="w", pady=6)
         provider_frame = ttk.Frame(frame)
         provider_frame.grid(row=10, column=1, sticky="w", pady=6)
         llm_provider_combo = ttk.Combobox(
             provider_frame,
             textvariable=_llm_server_var,
-            values=list(_LLM_SERVERS.keys()),
+            values=_get_server_values(),
             width=20,
         )
         llm_provider_combo.state(["readonly"])
@@ -2991,8 +3001,21 @@ class PCAPSentryApp:
             self._refresh_llm_models(llm_model_combo)
         llm_provider_combo.bind("<<ComboboxSelected>>", _on_server_selected)
 
+        # When offline mode is toggled, update the dropdown to hide/show cloud providers
+        def _on_offline_toggled(*_):
+            llm_provider_combo["values"] = _get_server_values()
+            current = _llm_server_var.get()
+            if self.offline_mode_var.get() and current in _CLOUD_PROVIDERS:
+                # Cloud provider selected but going offline – switch to Disabled
+                _llm_server_var.set("Disabled")
+                _on_server_selected()
+            elif self.offline_mode_var.get():
+                _show_api_key_row(False)
+
+        offline_check.configure(command=_on_offline_toggled)
+
         # Initial visibility
-        _show_api_key_row(_resolve_display_name() in _CLOUD_PROVIDERS)
+        _show_api_key_row(_resolve_display_name() in _CLOUD_PROVIDERS and not self.offline_mode_var.get())
         _update_api_key_hint(_resolve_display_name())
 
         ttk.Label(frame, text="LLM model:").grid(row=12, column=0, sticky="w", pady=6)
@@ -6371,6 +6394,37 @@ class PCAPSentryApp:
 
         self._run_task(task, done, on_error=failed, message="Downloading Ollama...",
                       progress_label="Downloading Ollama...")
+
+    def _check_internet_and_set_offline(self):
+        """Check internet connectivity at startup; auto-enable offline mode if unreachable."""
+        if self.offline_mode_var.get():
+            return  # Already offline, nothing to check
+
+        def _probe():
+            try:
+                req = urllib.request.Request(
+                    "https://www.google.com",
+                    method="HEAD",
+                    headers={"User-Agent": "PCAP-Sentry/connectivity-check"},
+                )
+                urllib.request.urlopen(req, timeout=4)
+                return True
+            except Exception:
+                return False
+
+        def _apply(online):
+            if not online and not self.offline_mode_var.get():
+                self.offline_mode_var.set(True)
+                self._save_settings_from_vars()
+                self.root_title = self._get_window_title()
+                self.root.title(self.root_title)
+                self.status_var.set("No internet detected — offline mode enabled automatically.")
+
+        def _run():
+            online = _probe()
+            self.root.after(0, lambda: _apply(online))
+
+        threading.Thread(target=_run, daemon=True).start()
 
     def _auto_detect_llm(self):
         if self.llm_provider_var.get().strip().lower() != "disabled":
