@@ -4,8 +4,10 @@ PCAP Sentry Update Checker
 Handles checking for new versions on GitHub and downloading updates.
 """
 
+import hashlib
 import json
 import os
+import re
 import shutil
 import ssl
 import subprocess
@@ -92,6 +94,11 @@ class UpdateChecker:
 
         return latest > current
 
+    # Maximum download size (500 MB) to prevent disk-fill DoS
+    _MAX_DOWNLOAD_BYTES = 500 * 1024 * 1024
+    # Maximum API JSON response size (5 MB)
+    _MAX_API_RESPONSE_BYTES = 5 * 1024 * 1024
+
     def fetch_latest_release(self) -> bool:
         """
         Fetch the latest release information from GitHub.
@@ -115,7 +122,10 @@ class UpdateChecker:
                     headers={"Accept": "application/vnd.github+json"},
                 )
                 with urllib.request.urlopen(req, context=ctx, timeout=15) as response:
-                    releases = json.loads(response.read().decode("utf-8"))
+                    raw = response.read(self._MAX_API_RESPONSE_BYTES + 1)
+                    if len(raw) > self._MAX_API_RESPONSE_BYTES:
+                        raise RuntimeError("GitHub API response too large")
+                    releases = json.loads(raw.decode("utf-8"))
                 for rel in releases:
                     if rel.get("draft") or rel.get("prerelease"):
                         continue
@@ -127,7 +137,10 @@ class UpdateChecker:
             except Exception:
                 # Fall back to /releases/latest
                 with urllib.request.urlopen(self.RELEASES_URL, context=ctx, timeout=10) as response:
-                    best = json.loads(response.read().decode("utf-8"))
+                    raw = response.read(self._MAX_API_RESPONSE_BYTES + 1)
+                    if len(raw) > self._MAX_API_RESPONSE_BYTES:
+                        raise RuntimeError("GitHub API response too large")
+                    best = json.loads(raw.decode("utf-8"))
 
             if best is None:
                 self._last_error = "No published releases found."
@@ -146,13 +159,17 @@ class UpdateChecker:
             self.download_is_installer = False
             for asset in assets:
                 name = asset.get("name", "")
+                url = asset.get("browser_download_url", "")
                 if not name.lower().endswith(".exe"):
+                    continue
+                # Only accept download URLs from GitHub domains
+                if not self._is_trusted_download_url(url):
                     continue
                 if "setup" in name.lower() or "install" in name.lower():
                     if "PCAP_Sentry" in name:
-                        installer_url = asset["browser_download_url"]
+                        installer_url = url
                 elif "PCAP_Sentry" in name:
-                    standalone_url = asset["browser_download_url"]
+                    standalone_url = url
 
             if installer_url:
                 self.download_url = installer_url
@@ -161,12 +178,51 @@ class UpdateChecker:
                 self.download_url = standalone_url
                 self.download_is_installer = False
 
+            # Fetch expected SHA-256 hash from the release's SHA256SUMS.txt asset
+            self._expected_sha256 = self._fetch_sha256_for_asset(best, ctx)
+
             return True
 
         except Exception as e:
             print(f"Error fetching latest release: {e}")
             self._last_error = str(e)
             return False
+
+    @staticmethod
+    def _is_trusted_download_url(url: str) -> bool:
+        """Only allow downloads from known GitHub domains."""
+        from urllib.parse import urlparse
+        try:
+            parsed = urlparse(url)
+            host = (parsed.hostname or "").lower()
+            return host.endswith(".github.com") or host == "github.com"
+        except Exception:
+            return False
+
+    def _fetch_sha256_for_asset(self, release: dict, ctx) -> dict:
+        """Download SHA256SUMS.txt from the release and return a {filename: hash} dict."""
+        result = {}
+        try:
+            for asset in release.get("assets", []):
+                if asset.get("name", "").upper() == "SHA256SUMS.TXT":
+                    url = asset["browser_download_url"]
+                    if not self._is_trusted_download_url(url):
+                        break
+                    req = urllib.request.Request(url, headers={"User-Agent": "PCAP-Sentry-Updater"})
+                    with urllib.request.urlopen(req, context=ctx, timeout=15) as resp:
+                        raw = resp.read(1 * 1024 * 1024)  # 1 MB limit
+                        text = raw.decode("utf-8", errors="replace")
+                    for line in text.strip().splitlines():
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            sha256_hash = parts[0].lower().strip()
+                            filename = parts[-1].strip()
+                            if len(sha256_hash) == 64:
+                                result[filename] = sha256_hash
+                    break
+        except Exception:
+            pass
+        return result
 
     def download_update(self, destination: str, progress_callback=None) -> bool:
         """
@@ -190,21 +246,55 @@ class UpdateChecker:
             )
             with urllib.request.urlopen(req, context=ctx, timeout=120) as response:
                 total_size = int(response.headers.get("Content-Length", 0))
+                # Enforce download size limit
+                if total_size > self._MAX_DOWNLOAD_BYTES:
+                    raise RuntimeError(f"Download too large ({total_size} bytes)")
                 downloaded = 0
                 chunk_size = 65536
+                sha256 = hashlib.sha256()
                 with open(destination, "wb") as f:
                     while True:
                         chunk = response.read(chunk_size)
                         if not chunk:
                             break
-                        f.write(chunk)
                         downloaded += len(chunk)
+                        if downloaded > self._MAX_DOWNLOAD_BYTES:
+                            raise RuntimeError("Download exceeded size limit")
+                        f.write(chunk)
+                        sha256.update(chunk)
                         if progress_callback:
                             progress_callback(downloaded, total_size)
-            return os.path.exists(destination) and os.path.getsize(destination) > 0
+
+            if not (os.path.exists(destination) and os.path.getsize(destination) > 0):
+                return False
+
+            # Verify SHA-256 hash if available
+            actual_hash = sha256.hexdigest().lower()
+            expected = getattr(self, "_expected_sha256", {}) or {}
+            filename = os.path.basename(destination)
+            # Try matching by the download URL's filename first, then by destination filename
+            download_filename = self.download_url.rsplit("/", 1)[-1] if self.download_url else ""
+            expected_hash = expected.get(download_filename) or expected.get(filename)
+            if expected_hash:
+                if actual_hash != expected_hash.lower():
+                    os.remove(destination)
+                    self._last_error = (
+                        f"SHA-256 mismatch!\n"
+                        f"Expected: {expected_hash}\n"
+                        f"Actual:   {actual_hash}\n"
+                        f"The download may have been tampered with."
+                    )
+                    print(f"Security: SHA-256 mismatch for {filename}")
+                    return False
+                print(f"Security: SHA-256 verified for {filename}")
+            else:
+                print(f"Security: No SHA-256 hash available for {filename} (skipping verification)")
+
+            return True
 
         except Exception as e:
             print(f"Error downloading update: {e}")
+            self._last_error = str(e)
             return False
 
     @staticmethod
@@ -291,12 +381,23 @@ class UpdateChecker:
 
             backup_path = current_exe_path + ".backup"
             script_path = os.path.join(self.get_update_dir(), "apply_update.cmd")
+
+            # Sanitize paths to prevent command injection via special characters
+            def _sanitize_cmd_path(p: str) -> str:
+                """Remove characters that could break out of CMD variable quoting."""
+                # Only allow safe path characters: letters, digits, spaces, \, /, :, ., -, _
+                return re.sub(r'[^\w\s\\/:._-]', '', p)
+
+            safe_new = _sanitize_cmd_path(new_exe_path)
+            safe_cur = _sanitize_cmd_path(current_exe_path)
+            safe_bak = _sanitize_cmd_path(backup_path)
+
             script_lines = [
                 "@echo off",
                 "setlocal",
-                f'set "NEW_EXE={new_exe_path}"',
-                f'set "CUR_EXE={current_exe_path}"',
-                f'set "BACKUP_EXE={backup_path}"',
+                f'set "NEW_EXE={safe_new}"',
+                f'set "CUR_EXE={safe_cur}"',
+                f'set "BACKUP_EXE={safe_bak}"',
                 "set RETRIES=30",
                 "",
                 ":retry",

@@ -31,6 +31,9 @@ _REQUEST_TIMEOUT = (_CONNECT_TIMEOUT, _READ_TIMEOUT)
 # Max concurrent network requests
 _MAX_WORKERS = 6
 
+# Maximum response size from external APIs (2 MB)
+_MAX_RESPONSE_BYTES = 2 * 1024 * 1024
+
 
 class ThreatIntelligence:
     """Threat intelligence checker using free/public APIs"""
@@ -59,7 +62,8 @@ class ThreatIntelligence:
                         pool_connections=8, pool_maxsize=12, max_retries=0,
                     )
                     s.mount("https://", adapter)
-                    s.mount("http://", adapter)
+                    # Note: http:// adapter intentionally omitted to prevent
+                    # accidental plaintext requests or redirect downgrades.
                     self._session = s
         return self._session
 
@@ -135,6 +139,16 @@ class ThreatIntelligence:
                     del self._cache[oldest_key]
             self._cache[key] = (value, now)
 
+    def _safe_json(self, response) -> dict:
+        """Parse JSON from a requests response with a size limit to prevent OOM."""
+        content_length = response.headers.get("Content-Length")
+        if content_length and int(content_length) > _MAX_RESPONSE_BYTES:
+            raise RuntimeError(f"Response too large: {content_length} bytes")
+        raw = response.content
+        if len(raw) > _MAX_RESPONSE_BYTES:
+            raise RuntimeError(f"Response too large: {len(raw)} bytes")
+        return response.json()
+
     def check_domain_reputation(self, domain: str) -> Dict:
         """
         Check domain reputation using free public sources
@@ -199,7 +213,7 @@ class ThreatIntelligence:
             response = self._get_session().get(url, timeout=_REQUEST_TIMEOUT)
 
             if response.status_code == 200:
-                data = response.json()
+                data = self._safe_json(response)
                 if data.get("reputation"):
                     return {
                         "reputation": data["reputation"],
@@ -219,7 +233,7 @@ class ThreatIntelligence:
             response = self._get_session().get(url, timeout=_REQUEST_TIMEOUT)
 
             if response.status_code == 200:
-                data = response.json()
+                data = self._safe_json(response)
                 if data.get("reputation"):
                     return {
                         "reputation": data["reputation"],
@@ -247,7 +261,7 @@ class ThreatIntelligence:
             response = self._get_session().post(url, data=data, timeout=_REQUEST_TIMEOUT)
 
             if response.status_code == 200:
-                result = response.json()
+                result = self._safe_json(response)
                 if result.get("query_status") == "ok" and result.get("urls"):
                     return {
                         "found": True,

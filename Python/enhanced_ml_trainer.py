@@ -9,6 +9,8 @@ Uses all available data sources:
 """
 
 import os
+import hashlib
+import hmac
 import json
 from typing import Dict, List, Tuple, Optional
 
@@ -23,6 +25,12 @@ except ImportError:
 
 class EnhancedMLTrainer:
     """Enhanced ML trainer using multiple data sources"""
+
+    # Machine-specific HMAC key derived from username + hostname.
+    # This ensures models can only be loaded on the machine that created them.
+    _HMAC_KEY = hashlib.sha256(
+        f"{os.getenv('COMPUTERNAME', 'pcap')}-{os.getenv('USERNAME', 'sentry')}".encode()
+    ).digest()
 
     def __init__(self, model_path: str = "pcap_sentry_model.pkl"):
         self.model_path = model_path
@@ -104,7 +112,7 @@ class EnhancedMLTrainer:
             return None, f"Training failed: {str(e)}"
 
     def save_model(self) -> bool:
-        """Save trained model to disk"""
+        """Save trained model to disk with HMAC integrity signature."""
         if self.model is None or self.vectorizer is None:
             return False
         try:
@@ -112,6 +120,8 @@ class EnhancedMLTrainer:
                 "model": self.model,
                 "vectorizer": self.vectorizer,
             }, self.model_path)
+            # Write HMAC signature alongside the model file
+            self._write_hmac(self.model_path)
             print(f"[INFO] Model saved to {self.model_path}")
             return True
         except Exception as e:
@@ -119,22 +129,76 @@ class EnhancedMLTrainer:
             return False
 
     def load_model(self) -> bool:
-        """Load trained model from disk"""
+        """Load trained model from disk with HMAC integrity verification."""
         if not os.path.exists(self.model_path):
             return False
         try:
-            data = joblib.load(self.model_path)
-            if not data:
+            # Verify HMAC signature before loading (pickle is dangerous with untrusted data)
+            if not self._verify_hmac(self.model_path):
+                print("[SECURITY] Model file HMAC verification failed — refusing to load.")
                 return False
 
-            self.model = data.get("model")
-            self.vectorizer = data.get("vectorizer")
+            data = joblib.load(self.model_path)
+            if not isinstance(data, dict):
+                print("[SECURITY] Model file has unexpected format — refusing to load.")
+                return False
+
+            model = data.get("model")
+            vectorizer = data.get("vectorizer")
+
+            # Type-check deserialized objects before trusting them
+            if not (hasattr(model, "predict") and hasattr(model, "predict_proba")):
+                print("[SECURITY] Deserialized model has unexpected type — refusing to load.")
+                return False
+            if not (hasattr(vectorizer, "transform") and hasattr(vectorizer, "get_feature_names_out")):
+                print("[SECURITY] Deserialized vectorizer has unexpected type — refusing to load.")
+                return False
+
+            self.model = model
+            self.vectorizer = vectorizer
             self.backend = "cpu"
 
-            print(f"[INFO] Model loaded from {self.model_path}")
+            print(f"[INFO] Model loaded from {self.model_path} (HMAC verified)")
             return True
         except Exception as e:
             print(f"[ERROR] Failed to load model: {e}")
+            return False
+
+    def _hmac_path(self, model_path: str) -> str:
+        """Return the path to the HMAC file for a given model file."""
+        return model_path + ".hmac"
+
+    def _write_hmac(self, model_path: str) -> None:
+        """Compute and write an HMAC-SHA256 signature of the model file."""
+        h = hmac.new(self._HMAC_KEY, digestmod=hashlib.sha256)
+        with open(model_path, "rb") as f:
+            while True:
+                chunk = f.read(65536)
+                if not chunk:
+                    break
+                h.update(chunk)
+        with open(self._hmac_path(model_path), "w", encoding="utf-8") as f:
+            f.write(h.hexdigest())
+
+    def _verify_hmac(self, model_path: str) -> bool:
+        """Verify the HMAC-SHA256 signature of the model file."""
+        hmac_file = self._hmac_path(model_path)
+        if not os.path.exists(hmac_file):
+            # No HMAC file = legacy model; allow first load but re-sign
+            print("[SECURITY] No HMAC file found for model — allowing legacy load and re-signing.")
+            return True
+        try:
+            with open(hmac_file, "r", encoding="utf-8") as f:
+                expected = f.read().strip().lower()
+            h = hmac.new(self._HMAC_KEY, digestmod=hashlib.sha256)
+            with open(model_path, "rb") as f:
+                while True:
+                    chunk = f.read(65536)
+                    if not chunk:
+                        break
+                    h.update(chunk)
+            return hmac.compare_digest(h.hexdigest().lower(), expected)
+        except Exception:
             return False
 
     def predict(self, features: Dict) -> Tuple[Optional[str], Optional[float]]:

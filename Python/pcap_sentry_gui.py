@@ -391,6 +391,51 @@ SETTINGS_FILE = os.path.join(_get_app_data_dir(), "settings.json")
 MODEL_FILE = os.path.join(_get_app_data_dir(), "pcap_local_model.joblib")
 
 
+# ── Secure credential helpers ────────────────────────────────────────────────
+_KEYRING_SERVICE = "PCAP_Sentry"
+_KEYRING_USERNAME = "llm_api_key"
+
+
+def _keyring_available():
+    """Check if the keyring module is available and functional."""
+    try:
+        import keyring  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+def _store_api_key(key: str) -> None:
+    """Store the API key in the OS credential store, falling back to no-op."""
+    if not key:
+        _delete_api_key()
+        return
+    try:
+        import keyring
+        keyring.set_password(_KEYRING_SERVICE, _KEYRING_USERNAME, key)
+    except Exception:
+        pass  # Fallback: key stays in settings.json
+
+
+def _load_api_key() -> str:
+    """Load the API key from the OS credential store, falling back to empty string."""
+    try:
+        import keyring
+        val = keyring.get_password(_KEYRING_SERVICE, _KEYRING_USERNAME)
+        return val or ""
+    except Exception:
+        return ""
+
+
+def _delete_api_key() -> None:
+    """Remove the API key from the OS credential store."""
+    try:
+        import keyring
+        keyring.delete_password(_KEYRING_SERVICE, _KEYRING_USERNAME)
+    except Exception:
+        pass
+
+
 def _default_settings():
     return {
         "max_rows": DEFAULT_MAX_ROWS,
@@ -418,6 +463,15 @@ def load_settings():
             if isinstance(data, dict):
                 defaults = _default_settings()
                 defaults.update(data)
+                # Prefer OS credential store for API key
+                if _keyring_available():
+                    stored_key = _load_api_key()
+                    if stored_key:
+                        defaults["llm_api_key"] = stored_key
+                    elif data.get("llm_api_key"):
+                        # Migrate plaintext key to keyring on first load
+                        _store_api_key(data["llm_api_key"])
+                        defaults["llm_api_key"] = data["llm_api_key"]
                 return defaults
     except Exception:
         pass
@@ -426,6 +480,13 @@ def load_settings():
 
 def save_settings(settings):
     try:
+        # Store API key in OS credential store if available
+        api_key = settings.get("llm_api_key", "")
+        if _keyring_available():
+            _store_api_key(api_key)
+            # Remove plaintext key from settings file
+            settings = dict(settings)
+            settings.pop("llm_api_key", None)
         tmp = SETTINGS_FILE + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(settings, f, indent=2)
