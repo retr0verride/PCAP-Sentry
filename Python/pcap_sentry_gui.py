@@ -5400,7 +5400,7 @@ class PCAPSentryApp:
             padx=2,
             pady=0,
         )
-        x_label.place(relx=1.0, rely=0.5, anchor="e", x=-2, y=2)
+        x_label.place(relx=1.0, rely=0.5, anchor="e", x=-2)
         x_label.bind("<Button-1>", lambda e: var.set(""))
         x_label.bind("<Enter>", lambda e: x_label.configure(fg=self.colors["danger_hover"]))
         x_label.bind("<Leave>", lambda e: x_label.configure(fg=self.colors["danger"]))
