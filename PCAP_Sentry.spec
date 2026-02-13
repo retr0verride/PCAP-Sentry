@@ -18,7 +18,31 @@ def _require_package(name):
 
 
 def _filter_hiddenimports(items):
-    return [item for item in items if ".tests" not in item]
+    filtered = []
+    for item in items:
+        if ".tests" in item:
+            continue
+        if ".test" in item:
+            continue
+        if ".sphinxext" in item:
+            continue
+        if ".testing" in item or "._test" in item:
+            continue
+        if item.endswith(".conftest") or ".conftest." in item:
+            continue
+        filtered.append(item)
+    return filtered
+
+
+def _unique(sequence):
+    seen = set()
+    ordered = []
+    for item in sequence:
+        if item in seen:
+            continue
+        seen.add(item)
+        ordered.append(item)
+    return ordered
 
 
 def _filter_datas(items):
@@ -61,6 +85,10 @@ tmp_ret = _collect_package('tkinterdnd2')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 hiddenimports += ['scapy', 'scapy.all', 'sklearn', 'joblib']
+
+datas = _unique(datas)
+binaries = _unique(binaries)
+hiddenimports = _unique(hiddenimports)
 
 
 for icon_name in ("pcap_sentry.ico", "custom.ico"):
