@@ -55,6 +55,10 @@ PCAP Sentry is a malware analysis console for network packet capture (PCAP) file
 | 🦈 | **Generates Wireshark filters** for follow-up investigation |
 | 🌐 | **Queries threat intelligence feeds** for known-bad indicators |
 | 🧠 | **Learns from your data** via a trainable knowledge base and optional ML model |
+| 💬 | **Chat interface** powered by a local LLM (Ollama, offline) or OpenAI-compatible endpoint (local or cloud) |
+| ♻️ | **LLM status is saved and restored automatically** across sessions |
+| 🔒 | **Security hardened** with path-traversal guards, input sanitization, model-name validation, and response-size limits |
+| ⚡ | **Optimized analysis engine** with cached vector computations, mask-based filtering, and centralized LLM retry logic |
 
 ### Who Is It For?
 
@@ -140,7 +144,7 @@ When you launch PCAP Sentry for the first time, the application opens to the **A
 
 - A **header banner** with the application name and version
 - A **toolbar** with analysis controls and preferences
-- **Three main tabs**: Analyze, Train, and Knowledge Base
+- **Four main tabs**: Analyze, Train, Knowledge Base, and Chat
 
 ### Quick Start: Analyzing Your First PCAP
 
@@ -156,7 +160,7 @@ When you launch PCAP Sentry for the first time, the application opens to the **A
 
 ### Main Tabs
 
-PCAP Sentry has three primary tabs:
+PCAP Sentry has four primary tabs:
 
 | Tab | Purpose |
 |-----|--------|
@@ -176,6 +180,8 @@ The toolbar appears below the header and contains:
 | **⚙ Preferences** | Opens the Preferences dialog for advanced settings. |
 | **Check for Updates** | Checks GitHub for newer versions of PCAP Sentry. |
 
+> **Tip:** Many controls throughout the interface display a **?** icon. Hover over it to see a tooltip explaining the feature.
+
 ### Header Indicators
 
 The header bar displays:
@@ -188,6 +194,8 @@ The header bar displays:
 | **● LLM** (yellow) | LLM connection test in progress |
 | **○ LLM** (gray) | LLM enabled but not yet tested |
 | **LLM: off** (gray) | LLM features are disabled |
+
+> **Tip:** Click the LLM indicator to run a connection test at any time.
 
 ### Supported File Types
 
@@ -233,8 +241,9 @@ After analysis completes, you can:
 
 - **Mark as Safe** — Add this PCAP's features to the knowledge base as a safe sample
 - **Mark as Malicious** — Add this PCAP's features to the knowledge base as a malware sample
+- **Undo Last** — Revert the most recent KB addition if you labelled by mistake
 - **Open Charts** — Launch the visual charts window with 7 chart types
-- **Copy Wireshark Filters** — Copy auto-generated Wireshark display filters to the clipboard
+- **Copy Wireshark Filters** — Copy auto-generated Wireshark display filters to the clipboard (found in the **Why** sub-tab)
 
 ### Analyzing ZIP Archives
 
@@ -287,13 +296,39 @@ Designed for beginners and learning purposes:
 A full, filterable packet table:
 
 - Browse individual packets from the capture
-- **Column management** — Right-click column headers to show/hide columns or change alignment
+- **Column management** — Right-click column headers to show/hide columns or change alignment (single column or all at once)
+- **Click any column header** to sort ascending/descending (sort arrows ▲/▼ indicate direction)
 - **C2/Exfiltration hints** — Packets flagged with potential Command & Control or data exfiltration indicators
 - Scrollable with mouse wheel support
+
+#### Packet Filters
+
+The Packets tab includes a **Packet Filters** panel to isolate specific traffic:
+
+| Filter | Description |
+|--------|-------------|
+| **Protocol** | Dropdown: Any, TCP, UDP, or Other |
+| **Src IP / Dst IP** | Filter by source or destination IP address |
+| **Src Port / Dst Port** | Filter by source or destination port number |
+| **Time (s)** | Min/max time range in seconds from the start of the capture |
+| **Size (bytes)** | Min/max packet size in bytes |
+| **DNS/HTTP only** | Show only DNS lookups and HTTP requests |
+
+Click **Apply** to filter the table, or **Reset** to clear all filters.
 
 ### 7.5 Extracted Info Tab (🔑)
 
 Displays credentials and host information found in cleartext traffic:
+
+#### Key Findings
+
+A summary panel at the top highlights the most important discoveries, color-coded for quick scanning:
+
+| Color | Meaning |
+|-------|--------|
+| 🟦 Blue | Usernames |
+| 🟥 Red | Passwords |
+| 🟩 Green | Computer / host names |
 
 #### Credentials
 Extracted authentication data from cleartext protocols including:
@@ -306,6 +341,8 @@ Extracted authentication data from cleartext protocols including:
 
 **Copy All** button copies all credentials as tab-separated text.
 
+The credentials table has columns: **Type**, **Protocol**, **Source**, **Destination**, **Value**, and **Detail**. Rows are color-coded: red for passwords, blue for usernames, green for computer names, and yellow for cookies/tokens.
+
 #### Host Discovery
 Network hosts identified from:
 - IP addresses (source and destination)
@@ -313,6 +350,8 @@ Network hosts identified from:
 - Computer names (from DNS, DHCP, SMTP EHLO, NetBIOS)
 
 **Copy All** button copies all host information to the clipboard.
+
+The host table has columns: **IP Address**, **MAC Address(es)**, and **Computer / Hostname**. Rows with resolved hostnames are highlighted in green.
 
 > **⚠ Security Note:** Credential extraction only works on unencrypted (cleartext) traffic. Encrypted protocols (HTTPS, SSH, etc.) cannot be decoded without the appropriate keys.
 
@@ -401,7 +440,6 @@ PCAP Sentry integrates with free, public threat intelligence sources to enhance 
 |------|-----------|---|
 | 👽 **AlienVault OTX** | IP/domain reputation, threat pulses | Not required |
 | 🔗 **URLhaus** | Malicious URL database | Not required |
-| 🌐 **Public IP/Domain Reputation** | Known-bad indicator lists | Not required |
 
 ### How It Works
 
@@ -548,7 +586,7 @@ Your LLM connection status (provider, model, endpoint) is now saved automaticall
 | Setting | Default | Description |
 |---------|---------|-------------|
 | 🎨 **Theme** | System | Choose `System`, `Dark`, or `Light` appearance. Changes require an app restart. |
-| 📊 **Max packets for visuals** | 50,000 | Maximum packets loaded for charts and the packet table. |
+| 📊 **Max packets for visuals** | 200,000 | Maximum packets loaded for charts and the packet table. |
 | 🌐 **Parse HTTP payloads** | On | Extract HTTP method, host, and path from unencrypted traffic. |
 | 💾 **High memory mode** | Off | Load entire PCAP into RAM for faster processing. Best for files under 500 MB. |
 | ⚡ **Turbo parse** | On | Use fast raw-byte parsing. 5–15× faster for files over 50 MB. |
@@ -560,7 +598,8 @@ Your LLM connection status (provider, model, endpoint) is now saved automaticall
 | 🔗 **LLM endpoint** | http://localhost:11434 | Base URL for the LLM API. For Ollama use `http://localhost:11434`. For OpenAI-compatible servers, use the server base URL (no `/v1` suffix). |
 | 🛑 **Stop Ollama on exit** | On | When enabled and using local Ollama, PCAP Sentry stops local Ollama processes on app close. |
 | 🧪 **Test Connection** | — | Sends a test request to verify the LLM is reachable with the current settings. Shows OK/FAIL status. |
-| 📁 **Backup directory** | Default | Directory where KB backups are stored. |
+| �️ **Uninstall** | — | Removes the currently selected Ollama model from disk. Only available when provider is `ollama`. |
+| �📁 **Backup directory** | Default | Directory where KB backups are stored. |
 
 > 🤖 **LLM Note**
 >
@@ -593,15 +632,14 @@ If a server is found, the provider, endpoint, and first available model are auto
 
 If you choose the **Install/manage Ollama** option during PCAP Sentry setup, the installer shows an **Ollama Models** page where you can:
 
-- **Install or update selected models** (default behavior)
-- **Remove selected models** (check **Remove selected models instead of install or update**)
+- **Install or update selected models** using the checkboxes on that page
 
-You can select multiple models at once using the checkboxes on that page.
+You can select multiple models at once. To remove a model later, use the **Uninstall** button in **Preferences** (see below).
 
 The page also includes a direct link to the Ollama model library with model descriptions:
 - https://ollama.com/library
 
-Example preset options include `llama3.2`, `qwen2.5:14b`, `deepseek-r1:7b`, and `deepseek-r1:14b`.
+13 preset models are available including `llama3.2` (default), `qwen2.5`, `phi4`, `mistral`, `deepseek-r1:7b`, `deepseek-r1:14b`, and more.
 
 The installer shows real-time progress while installing Ollama and while downloading each selected model:
 
@@ -678,12 +716,14 @@ All preferences are saved to `settings.json` in the application data directory:
    - A dialog shows the new version number and release notes
    - Click **Download & Update** to download the installer
    - Download progress is displayed
+   - The updater prefers the full installer when available, falling back to the standalone EXE
    - The installer launches automatically when the download completes
    - Follow the installer prompts to update
 4. If you're already on the latest version, a confirmation message is shown.
 
 ### Update Details
 
+- Your knowledge base is automatically backed up before any update is applied
 - Updates are downloaded to `%LOCALAPPDATA%\PCAP_Sentry\updates\`
 - All connections use HTTPS with SSL verification
 - User confirmation is always required — no silent updates
@@ -702,6 +742,7 @@ PCAP Sentry uses date-based versioning: `YYYY.MM.DD` (e.g., `2026.02.13`). If mu
 - **Multiple instances:** PCAP Sentry only allows one instance at a time. Check the taskbar or Task Manager for an existing instance.
 - **Missing VC++ Runtime:** Download and install the [Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe).
 - **Antivirus blocking:** Some antivirus products may flag the application. Add an exception for the PCAP Sentry installation directory.
+- **Unexpected error dialog:** If you see an error on launch, check `startup_errors.log` in the app data folder. Runtime errors are logged to `app_errors.log`.
 
 ### Analysis Takes Too Long
 
@@ -727,7 +768,16 @@ PCAP Sentry uses date-based versioning: `YYYY.MM.DD` (e.g., `2026.02.13`). If mu
 - Click **Test Connection** in Preferences to validate your settings — the error message includes the URL and server response for diagnostics.
 - If the endpoint includes `/v1`, remove it — PCAP Sentry adds the correct API path automatically.
 - Check the header indicator: **✔ LLM** (green/blue) means connected, **✘ LLM** (red) means failed.
-- Error logs are written to `%LOCALAPPDATA%\PCAP_Sentry\` for detailed troubleshooting.
+- Error logs are written to `%LOCALAPPDATA%\PCAP_Sentry\`:
+  - `startup_errors.log` — errors during application launch
+  - `app_errors.log` — uncaught runtime errors
+
+### Uninstalling
+
+During uninstall, the installer will ask:
+
+1. **Remove Ollama?** — Whether to also uninstall the Ollama runtime (if installed).
+2. **Keep Knowledge Base?** — Whether to preserve your trained knowledge base data or delete it.
 
 ### Headless Ollama Install Flow (Troubleshooting)
 
@@ -781,7 +831,8 @@ This directory contains:
 | `pcap_local_model.joblib` | Trained ML model |
 | `kb_backups/` | Automatic KB backups (3 most recent) |
 | `updates/` | Downloaded update files |
-| `*.log` | Application log files |
+| `startup_errors.log` | Errors during application launch |
+| `app_errors.log` | Uncaught runtime errors |
 
 ---
 
@@ -820,8 +871,12 @@ A: PCAP Sentry is developed and tested for Windows. While it may run from source
 | Input | Action |
 |-------|--------|
 | Mouse wheel | Scroll the Analyze tab |
-| Right-click on column header | Show/hide columns, change alignment |
+| Click column header | Sort table ascending/descending (▲/▼) |
+| Right-click column header | Show/hide columns, align single column or all columns (Left/Center/Right) |
 | Drag-and-drop | Drop PCAP files onto entry fields or the Analyze tab |
+| Enter (in Chat) | Send the current message |
+| **?** icons | Hover for contextual tooltip help |
+| **✕** button on entry fields | Clear the input field |
 
 ### B. Detected Protocols & Patterns
 
