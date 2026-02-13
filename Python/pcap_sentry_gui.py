@@ -5814,6 +5814,11 @@ class PCAPSentryApp:
         if not self._llm_is_enabled():
             on_apply(intended_label)
             return
+        # Skip if the LLM was never successfully connected
+        status = self.llm_test_status_var.get().strip()
+        if status in ("", "FAIL", "Disabled", "Not tested"):
+            on_apply(intended_label)
+            return
 
         self.sample_note_var.set("LLM: checking...")
 
