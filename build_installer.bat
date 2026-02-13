@@ -3,15 +3,22 @@ setlocal enabledelayedexpansion
 
 REM Builds the installer using Inno Setup.
 REM Run this after building the EXE.
-REM Optional: pass -NoPush to skip git commit/push.
+REM Default behavior: local build only (no commit/push).
+REM Optional: pass -Push to enable git commit/push and release creation.
+REM Optional: pass -NoPush to force local-only mode.
 REM Optional: pass -Notes "your notes here" to set release notes / What's New.
 REM   If omitted, defaults to "Minor tweaks and improvements".
 
-set "NO_PUSH="
+set "NO_PUSH=1"
 set "BUILD_NOTES=Minor tweaks and improvements"
 
 :parse_args
 if "%~1"=="" goto :args_done
+if /I "%~1"=="-Push" (
+	set "NO_PUSH="
+	shift
+	goto :parse_args
+)
 if /I "%~1"=="-NoPush" (
 	set "NO_PUSH=1"
 	shift
@@ -106,8 +113,7 @@ if defined NO_PUSH (
 	) else (
 		echo ==== Creating GitHub Release v%VERSION% ====>> "%LOG_PATH%"
 		echo Release Notes: !BUILD_NOTES!>> "%LOG_PATH%"
-		gh release create "v%VERSION%" "dist\PCAP_Sentry_Setup.exe" --title "PCAP Sentry v%VERSION%" --notes "## What's New
-!BUILD_NOTES!" >> "%LOG_PATH%" 2>&1
+		gh release create "v%VERSION%" "dist\PCAP_Sentry_Setup.exe" --title "PCAP Sentry v%VERSION%" --notes "What's New: !BUILD_NOTES!" >> "%LOG_PATH%" 2>&1
 		if errorlevel 1 (
 			echo Warning: Failed to create GitHub release. See %LOG_PATH% for details.
 		) else (
