@@ -70,6 +70,7 @@ var
   OllamaModelsHint: TNewStaticText;
   OllamaRemoveModeCheck: TNewCheckBox;
   TasksClickHandlerSet: Boolean;
+  CommandRunId: Integer;
 
 function GetDiskFreeSpaceEx(lpDirectoryName: string; var FreeBytesAvailableToCaller, TotalNumberOfBytes, TotalNumberOfFreeBytes: Int64): Boolean;
   external 'GetDiskFreeSpaceExW@kernel32.dll stdcall';
@@ -123,6 +124,9 @@ function IsOllamaRemoveMode: Boolean;
 begin
   Result := (OllamaRemoveModeCheck <> nil) and OllamaRemoveModeCheck.Checked;
 end;
+
+procedure SetOllamaInstallProgress(const CaptionText: String; Position, MaxValue: Integer);
+  forward;
 
 procedure UpdateOllamaSpaceNote;
 var
@@ -225,6 +229,62 @@ begin
   end;
   if OllamaModelsPage <> nil then
     OllamaModelsPage.CheckListBox.OnClickCheck := @HandleSelectionChange;
+end;
+
+function RunCommandWithProgress(
+  const FileName, Params, WaitCaption: String;
+  BasePosition, MaxValue: Integer;
+  var ResultCode: Integer
+): Boolean;
+var
+  DoneFile: String;
+  WrappedCommand: String;
+  ExitText: AnsiString;
+  PulsePosition: Integer;
+begin
+  CommandRunId := CommandRunId + 1;
+  DoneFile := ExpandConstant('{tmp}\pcap_sentry_cmd_exit_' + IntToStr(CommandRunId) + '.txt');
+  WrappedCommand :=
+    AddQuotes(FileName) + ' ' + Params + ' >nul 2>nul' +
+    ' & echo %ERRORLEVEL% > ' + AddQuotes(DoneFile);
+
+  SetOllamaInstallProgress(WaitCaption, BasePosition, MaxValue);
+
+  if not Exec(
+      ExpandConstant('{cmd}'),
+      '/C ' + AddQuotes(WrappedCommand),
+      '',
+      SW_HIDE,
+      ewNoWait,
+      ResultCode
+    ) then
+  begin
+    Result := False;
+    exit;
+  end;
+
+  PulsePosition := BasePosition;
+  while not FileExists(DoneFile) do
+  begin
+    if BasePosition < MaxValue then
+    begin
+      if PulsePosition = BasePosition then
+        PulsePosition := BasePosition + 1
+      else
+        PulsePosition := BasePosition;
+      WizardForm.ProgressGauge.Position := PulsePosition;
+    end;
+    WizardForm.Update;
+    Sleep(300);
+  end;
+
+  if LoadStringFromFile(DoneFile, ExitText) then
+    ResultCode := StrToIntDef(Trim(ExitText), 1)
+  else
+    ResultCode := 1;
+
+  DeleteFile(DoneFile);
+  Result := ResultCode = 0;
 end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
@@ -364,7 +424,7 @@ begin
   WizardForm.Update;
 end;
 
-function InstallOllamaRuntime: Boolean;
+function InstallOllamaRuntime(TotalSteps: Integer): Boolean;
 var
   ResultCode: Integer;
   InstallerPath: String;
@@ -373,12 +433,12 @@ begin
   if IsOllamaAvailable then
     exit;
 
-  if Exec(
+  if RunCommandWithProgress(
       'winget.exe',
       'install -e --id Ollama.Ollama --accept-package-agreements --accept-source-agreements -h',
-      '',
-      SW_HIDE,
-      ewWaitUntilTerminated,
+      'Installing Ollama runtime (1/' + IntToStr(TotalSteps) + ') ...',
+      0,
+      TotalSteps,
       ResultCode
     ) and (ResultCode = 0) then
   begin
@@ -387,12 +447,12 @@ begin
   end;
 
   InstallerPath := ExpandConstant('{tmp}\OllamaSetup.exe');
-  if not Exec(
+  if not RunCommandWithProgress(
       'powershell.exe',
       '-NoProfile -ExecutionPolicy Bypass -Command "Invoke-WebRequest -Uri ''https://ollama.com/download/OllamaSetup.exe'' -OutFile ''' + InstallerPath + '''"',
-      '',
-      SW_HIDE,
-      ewWaitUntilTerminated,
+      'Downloading Ollama installer ...',
+      0,
+      TotalSteps,
       ResultCode
     ) then
   begin
@@ -400,12 +460,12 @@ begin
     exit;
   end;
 
-  if not Exec(
+  if not RunCommandWithProgress(
       InstallerPath,
       '/S',
-      '',
-      SW_HIDE,
-      ewWaitUntilTerminated,
+      'Installing Ollama runtime ...',
+      0,
+      TotalSteps,
       ResultCode
     ) or (ResultCode <> 0) then
   begin
@@ -465,12 +525,12 @@ begin
     else
       OllamaArgs := 'pull ' + OllamaModelIds[I];
 
-    if not Exec(
+    if not RunCommandWithProgress(
         OllamaExe,
         OllamaArgs,
-        '',
-        SW_HIDE,
-        ewWaitUntilTerminated,
+        ActionVerb + ' Ollama model ' + IntToStr(SelectedIndex) + '/' + IntToStr(SelectedCount) + ': ' + OllamaModelIds[I] + ' ...',
+        CurrentStep,
+        TotalSteps,
         ResultCode
       ) or (ResultCode <> 0) then
     begin
@@ -596,7 +656,7 @@ begin
         TotalSteps
       );
 
-      if not InstallOllamaRuntime then
+      if not InstallOllamaRuntime(TotalSteps) then
       begin
         MsgBox(
           'Ollama installation failed.' + #13#10 +
