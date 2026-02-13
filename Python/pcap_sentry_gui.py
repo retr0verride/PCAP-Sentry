@@ -6118,7 +6118,7 @@ class PCAPSentryApp:
 
         _set_status("Downloading...", self.colors.get("accent", "#58a6ff"))
 
-        def task():
+        def task(progress_cb):
             tmp_dir = tempfile.mkdtemp(prefix="ollama_")
             installer_path = os.path.join(tmp_dir, "OllamaSetup.exe")
             req = urllib.request.Request(
@@ -6126,12 +6126,23 @@ class PCAPSentryApp:
                 headers={"User-Agent": "PCAP-Sentry/1.0"},
             )
             with urllib.request.urlopen(req, timeout=120) as resp:
+                total = int(resp.headers.get("Content-Length", 0))
+                downloaded = 0
                 with open(installer_path, "wb") as f:
                     while True:
                         chunk = resp.read(65536)
                         if not chunk:
                             break
                         f.write(chunk)
+                        downloaded += len(chunk)
+                        if total > 0:
+                            pct = min(downloaded / total * 100, 100)
+                            progress_cb(
+                                pct,
+                                processed=downloaded,
+                                total=total,
+                                label="Downloading Ollama...",
+                            )
             return installer_path
 
         def done(installer_path):
@@ -6182,7 +6193,8 @@ class PCAPSentryApp:
                 f"Error: {err}",
             )
 
-        self._run_task(task, done, on_error=failed, message="Downloading Ollama...")
+        self._run_task(task, done, on_error=failed, message="Downloading Ollama...",
+                      progress_label="Downloading Ollama...")
 
     def _auto_detect_llm(self):
         if self.llm_provider_var.get().strip().lower() != "disabled":
