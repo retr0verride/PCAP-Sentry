@@ -47,7 +47,7 @@ echo Args: %*>> "%LOG_PATH%"
 
 REM Update version before build (unless -NoBump is set)
 if defined NO_BUMP (
-	echo ==== Skipping Version Update (-NoBump) ====>> "%LOG_PATH%"
+	echo ==== Skipping Version Update -NoBump ====>> "%LOG_PATH%"
 ) else (
 	echo ==== Updating Version ====>> "%LOG_PATH%"
 	echo Build Notes: !BUILD_NOTES!>> "%LOG_PATH%"
