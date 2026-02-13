@@ -236,7 +236,11 @@ begin
   if NumText = '' then
     exit;
 
-  NumValue := StrToFloatDef(NumText, -1.0);
+  try
+    NumValue := StrToFloat(NumText);
+  except
+    exit;
+  end;
   if NumValue < 0 then
     exit;
 
@@ -420,7 +424,7 @@ function RunCommandWithProgress(
 var
   WrappedCommand: String;
   LogFile: String;
-  LogText: String;
+  LogText: AnsiString;
   ExitCode: Cardinal;
   PulsePosition: Integer;
   Percent: Integer;
@@ -1025,7 +1029,7 @@ begin
             SetOllamaInstallProgress('Ollama setup cancelled.', 0, TotalSteps);
             exit;
           end;
-          raise;
+          RaiseException(GetExceptionMessage);
         end;
       finally
         RestoreOllamaWizardUi;
