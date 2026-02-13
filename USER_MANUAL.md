@@ -6,7 +6,7 @@
 
 ### User Manual
 
-![Version](https://img.shields.io/badge/Version-2026.02.12-58a6ff?style=for-the-badge&labelColor=0d1117)
+![Version](https://img.shields.io/badge/Version-2026.02.12--27-58a6ff?style=for-the-badge&labelColor=0d1117)
 ![Platform](https://img.shields.io/badge/Platform-Windows-58a6ff?style=for-the-badge&logo=windows&logoColor=white&labelColor=0d1117)
 ![License](https://img.shields.io/badge/License-See_LICENSE.txt-58a6ff?style=for-the-badge&labelColor=0d1117)
 
@@ -159,6 +159,7 @@ PCAP Sentry has three primary tabs:
 | 🔍 **Analyze** | Select and analyze PCAP files, view results |
 | 🧠 **Train** | Add known-safe or known-malware PCAPs to the knowledge base |
 | 📚 **Knowledge Base** | Manage the KB: refresh, backup, restore, reset, import IoC feeds |
+| 💬 **Chat** | Ask questions about current analysis results and general cybersecurity topics (requires an LLM) |
 
 ### Toolbar
 
@@ -170,6 +171,19 @@ The toolbar appears below the header and contains:
 | **Parse HTTP payloads** | When checked, extracts HTTP request details (method, host, path) from unencrypted traffic. |
 | **⚙ Preferences** | Opens the Preferences dialog for advanced settings. |
 | **Check for Updates** | Checks GitHub for newer versions of PCAP Sentry. |
+
+### Header Indicators
+
+The header bar displays:
+
+| Indicator | Meaning |
+|-----------|----------|
+| **✔ LLM** (green) | LLM connection tested and working |
+| **✔ LLM** (blue) | LLM auto-detected on startup |
+| **✘ LLM** (red) | LLM connection test failed |
+| **● LLM** (yellow) | LLM connection test in progress |
+| **○ LLM** (gray) | LLM enabled but not yet tested |
+| **LLM: off** (gray) | LLM features are disabled |
 
 ### Supported File Types
 
@@ -327,6 +341,10 @@ The **Train** tab allows you to teach PCAP Sentry what safe and malicious traffi
 - **Build a balanced KB** — Try to add roughly equal numbers of safe and malicious samples.
 - **Retrain periodically** — Add new samples as you encounter new traffic patterns.
 - The knowledge base is stored as a JSON file and persists across sessions.
+
+### LLM Label Assistant (Optional)
+
+If enabled in Preferences, PCAP Sentry can call a local LLM (Ollama or any OpenAI-compatible server) to suggest a label and short rationale before saving a sample. You can accept the suggestion or keep your original label.
 
 ---
 
@@ -518,7 +536,65 @@ Open preferences via the **⚙ Preferences** button in the toolbar.
 | 🧠 **Enable local ML model** | Off | Use the trained scikit-learn model for a supplemental verdict. |
 | ✈️ **Offline mode** | Off | Disable all online threat intelligence lookups. |
 | 🧵 **Multithreaded analysis** | On | Use multiple threads for parallel analysis. |
+| 🤖 **LLM provider** | Disabled | Select `disabled`, `ollama`, or `openai_compat`. Auto-detected on startup if a local LLM server is found. |
+| 🧠 **LLM model** | llama3 | Model name dropdown — click **↻** to detect available models from the running server. You can also type a custom model name. |
+| 🔗 **LLM endpoint** | http://localhost:11434 | Base URL for the LLM API. For Ollama use `http://localhost:11434`. For OpenAI-compatible servers, use the server base URL (no `/v1` suffix). |
+| 🧪 **Test Connection** | — | Sends a test request to verify the LLM is reachable with the current settings. Shows OK/FAIL status. |
 | 📁 **Backup directory** | Default | Directory where KB backups are stored. |
+
+> 🤖 **LLM Note**
+>
+> LLM suggestions are optional and run locally when using Ollama or an OpenAI-compatible server. Your PCAP data is not uploaded; only summarized statistics are sent to the local LLM endpoint.
+
+### LLM Auto-Detection
+
+On startup, if the LLM provider is set to `disabled`, PCAP Sentry automatically scans for local LLM servers:
+
+1. **Ollama** — Checks `http://localhost:11434` for available models
+2. **OpenAI-compatible** — Checks common ports (1234, 8000, 8080, 5000, 5001) for `/v1/models`
+
+If a server is found, the provider, endpoint, and first available model are automatically configured. The header indicator shows **✔ LLM** in blue when auto-detected.
+
+### Ollama Setup (Optional)
+
+1. Install Ollama: https://ollama.com/download
+2. Pull a model (example):
+   ```
+   ollama pull llama3
+   ```
+3. Ensure the Ollama service is running (default endpoint: `http://localhost:11434`).
+4. In **⚙ Preferences**, set:
+   - **LLM provider** = `ollama`
+   - **LLM model** = click **↻** to detect available models, or type a model name
+   - **LLM endpoint** = `http://localhost:11434`
+5. Click **Test Connection** to verify.
+
+### OpenAI-Compatible Server Setup (Optional)
+
+PCAP Sentry works with any server that implements the OpenAI chat completions API (e.g., LM Studio, text-generation-webui, LocalAI, vLLM):
+
+1. Start your OpenAI-compatible server.
+2. In **⚙ Preferences**, set:
+   - **LLM provider** = `openai_compat`
+   - **LLM model** = click **↻** to detect available models, or type a model name
+   - **LLM endpoint** = your server's base URL (e.g., `http://localhost:1234`). Do not include `/v1`.
+3. Click **Test Connection** to verify.
+
+### Chat Tab
+
+The **Chat** tab provides a conversational interface powered by your configured LLM:
+
+- **Context-aware** — Automatically includes the current analysis results (verdict, risk score, protocol stats) in the conversation
+- **Conversation history** — The last 6 messages are sent as context for follow-up questions
+- **Send** — Type a question and press Enter or click Send
+- **Clear** — Resets the conversation history
+- **Disabled when LLM is off** — The tab is available but the controls are disabled until an LLM provider is configured
+
+Example questions:
+- "Why was this capture flagged as malicious?"
+- "What do the DNS queries suggest?"
+- "Is this level of port scanning normal?"
+- "Explain the TLS certificate findings"
 
 > 🎨 **App Color Palette Reference**
 >
@@ -592,6 +668,16 @@ All preferences are saved to `settings.json` in the application data directory:
 - Verify **Offline mode** is not enabled in Preferences.
 - Check that public APIs are reachable (AlienVault OTX, URLhaus).
 - API rate limits may temporarily block lookups — try again later.
+
+### LLM Not Working
+
+- Ensure **LLM provider** is set to `ollama` or `openai_compat` in Preferences.
+- Verify the LLM server is running and reachable at the configured endpoint.
+- For Ollama: confirm the model is pulled (e.g., `ollama pull llama3`).
+- Click **Test Connection** in Preferences to validate your settings — the error message includes the URL and server response for diagnostics.
+- If the endpoint includes `/v1`, remove it — PCAP Sentry adds the correct API path automatically.
+- Check the header indicator: **✔ LLM** (green/blue) means connected, **✘ LLM** (red) means failed.
+- Error logs are written to `%APPDATA%\PCAP Sentry\` for detailed troubleshooting.
 
 ### ML Model Not Working
 

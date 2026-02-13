@@ -12,10 +12,13 @@ import shutil
 import socket
 import statistics
 import struct
+import subprocess
 import sys
 import tempfile
 import threading
 import time
+import urllib.error
+import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 import traceback
 import zipfile
@@ -375,6 +378,9 @@ def _default_settings():
         "use_multithreading": True,
         "turbo_parse": True,
         "backup_dir": os.path.dirname(KNOWLEDGE_BASE_FILE),
+        "llm_provider": "disabled",
+        "llm_model": "llama3",
+        "llm_endpoint": "http://localhost:11434",
         "theme": "system",
         "app_data_notice_shown": False,
     }
@@ -2242,6 +2248,13 @@ class PCAPSentryApp:
         self.use_local_model_var = tk.BooleanVar(value=self.settings.get("use_local_model", False))
         self.use_multithreading_var = tk.BooleanVar(value=self.settings.get("use_multithreading", True))
         self.turbo_parse_var = tk.BooleanVar(value=self.settings.get("turbo_parse", True))
+        self.llm_provider_var = tk.StringVar(value=self.settings.get("llm_provider", "disabled"))
+        self.llm_model_var = tk.StringVar(value=self.settings.get("llm_model", "llama3"))
+        self.llm_endpoint_var = tk.StringVar(value=self.settings.get("llm_endpoint", "http://localhost:11434"))
+        self.llm_test_status_var = tk.StringVar(value="Not tested")
+        self.llm_test_status_label = None
+        self.llm_header_indicator = None
+        self.llm_header_label = None
         self.status_var = tk.StringVar(value="Ready")
         self.progress_percent_var = tk.StringVar(value="")
         self._progress_target = 0.0
@@ -2265,6 +2278,8 @@ class PCAPSentryApp:
         self.current_df = None
         self.current_stats = None
         self.current_sample_info = None
+        self.current_verdict = None
+        self.current_risk_score = None
         self.packet_base_time = None
         self.busy_count = 0
         self.busy_widgets = []
@@ -2297,6 +2312,15 @@ class PCAPSentryApp:
         self.packet_size_max_var = None
         self.packet_dns_http_only_var = None
 
+        # Chat state
+        self.chat_history = []
+        self.chat_text = None
+        self.chat_entry_var = tk.StringVar(value="")
+        self.chat_entry = None
+        self.chat_send_button = None
+        self.chat_clear_button = None
+        self.chat_disabled_var = tk.StringVar(value="")
+
         # Extracted Info tab state
         self.cred_table = None
         self.host_table = None
@@ -2324,6 +2348,7 @@ class PCAPSentryApp:
 
         # Backup knowledge base on close
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+        self.root.after(400, self._auto_detect_llm)
 
     def _on_close(self):
         """Handle window close – cancel timers, backup KB, then destroy."""
@@ -2331,6 +2356,7 @@ class PCAPSentryApp:
         self._reset_progress()
         _backup_knowledge_base()
         self.root.destroy()
+        
 
     def _get_window_title(self):
         """Generate window title with mode indicator"""
@@ -2498,6 +2524,27 @@ class PCAPSentryApp:
             w.bind("<Leave>", _manual_leave)
             w.bind("<Button-1>", _manual_click)
 
+        # LLM status indicator pill
+        _llm_ind_bg = self.colors.get("panel", "#161b22")
+        _llm_ind_border = self.colors.get("border", "#21262d")
+        self.llm_header_indicator = tk.Frame(
+            top_row,
+            bg=_llm_ind_bg,
+            highlightbackground=_llm_ind_border,
+            highlightthickness=1,
+            padx=8, pady=4,
+        )
+        self.llm_header_indicator.pack(side=tk.RIGHT, padx=(0, 4))
+        self.llm_header_label = tk.Label(
+            self.llm_header_indicator,
+            text="LLM: off",
+            font=("Segoe UI", 8),
+            fg=self.colors.get("muted", "#8b949e"),
+            bg=_llm_ind_bg,
+        )
+        self.llm_header_label.pack()
+        self._update_llm_header_indicator()
+
         # Indent subtitle to align with text (past icon)
         subtitle_padx = (52, 0) if self._header_icon_image else (0, 0)
         ttk.Label(
@@ -2540,14 +2587,17 @@ class PCAPSentryApp:
         self.train_tab = ttk.Frame(notebook)
         self.analyze_tab = ttk.Frame(notebook)
         self.kb_tab = ttk.Frame(notebook)
+        self.chat_tab = ttk.Frame(notebook)
 
         notebook.add(self.analyze_tab, text="  \U0001f50d  Analyze  ")
         notebook.add(self.train_tab, text="  \U0001f9e0  Train  ")
         notebook.add(self.kb_tab, text="  \U0001f4da  Knowledge Base  ")
+        notebook.add(self.chat_tab, text="  Chat  ")
 
         self._build_train_tab()
         self._build_analyze_tab()
         self._build_kb_tab()
+        self._build_chat_tab()
 
         notebook.select(self.analyze_tab)
 
@@ -2664,14 +2714,76 @@ class PCAPSentryApp:
             "This can significantly speed up analysis on multi-core systems. "
             "Disable if you experience stability issues or want to reduce CPU usage.", row=8, column=2, sticky="w")
 
+        ttk.Label(frame, text="LLM provider:").grid(row=9, column=0, sticky="w", pady=6)
+        llm_provider_combo = ttk.Combobox(
+            frame,
+            textvariable=self.llm_provider_var,
+            values=["disabled", "ollama", "openai_compat"],
+            width=12,
+        )
+        llm_provider_combo.state(["readonly"])
+        llm_provider_combo.grid(row=9, column=1, sticky="w", pady=6)
+        self._help_icon_grid(frame, "Choose which LLM to use for label suggestions. "
+            "Select 'disabled' to turn off LLM features.", row=9, column=2, sticky="w")
+
+        ttk.Label(frame, text="LLM model:").grid(row=10, column=0, sticky="w", pady=6)
+        model_frame = ttk.Frame(frame)
+        model_frame.grid(row=10, column=1, sticky="w", pady=6)
+        llm_model_combo = ttk.Combobox(model_frame, textvariable=self.llm_model_var, width=27)
+        llm_model_combo.pack(side=tk.LEFT)
+        refresh_btn = ttk.Button(
+            model_frame, text="\u21BB", width=3, style="Secondary.TButton",
+            command=lambda: self._refresh_llm_models(llm_model_combo),
+        )
+        refresh_btn.pack(side=tk.LEFT, padx=(4, 0))
+        self._help_icon_grid(frame, "Model name for the selected provider. Click \u21BB to detect available models.", row=10, column=2, sticky="w")
+        self._refresh_llm_models(llm_model_combo)
+
+        ttk.Label(frame, text="LLM endpoint:").grid(row=11, column=0, sticky="w", pady=6)
+        llm_endpoint_entry = ttk.Entry(frame, textvariable=self.llm_endpoint_var, width=40)
+        llm_endpoint_entry.grid(row=11, column=1, sticky="w", pady=6)
+        self._help_icon_grid(frame, "API base URL for the LLM provider. For Ollama, default is http://localhost:11434. "
+            "For OpenAI-compatible servers, use the server base URL (no /v1).", row=11, column=2, sticky="w")
+
+        ttk.Label(frame, text="Test LLM:").grid(row=12, column=0, sticky="w", pady=6)
+        test_frame = ttk.Frame(frame)
+        test_frame.grid(row=12, column=1, sticky="w", pady=6)
+        ttk.Button(test_frame, text="Test Connection", style="Secondary.TButton",
+                   command=self._test_llm_connection).pack(side=tk.LEFT)
+        self.llm_test_status_label = tk.Label(
+            test_frame,
+            textvariable=self.llm_test_status_var,
+            fg=self.colors.get("muted", "#8b949e"),
+            bg=self.colors.get("bg", "#0d1117"),
+            font=("Segoe UI", 9, "bold"),
+            padx=8,
+        )
+        self.llm_test_status_label.pack(side=tk.LEFT)
+        self._help_icon_grid(frame, "Sends a small test request to verify the current LLM settings.", row=12, column=2, sticky="w")
+
+        def _set_llm_fields_state(*_):
+            state = "normal" if self.llm_provider_var.get() != "disabled" else "disabled"
+            llm_model_combo.configure(state=state)
+            llm_endpoint_entry.configure(state=state)
+            refresh_btn.configure(state=state)
+            if state == "disabled":
+                self._set_llm_test_status("Disabled", self.colors.get("muted", "#8b949e"))
+            else:
+                if not self.llm_test_status_var.get():
+                    self._set_llm_test_status("Not tested", self.colors.get("muted", "#8b949e"))
+                self._refresh_llm_models(llm_model_combo)
+
+        llm_provider_combo.bind("<<ComboboxSelected>>", _set_llm_fields_state)
+        _set_llm_fields_state()
+
         # Backup directory row with improved spacing
 
-        ttk.Label(frame, text="Backup directory:").grid(row=9, column=0, sticky="w", pady=6)
+        ttk.Label(frame, text="Backup directory:").grid(row=13, column=0, sticky="w", pady=6)
         backup_entry = ttk.Entry(frame, textvariable=self.backup_dir_var, width=60)
-        backup_entry.grid(row=9, column=1, sticky="ew", pady=6)
+        backup_entry.grid(row=13, column=1, sticky="ew", pady=6)
         frame.grid_columnconfigure(1, weight=1)
         button_frame = ttk.Frame(frame)
-        button_frame.grid(row=9, column=2, columnspan=4, sticky="e", pady=6)
+        button_frame.grid(row=13, column=2, columnspan=4, sticky="e", pady=6)
         ttk.Button(button_frame, text="\u2715", width=2, style="Secondary.TButton",
                    command=lambda: self.backup_dir_var.set("")).pack(side=tk.LEFT, padx=2)
         ttk.Button(button_frame, text="Browse", style="Secondary.TButton",
@@ -2680,7 +2792,7 @@ class PCAPSentryApp:
         ttk.Button(button_frame, text="Cancel", style="Secondary.TButton",
                    command=window.destroy).pack(side=tk.LEFT, padx=2)
         ttk.Button(frame, text="Reset to Defaults", style="Danger.TButton",
-                   command=self._reset_preferences).grid(row=10, column=0, columnspan=6, sticky="e", pady=(12, 0))
+               command=self._reset_preferences).grid(row=14, column=0, columnspan=6, sticky="e", pady=(12, 0))
 
         window.grab_set()
 
@@ -2700,11 +2812,16 @@ class PCAPSentryApp:
             "turbo_parse": bool(self.turbo_parse_var.get()),
             "offline_mode": bool(self.offline_mode_var.get()),
             "backup_dir": self.backup_dir_var.get().strip(),
+            "llm_provider": self.llm_provider_var.get().strip().lower() or "disabled",
+            "llm_model": self.llm_model_var.get().strip() or "llama3",
+            "llm_endpoint": self.llm_endpoint_var.get().strip() or "http://localhost:11434",
             "theme": self.theme_var.get().strip().lower() or "system",
             "app_data_notice_shown": bool(self.settings.get("app_data_notice_shown")),
         }
         self.settings = settings
         save_settings(settings)
+        if hasattr(self, "_sync_chat_controls"):
+            self._sync_chat_controls()
 
     def _reset_preferences(self):
         confirm = messagebox.askyesno(
@@ -2723,6 +2840,9 @@ class PCAPSentryApp:
         self.turbo_parse_var.set(defaults.get("turbo_parse", True))
         self.offline_mode_var.set(defaults.get("offline_mode", False))
         self.backup_dir_var.set(defaults["backup_dir"])
+        self.llm_provider_var.set(defaults.get("llm_provider", "disabled"))
+        self.llm_model_var.set(defaults.get("llm_model", "llama3"))
+        self.llm_endpoint_var.set(defaults.get("llm_endpoint", "http://localhost:11434"))
         self.theme_var.set(defaults["theme"])
         self._save_settings_from_vars()
 
@@ -3011,6 +3131,262 @@ class PCAPSentryApp:
             self.target_path_var.set("")
         if self.ioc_path_var is not None:
             self.ioc_path_var.set("")
+
+    def _build_chat_tab(self):
+        container = ttk.Frame(self.chat_tab, padding=14)
+        container.pack(fill=tk.BOTH, expand=True)
+
+        header = ttk.Frame(container)
+        header.pack(fill=tk.X, pady=(0, 8))
+        ttk.Label(header, text="Chat Assistant", style="Heading.TLabel").pack(side=tk.LEFT)
+        self._help_icon(header, "Ask questions about the current analysis or general usage. "
+            "Chat uses the configured LLM provider.")
+
+        disabled_label = ttk.Label(container, textvariable=self.chat_disabled_var, style="Hint.TLabel")
+        disabled_label.pack(anchor=tk.W, pady=(0, 6))
+
+        self.chat_text = tk.Text(container, height=18, wrap=tk.WORD)
+        self._style_text(self.chat_text)
+        self.chat_text.configure(state=tk.DISABLED)
+        self.chat_text.tag_configure("user", foreground=self.colors.get("accent", "#58a6ff"))
+        self.chat_text.tag_configure("assistant", foreground=self.colors.get("text", "#e6edf3"))
+        self.chat_text.tag_configure("system", foreground=self.colors.get("muted", "#8b949e"))
+        self.chat_text.pack(fill=tk.BOTH, expand=True)
+
+        input_frame = ttk.Frame(container)
+        input_frame.pack(fill=tk.X, pady=(8, 0))
+        self.chat_entry = ttk.Entry(input_frame, textvariable=self.chat_entry_var, width=80)
+        self.chat_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.chat_send_button = ttk.Button(input_frame, text="Send", command=self._send_chat_message)
+        self.chat_send_button.pack(side=tk.LEFT, padx=6)
+        self.chat_clear_button = ttk.Button(input_frame, text="Clear", style="Secondary.TButton",
+                                           command=self._clear_chat)
+        self.chat_clear_button.pack(side=tk.LEFT)
+
+        self.chat_entry.bind("<Return>", lambda _e: self._send_chat_message())
+        self._sync_chat_controls()
+
+    def _sync_chat_controls(self):
+        enabled = self._llm_is_enabled()
+        if not enabled:
+            self.chat_disabled_var.set("Chat is disabled. Enable an LLM provider in Preferences.")
+        else:
+            self.chat_disabled_var.set("")
+
+        state = "normal" if enabled else "disabled"
+        if self.chat_entry is not None:
+            self.chat_entry.configure(state=state)
+        if self.chat_send_button is not None:
+            self.chat_send_button.configure(state=state)
+        if self.chat_clear_button is not None:
+            self.chat_clear_button.configure(state=state)
+
+    def _append_chat_message(self, role, text):
+        if self.chat_text is None:
+            return
+        self.chat_text.configure(state=tk.NORMAL)
+        prefix = "User: " if role == "user" else "Assistant: "
+        tag = "user" if role == "user" else "assistant"
+        if role == "system":
+            prefix = "System: "
+            tag = "system"
+        self.chat_text.insert(tk.END, f"{prefix}{text}\n", tag)
+        self.chat_text.see(tk.END)
+        self.chat_text.configure(state=tk.DISABLED)
+
+    def _clear_chat(self):
+        self.chat_history = []
+        if self.chat_text is None:
+            return
+        self.chat_text.configure(state=tk.NORMAL)
+        self.chat_text.delete("1.0", tk.END)
+        self.chat_text.configure(state=tk.DISABLED)
+
+    def _build_chat_context(self):
+        if self.current_stats is None:
+            return {"status": "no_analysis"}
+        return {
+            "status": "analysis_loaded",
+            "verdict": self.current_verdict,
+            "risk_score": self.current_risk_score,
+            "packet_count": self.current_stats.get("packet_count"),
+            "avg_size": self.current_stats.get("avg_size"),
+            "median_size": self.current_stats.get("median_size"),
+            "protocol_counts": self.current_stats.get("protocol_counts", {}),
+            "top_ports": self.current_stats.get("top_ports", []),
+            "dns_query_count": self.current_stats.get("dns_query_count"),
+            "http_request_count": self.current_stats.get("http_request_count"),
+            "tls_packet_count": self.current_stats.get("tls_packet_count"),
+            "top_dns": self.current_stats.get("top_dns", []),
+            "top_tls_sni": self.current_stats.get("top_tls_sni", []),
+        }
+
+    def _request_llm_chat(self, user_message):
+        provider = self.llm_provider_var.get().strip().lower()
+        if provider == "ollama":
+            return self._request_ollama_chat(user_message)
+        if provider == "openai_compat":
+            return self._request_openai_compat_chat(
+                [
+                    {"role": "system", "content": "You are a PCAP Sentry assistant. Answer clearly and concisely."},
+                    {"role": "user", "content": self._build_openai_chat_prompt(user_message)},
+                ]
+            )
+        raise ValueError(f"Unsupported LLM provider: {provider}")
+
+    def _request_ollama_chat(self, user_message):
+        endpoint = self._normalize_ollama_endpoint(self.llm_endpoint_var.get() or "http://localhost:11434")
+        model = self.llm_model_var.get().strip() or "llama3"
+        url = endpoint.rstrip("/") + "/api/chat"
+        context = self._build_chat_context()
+
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a PCAP Sentry assistant. Answer clearly and concisely. "
+                    "If no analysis is loaded, say so and answer in general terms.\n\n"
+                    f"Context JSON:\n{json.dumps(context, indent=2)}"
+                ),
+            },
+        ]
+        for msg in self.chat_history[-6:]:
+            role = msg.get("role")
+            if role in ("user", "assistant"):
+                messages.append({"role": role, "content": msg.get("content", "")})
+        messages.append({"role": "user", "content": user_message})
+
+        payload = {
+            "model": model,
+            "messages": messages,
+            "stream": False,
+        }
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                raw = resp.read().decode("utf-8")
+        except urllib.error.HTTPError as exc:
+            body = ""
+            try:
+                body = exc.read().decode("utf-8", errors="replace")
+            except Exception:
+                pass
+            raise RuntimeError(f"LLM connection failed ({url}): HTTP {exc.code} {exc.reason}. {body}".strip())
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"LLM connection failed ({url}): {exc}")
+
+        response = json.loads(raw)
+        content = response.get("message", {}).get("content", "")
+        if not content:
+            raise ValueError("LLM response was empty.")
+        return content.strip()
+
+    def _build_openai_chat_prompt(self, user_message):
+        context = self._build_chat_context()
+        history_lines = []
+        for msg in self.chat_history[-6:]:
+            role = msg.get("role")
+            content = msg.get("content", "")
+            if role == "user":
+                history_lines.append(f"User: {content}")
+            elif role == "assistant":
+                history_lines.append(f"Assistant: {content}")
+
+        history_block = "\n".join(history_lines)
+        return (
+            "Context JSON:\n"
+            f"{json.dumps(context, indent=2)}\n\n"
+            f"Conversation:\n{history_block}\n"
+            f"User: {user_message}"
+        )
+
+    def _normalize_openai_endpoint(self, endpoint):
+        base = endpoint.strip().rstrip("/")
+        if base.endswith("/v1"):
+            base = base[:-3]
+        return base
+
+    def _normalize_ollama_endpoint(self, endpoint):
+        base = endpoint.strip().rstrip("/")
+        if base.endswith("/v1"):
+            base = base[:-3]
+        return base
+
+    def _request_openai_compat_chat(self, messages, temperature=0.3):
+        endpoint = self._normalize_openai_endpoint(self.llm_endpoint_var.get() or "http://localhost:1234")
+        model = self.llm_model_var.get().strip() or "local-model"
+        url = endpoint + "/v1/chat/completions"
+        payload = {
+            "model": model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": 400,
+        }
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                raw = resp.read().decode("utf-8")
+        except urllib.error.HTTPError as exc:
+            body = ""
+            try:
+                body = exc.read().decode("utf-8", errors="replace")
+            except Exception:
+                pass
+            raise RuntimeError(f"LLM connection failed ({url}): HTTP {exc.code} {exc.reason}. {body}".strip())
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"LLM connection failed ({url}): {exc}")
+
+        response = json.loads(raw)
+        choices = response.get("choices", [])
+        if not choices:
+            raise ValueError("LLM response contained no choices.")
+        message = choices[0].get("message", {})
+        content = message.get("content", "")
+        if not content:
+            raise ValueError("LLM response was empty.")
+        return content.strip()
+
+    def _send_chat_message(self):
+        if not self._llm_is_enabled():
+            messagebox.showwarning("Chat", "Chat is disabled. Enable an LLM provider in Preferences first.")
+            return
+        message = self.chat_entry_var.get().strip()
+        if not message:
+            return
+        self.chat_entry_var.set("")
+        self.chat_history.append({"role": "user", "content": message})
+        self._append_chat_message("user", message)
+        self.sample_note_var.set("Chat: thinking...")
+
+        if self.chat_entry is not None:
+            self.chat_entry.configure(state=tk.DISABLED)
+        if self.chat_send_button is not None:
+            self.chat_send_button.configure(state=tk.DISABLED)
+
+        def task():
+            return self._request_llm_chat(message)
+
+        def done(reply):
+            self.sample_note_var.set("")
+            self.chat_history.append({"role": "assistant", "content": reply})
+            self._append_chat_message("assistant", reply)
+            if self.chat_entry is not None:
+                self.chat_entry.configure(state=tk.NORMAL)
+            if self.chat_send_button is not None:
+                self.chat_send_button.configure(state=tk.NORMAL)
+
+        def failed(err):
+            self.sample_note_var.set("")
+            _write_error_log("Chat request failed", err)
+            self._append_chat_message("system", f"Chat error: {err}")
+            if self.chat_entry is not None:
+                self.chat_entry.configure(state=tk.NORMAL)
+            if self.chat_send_button is not None:
+                self.chat_send_button.configure(state=tk.NORMAL)
+
+        self._run_task(task, done, on_error=failed, message="Chatting...")
 
     def _build_train_tab(self):
         container = ttk.Frame(self.train_tab, padding=14)
@@ -4635,6 +5011,19 @@ class PCAPSentryApp:
             bordercolor=self.colors["border"],
             padding=4,
         )
+        style.map(
+            "TCombobox",
+            fieldbackground=[("readonly", self.colors["panel"])],
+            foreground=[("readonly", self.colors["text"])],
+            selectbackground=[("readonly", self.colors["accent_subtle"])],
+            selectforeground=[("readonly", self.colors["text"])],
+        )
+
+        # Dropdown list styling for comboboxes
+        self.root.option_add("*TCombobox*Listbox.background", self.colors["panel"])
+        self.root.option_add("*TCombobox*Listbox.foreground", self.colors["text"])
+        self.root.option_add("*TCombobox*Listbox.selectBackground", self.colors["accent_subtle"])
+        self.root.option_add("*TCombobox*Listbox.selectForeground", self.colors["text"])
 
     def _resolve_theme(self):
         theme = "system"
@@ -5044,6 +5433,442 @@ class PCAPSentryApp:
             _write_error_log(f"Error clearing IoCs", e, sys.exc_info()[2])
             messagebox.showerror("Error", f"Failed to clear IoCs: {str(e)}")
 
+    def _llm_is_enabled(self):
+        provider = self.llm_provider_var.get().strip().lower()
+        return provider not in ("", "disabled")
+
+    def _request_llm_label(self, stats, summary):
+        provider = self.llm_provider_var.get().strip().lower()
+        if provider == "ollama":
+            return self._request_ollama_label(stats, summary)
+        if provider == "openai_compat":
+            return self._request_openai_compat_label(stats, summary)
+        raise ValueError(f"Unsupported LLM provider: {provider}")
+
+    def _request_ollama_label(self, stats, summary):
+        endpoint = self._normalize_ollama_endpoint(self.llm_endpoint_var.get() or "http://localhost:11434")
+        model = self.llm_model_var.get().strip() or "llama3"
+        url = endpoint.rstrip("/") + "/api/generate"
+        summary_stats = {
+            "packet_count": stats.get("packet_count"),
+            "avg_size": stats.get("avg_size"),
+            "median_size": stats.get("median_size"),
+            "protocol_counts": stats.get("protocol_counts", {}),
+            "top_ports": stats.get("top_ports", []),
+            "unique_src": stats.get("unique_src"),
+            "unique_dst": stats.get("unique_dst"),
+            "dns_query_count": stats.get("dns_query_count"),
+            "http_request_count": stats.get("http_request_count"),
+            "tls_packet_count": stats.get("tls_packet_count"),
+            "top_dns": stats.get("top_dns", []),
+            "top_tls_sni": stats.get("top_tls_sni", []),
+        }
+        prompt = (
+            "You are a cybersecurity assistant. Decide whether the capture should be labeled "
+            "'safe' or 'malicious' for a training knowledge base. "
+            "Return ONLY JSON with keys: label (safe/malicious), confidence (0-1), rationale (1-2 sentences).\n\n"
+            f"Summary stats JSON:\n{json.dumps(summary_stats, indent=2)}\n\n"
+            f"Human summary:\n{summary}\n"
+        )
+        payload = {
+            "model": model,
+            "prompt": prompt,
+            "stream": False,
+            "format": "json",
+        }
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                raw = resp.read().decode("utf-8")
+        except urllib.error.HTTPError as exc:
+            body = ""
+            try:
+                body = exc.read().decode("utf-8", errors="replace")
+            except Exception:
+                pass
+            raise RuntimeError(f"LLM connection failed ({url}): HTTP {exc.code} {exc.reason}. {body}".strip())
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"LLM connection failed ({url}): {exc}")
+
+        response = json.loads(raw)
+        content = response.get("response", "")
+        if not content:
+            raise ValueError("LLM response was empty.")
+
+        try:
+            parsed = json.loads(content)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"LLM response was not valid JSON: {exc}")
+
+        if not isinstance(parsed, dict):
+            raise ValueError("LLM response was not a JSON object.")
+
+        label = str(parsed.get("label", "")).strip().lower()
+        if label not in ("safe", "malicious"):
+            raise ValueError("LLM label must be 'safe' or 'malicious'.")
+
+        confidence = parsed.get("confidence", None)
+        if confidence is not None:
+            try:
+                confidence = float(confidence)
+            except (TypeError, ValueError):
+                confidence = None
+
+        rationale = str(parsed.get("rationale", "")).strip()
+        return {"label": label, "confidence": confidence, "rationale": rationale}
+
+    def _request_openai_compat_label(self, stats, summary):
+        summary_stats = {
+            "packet_count": stats.get("packet_count"),
+            "avg_size": stats.get("avg_size"),
+            "median_size": stats.get("median_size"),
+            "protocol_counts": stats.get("protocol_counts", {}),
+            "top_ports": stats.get("top_ports", []),
+            "unique_src": stats.get("unique_src"),
+            "unique_dst": stats.get("unique_dst"),
+            "dns_query_count": stats.get("dns_query_count"),
+            "http_request_count": stats.get("http_request_count"),
+            "tls_packet_count": stats.get("tls_packet_count"),
+            "top_dns": stats.get("top_dns", []),
+            "top_tls_sni": stats.get("top_tls_sni", []),
+        }
+        messages = [
+            {
+                "role": "system",
+                "content": "You are a cybersecurity assistant. Return ONLY JSON with keys: label (safe/malicious), "
+                           "confidence (0-1), rationale (1-2 sentences).",
+            },
+            {
+                "role": "user",
+                "content": "Summary stats JSON:\n"
+                           f"{json.dumps(summary_stats, indent=2)}\n\n"
+                           f"Human summary:\n{summary}\n",
+            },
+        ]
+        content = self._request_openai_compat_chat(messages, temperature=0.2)
+        try:
+            parsed = json.loads(content)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"LLM response was not valid JSON: {exc}")
+
+        if not isinstance(parsed, dict):
+            raise ValueError("LLM response was not a JSON object.")
+
+        label = str(parsed.get("label", "")).strip().lower()
+        if label not in ("safe", "malicious"):
+            raise ValueError("LLM label must be 'safe' or 'malicious'.")
+
+        confidence = parsed.get("confidence", None)
+        if confidence is not None:
+            try:
+                confidence = float(confidence)
+            except (TypeError, ValueError):
+                confidence = None
+
+        rationale = str(parsed.get("rationale", "")).strip()
+        return {"label": label, "confidence": confidence, "rationale": rationale}
+
+    def _confirm_llm_label(self, intended_label, stats, summary, on_apply):
+        if not self._llm_is_enabled():
+            on_apply(intended_label)
+            return
+
+        self.sample_note_var.set("LLM: checking...")
+
+        def task():
+            return self._request_llm_label(stats, summary)
+
+        def done(suggestion):
+            self.sample_note_var.set("")
+            suggested_label = suggestion.get("label") if suggestion else None
+            if suggested_label not in ("safe", "malicious"):
+                messagebox.showwarning("LLM Suggestion", "LLM did not return a valid label. Using selected label.")
+                on_apply(intended_label)
+                return
+
+            confidence = suggestion.get("confidence")
+            conf_text = f"{confidence:.2f}" if isinstance(confidence, (int, float)) else "n/a"
+            rationale = suggestion.get("rationale", "").strip()
+            if suggested_label == intended_label:
+                detail = (
+                    f"LLM agrees with your label: {suggested_label}\n"
+                    f"Confidence: {conf_text}\n"
+                )
+                if rationale:
+                    detail += f"Rationale: {rationale}\n"
+                messagebox.showinfo("LLM Suggestion", detail)
+                on_apply(intended_label)
+                return
+
+            prompt = (
+                f"LLM suggests: {suggested_label}\n"
+                f"Confidence: {conf_text}\n"
+            )
+            if rationale:
+                prompt += f"Rationale: {rationale}\n"
+            prompt += f"\nUse suggested label instead of '{intended_label}'?"
+            choice = messagebox.askyesnocancel("LLM Suggestion", prompt)
+            if choice is None:
+                return
+            on_apply(suggested_label if choice else intended_label)
+
+        def failed(err):
+            self.sample_note_var.set("")
+            messagebox.showwarning("LLM Suggestion", f"LLM suggestion failed: {err}\n\nUsing selected label.")
+            on_apply(intended_label)
+
+        self._run_task(task, done, on_error=failed, message="Contacting LLM...")
+
+    def _set_llm_test_status(self, text, color):
+        self.llm_test_status_var.set(text)
+        if self.llm_test_status_label is not None:
+            self.llm_test_status_label.configure(fg=color, bg=self.colors.get("bg", "#0d1117"))
+        self._update_llm_header_indicator()
+
+    def _update_llm_header_indicator(self):
+        if self.llm_header_label is None:
+            return
+        provider = self.llm_provider_var.get().strip().lower()
+        status = self.llm_test_status_var.get().strip()
+        bg = self.colors.get("panel", "#161b22")
+        if provider in ("", "disabled"):
+            text = "LLM: off"
+            fg = self.colors.get("muted", "#8b949e")
+            border = self.colors.get("border", "#21262d")
+        elif status == "OK":
+            text = "\u2714 LLM"
+            fg = self.colors.get("success", "#3fb950")
+            border = self.colors.get("success", "#3fb950")
+        elif status == "FAIL":
+            text = "\u2718 LLM"
+            fg = self.colors.get("danger", "#f85149")
+            border = self.colors.get("danger", "#f85149")
+        elif status == "Auto":
+            text = "\u2714 LLM"
+            fg = self.colors.get("accent", "#58a6ff")
+            border = self.colors.get("accent", "#58a6ff")
+        elif "Testing" in status or "testing" in status:
+            text = "\u25CF LLM"
+            fg = self.colors.get("warning", "#d29922")
+            border = self.colors.get("warning", "#d29922")
+        else:
+            text = "\u25CB LLM"
+            fg = self.colors.get("muted", "#8b949e")
+            border = self.colors.get("border", "#21262d")
+        self.llm_header_label.configure(text=text, fg=fg, bg=bg)
+        self.llm_header_indicator.configure(bg=bg, highlightbackground=border)
+
+    def _probe_ollama(self, endpoint):
+        base = self._normalize_ollama_endpoint(endpoint)
+        url = base.rstrip("/") + "/api/tags"
+        req = urllib.request.Request(url, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=1.5) as resp:
+            raw = resp.read().decode("utf-8")
+        payload = json.loads(raw)
+        models = payload.get("models", []) if isinstance(payload, dict) else []
+        if not models:
+            return None
+        model_name = models[0].get("name") if isinstance(models[0], dict) else None
+        return model_name
+
+    def _list_ollama_models(self, endpoint):
+        base = self._normalize_ollama_endpoint(endpoint)
+        url = base.rstrip("/") + "/api/tags"
+        req = urllib.request.Request(url, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            raw = resp.read().decode("utf-8")
+        payload = json.loads(raw)
+        models = payload.get("models", []) if isinstance(payload, dict) else []
+        return [m.get("name") for m in models if isinstance(m, dict) and m.get("name")]
+
+    def _probe_openai_compat(self, endpoint):
+        url = endpoint.rstrip("/") + "/v1/models"
+        req = urllib.request.Request(url, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=1.5) as resp:
+            raw = resp.read().decode("utf-8")
+        payload = json.loads(raw)
+        models = payload.get("data", []) if isinstance(payload, dict) else []
+        if not models:
+            return None
+        model_id = models[0].get("id") if isinstance(models[0], dict) else None
+        return model_id
+
+    def _list_openai_compat_models(self, endpoint):
+        base = self._normalize_openai_endpoint(endpoint)
+        url = base.rstrip("/") + "/v1/models"
+        req = urllib.request.Request(url, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            raw = resp.read().decode("utf-8")
+        payload = json.loads(raw)
+        models = payload.get("data", []) if isinstance(payload, dict) else []
+        return [m.get("id") for m in models if isinstance(m, dict) and m.get("id")]
+
+    def _refresh_llm_models(self, combo=None):
+        provider = self.llm_provider_var.get().strip().lower()
+        endpoint = self.llm_endpoint_var.get().strip()
+        if provider == "disabled" or not endpoint:
+            if combo is not None:
+                combo["values"] = []
+            return
+
+        def worker():
+            try:
+                if provider == "ollama":
+                    return self._list_ollama_models(endpoint)
+                if provider == "openai_compat":
+                    return self._list_openai_compat_models(endpoint)
+            except Exception:
+                pass
+            return []
+
+        def apply(names):
+            if combo is not None:
+                combo["values"] = names
+                if names and not self.llm_model_var.get().strip():
+                    self.llm_model_var.set(names[0])
+
+        def run():
+            names = worker()
+            self.root.after(0, lambda: apply(names))
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def _auto_detect_llm(self):
+        if self.llm_provider_var.get().strip().lower() != "disabled":
+            return
+
+        ports = [1234, 8000, 8080, 5000, 5001]
+
+        def worker():
+            try:
+                ollama_base = "http://localhost:11434"
+                model_name = self._probe_ollama(ollama_base)
+                if model_name:
+                    return {"provider": "ollama", "endpoint": ollama_base, "model": model_name}
+            except Exception:
+                pass
+            for port in ports:
+                base = f"http://localhost:{port}"
+                try:
+                    model_id = self._probe_openai_compat(base)
+                except Exception:
+                    continue
+                if model_id:
+                    return {"provider": "openai_compat", "endpoint": base, "model": model_id}
+            return None
+
+        def apply_result(result):
+            if not result:
+                return
+            self.llm_provider_var.set(result["provider"])
+            self.llm_endpoint_var.set(result["endpoint"])
+            self.llm_model_var.set(result["model"])
+            self._set_llm_test_status("Auto", self.colors.get("accent", "#58a6ff"))
+            self._save_settings_from_vars()
+
+        def run():
+            result = worker()
+            if result:
+                self.root.after(0, lambda: apply_result(result))
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def _test_llm_connection(self):
+        if not self._llm_is_enabled():
+            messagebox.showwarning("LLM Test", "LLM provider is disabled. Enable it in Preferences first.")
+            self._set_llm_test_status("Disabled", self.colors.get("muted", "#8b949e"))
+            return
+
+        self.sample_note_var.set("LLM: testing...")
+        self._set_llm_test_status("Testing...", self.colors.get("muted", "#8b949e"))
+        test_stats = {
+            "packet_count": 0,
+            "avg_size": 0.0,
+            "median_size": 0.0,
+            "protocol_counts": {},
+            "top_ports": [],
+            "unique_src": 0,
+            "unique_dst": 0,
+            "dns_query_count": 0,
+            "http_request_count": 0,
+            "tls_packet_count": 0,
+            "top_dns": [],
+            "top_tls_sni": [],
+        }
+        test_summary = "No traffic sample. This is a connection test only."
+
+        def task():
+            provider = self.llm_provider_var.get().strip().lower()
+            if provider == "ollama":
+                try:
+                    self._probe_ollama(self.llm_endpoint_var.get() or "http://localhost:11434")
+                except Exception:
+                    try:
+                        subprocess.Popen(["ollama", "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        time.sleep(1.2)
+                    except Exception:
+                        pass
+            return self._request_llm_label(test_stats, test_summary)
+
+        def done(suggestion):
+            self.sample_note_var.set("")
+            self._set_llm_test_status("OK", self.colors.get("success", "#3fb950"))
+            label = suggestion.get("label") if suggestion else "unknown"
+            confidence = suggestion.get("confidence")
+            conf_text = f"{confidence:.2f}" if isinstance(confidence, (int, float)) else "n/a"
+            rationale = suggestion.get("rationale", "").strip()
+            detail = f"Label: {label}\nConfidence: {conf_text}"
+            if rationale:
+                detail += f"\nRationale: {rationale}"
+            messagebox.showinfo("LLM Test", f"LLM connection OK.\n\n{detail}")
+
+        def failed(err):
+            self.sample_note_var.set("")
+            self._set_llm_test_status("FAIL", self.colors.get("danger", "#f85149"))
+            _write_error_log("LLM test failed", err)
+
+            provider = self.llm_provider_var.get().strip().lower()
+            endpoint = self.llm_endpoint_var.get().strip() or "http://localhost:11434"
+            if provider == "ollama" and endpoint.rstrip("/").endswith("/v1"):
+                messagebox.showerror(
+                    "LLM Test",
+                    "LLM test failed. The Ollama endpoint should not include /v1.\n\n"
+                    "Use: http://localhost:11434",
+                )
+                return
+            if provider == "ollama" and "HTTP Error 404" in str(err):
+                try:
+                    model_id = self._probe_openai_compat(self._normalize_openai_endpoint(endpoint))
+                except Exception:
+                    model_id = None
+                if model_id:
+                    messagebox.showerror(
+                        "LLM Test",
+                        "LLM test failed with 404. The endpoint looks OpenAI-compatible.\n\n"
+                        "Try setting LLM provider to 'openai_compat'.",
+                    )
+                    return
+
+            messagebox.showerror("LLM Test", f"LLM test failed: {err}")
+
+        self._run_task(task, done, on_error=failed, message="Testing LLM...")
+
+    def _apply_label_to_kb(self, label, stats, features, summary, title, message):
+        add_to_knowledge_base(label, stats, features, summary)
+        kb = load_knowledge_base()
+        self._last_kb_label = label
+        self._last_kb_entry = kb[label][-1] if kb[label] else None
+        self._sync_undo_buttons()
+        if self.use_local_model_var.get():
+            model_bundle, err = _train_local_model(kb)
+            if model_bundle is None:
+                messagebox.showinfo("Local Model", err or "Local model training skipped.")
+            else:
+                _save_local_model(model_bundle)
+        self._refresh_kb()
+        messagebox.showinfo(title, message)
+
     def _train(self, label):
         path = self.safe_path_var.get() if label == "safe" else self.mal_path_var.get()
         if not path:
@@ -5067,24 +5892,21 @@ class PCAPSentryApp:
                     return
                 features = build_features(stats)
                 summary = summarize_stats(stats)
-                add_to_knowledge_base(label, stats, features, summary)
-                # Store for undo
-                kb = load_knowledge_base()
-                self._last_kb_label = label
-                self._last_kb_entry = kb[label][-1] if kb[label] else None
-                self._sync_undo_buttons()
-                if self.use_local_model_var.get():
-                    model_bundle, err = _train_local_model(kb)
-                    if model_bundle is None:
-                        messagebox.showinfo("Local Model", err or "Local model training skipped.")
+                def apply_label(final_label):
+                    self._apply_label_to_kb(
+                        final_label,
+                        stats,
+                        features,
+                        summary,
+                        "Training",
+                        f"Added {final_label} PCAP to knowledge base.",
+                    )
+                    if label == "safe":
+                        self.safe_path_var.set("")
                     else:
-                        _save_local_model(model_bundle)
-                messagebox.showinfo("Training", f"Added {label} PCAP to knowledge base.")
-                self._refresh_kb()
-                if label == "safe":
-                    self.safe_path_var.set("")
-                else:
-                    self.mal_path_var.set("")
+                        self.mal_path_var.set("")
+
+                self._confirm_llm_label(label, stats, summary, apply_label)
             except Exception as e:
                 _write_error_log(f"Error training with {label} PCAP", e, sys.exc_info()[2])
                 messagebox.showerror("Error", f"Failed to train with PCAP: {str(e)}")
@@ -5102,20 +5924,17 @@ class PCAPSentryApp:
             
             features = build_features(self.current_stats)
             summary = summarize_stats(self.current_stats)
-            add_to_knowledge_base(label, self.current_stats, features, summary)
-            # Store for undo
-            kb = load_knowledge_base()
-            self._last_kb_label = label
-            self._last_kb_entry = kb[label][-1] if kb[label] else None
-            self._sync_undo_buttons()
-            if self.use_local_model_var.get():
-                model_bundle, err = _train_local_model(kb)
-                if model_bundle is None:
-                    messagebox.showinfo("Local Model", err or "Local model training skipped.")
-                else:
-                    _save_local_model(model_bundle)
-            self._refresh_kb()
-            messagebox.showinfo("Knowledge Base", f"Current capture saved as {label}.")
+            def apply_label(final_label):
+                self._apply_label_to_kb(
+                    final_label,
+                    self.current_stats,
+                    features,
+                    summary,
+                    "Knowledge Base",
+                    f"Current capture saved as {final_label}.",
+                )
+
+            self._confirm_llm_label(label, self.current_stats, summary, apply_label)
         except Exception as e:
             _write_error_log(f"Error labeling current capture as {label}", e, sys.exc_info()[2])
             messagebox.showerror("Error", f"Failed to label capture: {str(e)}")
@@ -6499,6 +7318,8 @@ class PCAPSentryApp:
             edu_content = result["edu_content"]
             wireshark_filters = result["wireshark_filters"]
             classifier_result = result["classifier_result"]
+            self.current_verdict = result.get("verdict")
+            self.current_risk_score = result.get("risk_score")
 
             self.current_df = df
             self.current_stats = stats
