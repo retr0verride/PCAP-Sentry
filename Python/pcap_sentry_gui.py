@@ -2279,7 +2279,7 @@ class PCAPSentryApp:
         self.colors = {}
         self._apply_theme()
 
-        self.font_title = tkfont.Font(family="Segoe UI", size=22, weight="bold")
+        self.font_title = tkfont.Font(family="Segoe UI", size=24, weight="bold")
         self.font_subtitle = tkfont.Font(family="Segoe UI", size=10)
 
         self.max_rows_var = tk.IntVar(value=self.settings.get("max_rows", DEFAULT_MAX_ROWS))
@@ -2518,7 +2518,7 @@ class PCAPSentryApp:
 
     def _build_header(self):
         header = ttk.Frame(self.root)
-        header.pack(fill=tk.X, padx=16, pady=(16, 8))
+        header.pack(fill=tk.X, padx=20, pady=(18, 10))
 
         top_row = ttk.Frame(header)
         top_row.pack(fill=tk.X)
@@ -2537,7 +2537,7 @@ class PCAPSentryApp:
             try:
                 from PIL import Image, ImageTk
                 img = Image.open(icon_path)
-                img = img.resize((40, 40), Image.LANCZOS)
+                img = img.resize((48, 48), Image.LANCZOS)
                 self._header_icon_image = ImageTk.PhotoImage(img)
             except Exception:
                 pass
@@ -2545,7 +2545,7 @@ class PCAPSentryApp:
             ttk.Label(
                 title_row,
                 image=self._header_icon_image,
-            ).pack(side=tk.LEFT, padx=(0, 10))
+            ).pack(side=tk.LEFT, padx=(0, 12))
         ttk.Label(
             title_row,
             text="PCAP Sentry",
@@ -2628,14 +2628,14 @@ class PCAPSentryApp:
         self._update_llm_header_indicator()
 
         # Indent subtitle to align with text (past icon)
-        subtitle_padx = (52, 0) if self._header_icon_image else (0, 0)
+        subtitle_padx = (62, 0) if self._header_icon_image else (0, 0)
         ttk.Label(
             title_block,
             text=f"Malware Analysis Console  \u2022  v{APP_VERSION}",
             style="Hint.TLabel",
         ).pack(anchor=tk.W, padx=subtitle_padx)
 
-        toolbar = ttk.Frame(header, padding=(0, 12, 0, 0))
+        toolbar = ttk.Frame(header, padding=(0, 14, 0, 0))
         toolbar.pack(fill=tk.X)
 
         ttk.Label(toolbar, text="Max packets for visuals:").pack(side=tk.LEFT)
@@ -2660,11 +2660,11 @@ class PCAPSentryApp:
 
         # Accent separator
         accent = ttk.Separator(self.root, orient=tk.HORIZONTAL)
-        accent.pack(fill=tk.X, padx=16, pady=(0, 6))
+        accent.pack(fill=tk.X, padx=20, pady=(0, 4))
 
     def _build_tabs(self):
         notebook = ttk.Notebook(self.root)
-        notebook.pack(fill=tk.BOTH, expand=True, padx=12, pady=(4, 8))
+        notebook.pack(fill=tk.BOTH, expand=True, padx=16, pady=(4, 6))
 
         self.train_tab = ttk.Frame(notebook)
         self.analyze_tab = ttk.Frame(notebook)
@@ -2674,7 +2674,7 @@ class PCAPSentryApp:
         notebook.add(self.analyze_tab, text="  \U0001f50d  Analyze  ")
         notebook.add(self.train_tab, text="  \U0001f9e0  Train  ")
         notebook.add(self.kb_tab, text="  \U0001f4da  Knowledge Base  ")
-        notebook.add(self.chat_tab, text="  Chat  ")
+        notebook.add(self.chat_tab, text="  \U0001f4ac  Chat  ")
 
         self._build_train_tab()
         self._build_analyze_tab()
@@ -2687,11 +2687,11 @@ class PCAPSentryApp:
 
     def _build_status(self):
         # Separator above status
-        ttk.Separator(self.root, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=12)
-        status = ttk.Frame(self.root, padding=(12, 8))
+        ttk.Separator(self.root, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=16)
+        status = ttk.Frame(self.root, padding=(16, 10))
         status.pack(fill=tk.X)
-        self.progress = ttk.Progressbar(status, mode="indeterminate", length=180)
-        self.progress.pack(side=tk.LEFT, padx=(0, 8))
+        self.progress = ttk.Progressbar(status, mode="indeterminate", length=200)
+        self.progress.pack(side=tk.LEFT, padx=(0, 10))
         ttk.Label(status, textvariable=self.progress_percent_var, style="Hint.TLabel").pack(side=tk.LEFT)
         # Cancel button (hidden by default)
         self.cancel_button = ttk.Button(
@@ -4923,46 +4923,63 @@ class PCAPSentryApp:
         except tk.TclError:
             pass
 
-        style.configure("TFrame", background=self.colors["bg"])
-        style.configure("TLabel", background=self.colors["bg"], foreground=self.colors["text"],
+        bg = self.colors["bg"]
+        panel = self.colors["panel"]
+        panel_alt = self.colors["panel_alt"]
+        text = self.colors["text"]
+        muted = self.colors["muted"]
+        accent = self.colors["accent"]
+        accent_alt = self.colors["accent_alt"]
+        accent_hover = self.colors["accent_hover"]
+        accent_subtle = self.colors["accent_subtle"]
+        border = self.colors["border"]
+        border_light = self.colors["border_light"]
+        tab_selected_fg = self.colors["tab_selected_fg"]
+
+        style.configure("TFrame", background=bg)
+        style.configure("TLabel", background=bg, foreground=text,
                         font=("Segoe UI", 10))
-        style.configure("Hint.TLabel", background=self.colors["bg"], foreground=self.colors["muted"],
+        style.configure("Hint.TLabel", background=bg, foreground=muted,
                         font=("Segoe UI", 9))
-        style.configure("Heading.TLabel", background=self.colors["bg"], foreground=self.colors["text"],
-                        font=("Segoe UI", 11, "bold"))
+        style.configure("Heading.TLabel", background=bg, foreground=text,
+                        font=("Segoe UI", 12, "bold"))
+
+        # ── Buttons ──────────────────────────────────────────────
+        _btn_font = ("Segoe UI", 10)
 
         # Primary action button
         style.configure(
             "TButton",
-            background=self.colors["accent"],
+            background=accent,
             foreground="#ffffff",
-            bordercolor=self.colors["accent_alt"],
+            bordercolor=accent_alt,
             focusthickness=0,
-            focuscolor=self.colors["accent"],
-            padding=(14, 7),
-            font=("Segoe UI", 10),
+            focuscolor=accent,
+            padding=(16, 8),
+            font=_btn_font,
         )
         style.map(
             "TButton",
-            background=[("active", self.colors["accent_hover"]), ("disabled", self.colors["border"])],
-            foreground=[("disabled", self.colors["muted"])],
-            bordercolor=[("active", self.colors["accent_hover"])],
+            background=[("active", accent_hover), ("disabled", border)],
+            foreground=[("disabled", muted)],
+            bordercolor=[("active", accent_hover)],
         )
 
         # Subtle / secondary button
         style.configure(
             "Secondary.TButton",
-            background=self.colors["panel"],
-            foreground=self.colors["text"],
-            bordercolor=self.colors["border"],
+            background=panel_alt,
+            foreground=text,
+            bordercolor=border_light,
             focusthickness=0,
-            padding=(12, 6),
-            font=("Segoe UI", 10),
+            padding=(14, 7),
+            font=_btn_font,
         )
         style.map(
             "Secondary.TButton",
-            background=[("active", self.colors["accent_subtle"]), ("disabled", self.colors["border"])],
-            foreground=[("disabled", self.colors["muted"])],
+            background=[("active", accent_subtle), ("disabled", border)],
+            foreground=[("active", accent), ("disabled", muted)],
+            bordercolor=[("active", accent)],
         )
 
         # Danger button
@@ -4972,29 +4989,30 @@ class PCAPSentryApp:
             foreground="#ffffff",
             bordercolor=self.colors["danger"],
             focusthickness=0,
-            padding=(12, 6),
-            font=("Segoe UI", 10),
+            padding=(14, 7),
+            font=_btn_font,
         )
         style.map(
             "Danger.TButton",
-            background=[("active", self.colors["danger_hover"]), ("disabled", self.colors["border"])],
-            foreground=[("disabled", self.colors["muted"])],
+            background=[("active", self.colors["danger_hover"]), ("disabled", border)],
+            foreground=[("disabled", muted)],
         )
 
         # Muted danger button (less prominent destructive actions)
         style.configure(
             "DangerMuted.TButton",
-            background=self.colors["panel_alt"],
+            background=panel_alt,
             foreground=self.colors["danger"],
-            bordercolor=self.colors["border"],
+            bordercolor=border_light,
             focusthickness=0,
-            padding=(12, 6),
-            font=("Segoe UI", 10),
+            padding=(14, 7),
+            font=_btn_font,
         )
         style.map(
             "DangerMuted.TButton",
-            background=[("active", self.colors["danger"]), ("disabled", self.colors["border"])],
-            foreground=[("active", "#ffffff"), ("disabled", self.colors["muted"])],
+            background=[("active", self.colors["danger"]), ("disabled", border)],
+            foreground=[("active", "#ffffff"), ("disabled", muted)],
+            bordercolor=[("active", self.colors["danger"])],
         )
 
         # Success button (e.g. Mark as Safe)
@@ -5004,13 +5022,13 @@ class PCAPSentryApp:
             foreground="#ffffff",
             bordercolor=self.colors["success"],
             focusthickness=0,
-            padding=(12, 6),
-            font=("Segoe UI", 10),
+            padding=(14, 7),
+            font=_btn_font,
         )
         style.map(
             "Success.TButton",
-            background=[("active", self.colors["success_hover"]), ("disabled", self.colors["border"])],
-            foreground=[("disabled", self.colors["muted"])],
+            background=[("active", self.colors["success_hover"]), ("disabled", border)],
+            foreground=[("disabled", muted)],
         )
 
         # Warning button (e.g. Mark as Malicious)
@@ -5020,150 +5038,181 @@ class PCAPSentryApp:
             foreground="#ffffff",
             bordercolor=self.colors["warning"],
             focusthickness=0,
-            padding=(12, 6),
-            font=("Segoe UI", 10),
+            padding=(14, 7),
+            font=_btn_font,
         )
         style.map(
             "Warning.TButton",
-            background=[("active", self.colors["warning_hover"]), ("disabled", self.colors["border"])],
-            foreground=[("disabled", self.colors["muted"])],
+            background=[("active", self.colors["warning_hover"]), ("disabled", border)],
+            foreground=[("disabled", muted)],
         )
 
-        style.configure("TCheckbutton", background=self.colors["bg"], foreground=self.colors["text"],
+        # ── Checkbuttons ─────────────────────────────────────────
+        style.configure("TCheckbutton", background=bg, foreground=text,
                         font=("Segoe UI", 10))
-        style.map("TCheckbutton", foreground=[("disabled", self.colors["muted"])])
-        style.configure("Quiet.TCheckbutton", background=self.colors["bg"], foreground=self.colors["text"],
+        style.map("TCheckbutton", foreground=[("disabled", muted)])
+        style.configure("Quiet.TCheckbutton", background=bg, foreground=text,
                         font=("Segoe UI", 10))
         style.map(
             "Quiet.TCheckbutton",
-            background=[("active", self.colors["bg"]), ("focus", self.colors["bg"])],
-            foreground=[("active", self.colors["text"]), ("disabled", self.colors["muted"])],
+            background=[("active", bg), ("focus", bg)],
+            foreground=[("active", text), ("disabled", muted)],
         )
 
-        style.configure("TLabelframe", background=self.colors["bg"], foreground=self.colors["text"],
-                        bordercolor=self.colors["border_light"])
-        style.configure("TLabelframe.Label", background=self.colors["bg"], foreground=self.colors["accent"],
+        # ── LabelFrame ───────────────────────────────────────────
+        style.configure("TLabelframe", background=bg, foreground=text,
+                        bordercolor=border_light, relief="groove",
+                        borderwidth=1)
+        style.configure("TLabelframe.Label", background=bg, foreground=accent,
                         font=("Segoe UI", 10, "bold"))
 
-        style.configure("TNotebook", background=self.colors["bg"], bordercolor=self.colors["border"],
-                        tabmargins=[4, 4, 4, 0])
-        style.configure("TNotebook.Tab", background=self.colors["panel"], foreground=self.colors["muted"],
-                        padding=(16, 8), font=("Segoe UI", 10))
+        # ── Notebook / Tabs ──────────────────────────────────────
+        style.configure("TNotebook", background=bg, bordercolor=border,
+                        tabmargins=[2, 6, 2, 0])
+        style.configure("TNotebook.Tab", background=panel_alt, foreground=muted,
+                        padding=(18, 9), font=("Segoe UI", 10, "bold"))
         style.map(
             "TNotebook.Tab",
-            background=[("selected", self.colors["accent"]), ("active", self.colors["accent_subtle"])],
-            foreground=[("selected", self.colors["tab_selected_fg"]), ("active", self.colors["text"])],
+            background=[("selected", accent), ("active", accent_subtle)],
+            foreground=[("selected", tab_selected_fg), ("active", text)],
             expand=[("selected", [0, 0, 0, 2])],
         )
 
+        # ── Entry / Spinbox / Combobox ───────────────────────────
+        _field_padding = 6
         style.configure(
             "TEntry",
-            fieldbackground=self.colors["panel"],
-            foreground=self.colors["text"],
-            bordercolor=self.colors["border"],
-            insertcolor=self.colors["text"],
-            padding=4,
+            fieldbackground=panel,
+            foreground=text,
+            bordercolor=border_light,
+            insertcolor=text,
+            padding=_field_padding,
         )
         style.map("TEntry",
-            bordercolor=[("focus", self.colors["accent"])],
+            bordercolor=[("focus", accent)],
         )
         style.configure(
             "TSpinbox",
-            fieldbackground=self.colors["panel"],
-            foreground=self.colors["text"],
-            bordercolor=self.colors["border"],
-            insertcolor=self.colors["text"],
-            padding=4,
+            fieldbackground=panel,
+            foreground=text,
+            bordercolor=border_light,
+            insertcolor=text,
+            padding=_field_padding,
+            arrowsize=14,
+        )
+        style.map("TSpinbox",
+            bordercolor=[("focus", accent)],
         )
 
-        # -- Treeview --
+        style.configure("TCombobox",
+            fieldbackground=panel,
+            foreground=text,
+            bordercolor=border_light,
+            padding=_field_padding,
+            arrowsize=14,
+        )
+        style.map(
+            "TCombobox",
+            fieldbackground=[("readonly", panel)],
+            foreground=[("readonly", text)],
+            selectbackground=[("readonly", accent_subtle)],
+            selectforeground=[("readonly", text)],
+            bordercolor=[("focus", accent), ("readonly", border_light)],
+        )
+
+        self.root.option_add("*TCombobox*Listbox.background", panel)
+        self.root.option_add("*TCombobox*Listbox.foreground", text)
+        self.root.option_add("*TCombobox*Listbox.selectBackground", accent_subtle)
+        self.root.option_add("*TCombobox*Listbox.selectForeground", text)
+        self.root.option_add("*TCombobox*Listbox.font", ("Segoe UI", 10))
+
+        # ── Treeview ─────────────────────────────────────────────
         style.configure(
             "Treeview",
-            background=self.colors["panel"],
-            fieldbackground=self.colors["panel"],
-            foreground=self.colors["text"],
-            bordercolor=self.colors["border"],
-            rowheight=28,
+            background=panel,
+            fieldbackground=panel,
+            foreground=text,
+            bordercolor=border,
+            rowheight=30,
             font=("Segoe UI", 10),
         )
         style.configure(
             "Treeview.Heading",
-            background=self.colors["accent_subtle"],
-            foreground=self.colors["text"],
+            background=panel_alt,
+            foreground=text,
             font=("Segoe UI", 10, "bold"),
-            padding=6,
-            bordercolor=self.colors["border"],
+            padding=8,
+            bordercolor=border_light,
             relief="flat",
         )
         style.map(
             "Treeview",
-            background=[("selected", self.colors["accent_subtle"])],
-            foreground=[("selected", self.colors["accent"])],
+            background=[("selected", accent_subtle)],
+            foreground=[("selected", accent)],
         )
         style.map(
             "Treeview.Heading",
-            background=[("active", self.colors["accent_subtle"])],
+            background=[("active", accent_subtle)],
+            foreground=[("active", accent)],
         )
 
         style.configure(
             "Packet.Treeview",
-            background=self.colors["panel"],
-            fieldbackground=self.colors["panel"],
-            foreground=self.colors["text"],
-            bordercolor=self.colors["border"],
+            background=panel,
+            fieldbackground=panel,
+            foreground=text,
+            bordercolor=border,
             rowheight=26,
             font=("Consolas", 10),
         )
         style.configure(
             "Packet.Treeview.Heading",
-            background=self.colors["accent_subtle"],
-            foreground=self.colors["text"],
-            bordercolor=self.colors["border"],
+            background=panel_alt,
+            foreground=text,
+            bordercolor=border_light,
             relief="flat",
             font=("Segoe UI", 9, "bold"),
-            padding=5,
+            padding=6,
         )
         style.map(
             "Packet.Treeview",
-            background=[("selected", self.colors["accent_subtle"])],
-            foreground=[("selected", self.colors["accent"])],
+            background=[("selected", accent_subtle)],
+            foreground=[("selected", accent)],
         )
         style.map(
             "Packet.Treeview.Heading",
-            background=[("active", self.colors["accent_subtle"]), ("pressed", self.colors["accent_subtle"])],
-            bordercolor=[("active", self.colors["accent"]), ("pressed", self.colors["accent"])],
+            background=[("active", accent_subtle), ("pressed", accent_subtle)],
+            foreground=[("active", accent), ("pressed", accent)],
+            bordercolor=[("active", accent), ("pressed", accent)],
             relief=[("active", "flat"), ("pressed", "flat")],
         )
 
+        # ── Scrollbar ────────────────────────────────────────────
         style.configure(
-            "TProgressbar",
-            background=self.colors["accent"],
-            troughcolor=self.colors["panel"],
-            bordercolor=self.colors["border"],
-            thickness=6,
-        )
-
-        style.configure("TSeparator", background=self.colors["border"])
-
-        style.configure("TCombobox",
-            fieldbackground=self.colors["panel"],
-            foreground=self.colors["text"],
-            bordercolor=self.colors["border"],
-            padding=4,
+            "TScrollbar",
+            background=panel_alt,
+            troughcolor=bg,
+            bordercolor=bg,
+            arrowcolor=muted,
+            gripcount=0,
+            width=10,
         )
         style.map(
-            "TCombobox",
-            fieldbackground=[("readonly", self.colors["panel"])],
-            foreground=[("readonly", self.colors["text"])],
-            selectbackground=[("readonly", self.colors["accent_subtle"])],
-            selectforeground=[("readonly", self.colors["text"])],
+            "TScrollbar",
+            background=[("active", border_light), ("disabled", bg)],
+            arrowcolor=[("active", text), ("disabled", border)],
         )
 
-        # Dropdown list styling for comboboxes
-        self.root.option_add("*TCombobox*Listbox.background", self.colors["panel"])
-        self.root.option_add("*TCombobox*Listbox.foreground", self.colors["text"])
-        self.root.option_add("*TCombobox*Listbox.selectBackground", self.colors["accent_subtle"])
-        self.root.option_add("*TCombobox*Listbox.selectForeground", self.colors["text"])
+        # ── Progressbar ──────────────────────────────────────────
+        style.configure(
+            "TProgressbar",
+            background=accent,
+            troughcolor=panel_alt,
+            bordercolor=border_light,
+            thickness=8,
+        )
+
+        style.configure("TSeparator", background=border)
 
     def _resolve_theme(self):
         theme = "system"
@@ -5218,48 +5267,23 @@ class PCAPSentryApp:
         theme = self._resolve_theme()
 
         if theme == "dark":
-            # Subtle dark gradient
-            steps = 24
+            # Smooth dark gradient
+            steps = 32
             for i in range(steps):
                 ratio = i / max(steps - 1, 1)
-                r = int(13 + (16 - 13) * ratio)
-                g = int(17 + (22 - 17) * ratio)
-                b = int(23 + (30 - 23) * ratio)
+                r = int(13 + (18 - 13) * ratio)
+                g = int(17 + (23 - 17) * ratio)
+                b = int(23 + (33 - 23) * ratio)
                 color = f"#{r:02x}{g:02x}{b:02x}"
                 y0 = int(h * i / steps)
                 y1 = int(h * (i + 1) / steps)
                 self.bg_canvas.create_rectangle(0, y0, w, y1, fill=color, outline=color)
 
-            # Subtle grid pattern (very faint)
-            grid_color = "#161d28"
-            for x in range(0, w, 80):
-                self.bg_canvas.create_line(x, 0, x, h, fill=grid_color, width=1)
-            for y in range(0, h, 80):
-                self.bg_canvas.create_line(0, y, w, y, fill=grid_color, width=1)
-
-            # Subtle accent glow in bottom-right corner
-            glow_x = int(w * 0.85)
-            glow_y = int(h * 0.75)
-            self.bg_canvas.create_oval(
-                glow_x - 180, glow_y - 120, glow_x + 180, glow_y + 120,
-                fill="", outline="#1a2744", width=2
-            )
-            self.bg_canvas.create_oval(
-                glow_x - 120, glow_y - 80, glow_x + 120, glow_y + 80,
-                fill="", outline="#18253f", width=1
-            )
-
-            # Hex dump motif (very subtle)
-            hex_color = self.colors.get("bg_hex", "#142133")
-            hex_rows = min(4, max(2, h // 180))
-            hex_cols = min(4, max(2, w // 280))
-            hex_text = "4f 52 4f 4c 2d 50 43 41 50"
-            for row in range(hex_rows):
-                for col in range(hex_cols):
-                    x = 60 + col * 240
-                    y = int(h * 0.78) + row * 24
-                    self.bg_canvas.create_text(x, y, anchor="w", text=hex_text,
-                                               fill=hex_color, font=("Consolas", 8))
+            # Subtle dot grid (cleaner than lines)
+            dot_color = "#161d28"
+            for x in range(40, w, 60):
+                for y in range(40, h, 60):
+                    self.bg_canvas.create_oval(x, y, x + 1, y + 1, fill=dot_color, outline=dot_color)
         else:
             # Light theme: clean minimal gradient
             steps = 16
@@ -5339,14 +5363,16 @@ class PCAPSentryApp:
             insertbackground=self.colors["text"],
             selectbackground=self.colors["accent_subtle"],
             selectforeground=self.colors["text"],
-            borderwidth=1,
+            borderwidth=0,
             relief="flat",
             highlightthickness=1,
-            highlightbackground=self.colors["border"],
+            highlightbackground=self.colors["border_light"],
             highlightcolor=self.colors["accent"],
             font=("Consolas", 10),
-            padx=8,
-            pady=6,
+            padx=10,
+            pady=8,
+            spacing1=2,
+            spacing3=2,
         )
 
     def _show_overlay(self, message):
