@@ -2,8 +2,8 @@
 # File generated for PyInstaller version resource
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(2026, 2, 13, 11),
-    prodvers=(2026, 2, 13, 11),
+    filevers=(2026, 2, 13, 12),
+    prodvers=(2026, 2, 13, 12),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -19,11 +19,11 @@ VSVersionInfo(
           [
             StringStruct('CompanyName', 'PCAP Sentry'),
             StringStruct('FileDescription', 'PCAP Sentry (GPU) - Malware Analysis Console'),
-            StringStruct('FileVersion', '2026.02.13-11'),
+            StringStruct('FileVersion', '2026.02.13-12'),
             StringStruct('InternalName', 'PCAP_Sentry_GPU'),
             StringStruct('OriginalFilename', 'PCAP_Sentry_GPU.exe'),
             StringStruct('ProductName', 'PCAP Sentry (GPU)'),
-            StringStruct('ProductVersion', '2026.02.13-11')
+            StringStruct('ProductVersion', '2026.02.13-12')
           ]
         )
       ]

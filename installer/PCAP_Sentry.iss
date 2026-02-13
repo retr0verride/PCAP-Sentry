@@ -3,14 +3,14 @@
 #define IncludeVCRedist
 #endif
 
-#define AppVer "2026.02.13-11"
+#define AppVer "2026.02.13-12"
 
 [Setup]
 AppId={{91EFC8EF-E9F8-42FC-9D82-479C14FBE67D}
 AppName=PCAP Sentry (GPU)
 AppVersion={#AppVer}
 AppVerName=PCAP Sentry (GPU) {#AppVer}
-VersionInfoVersion=2026.2.13.11
+VersionInfoVersion=2026.2.13.12
 AppPublisher=industrial-dave
 AppSupportURL=https://github.com/industrial-dave/PCAP-Sentry
 DefaultDirName={autopf}\PCAP Sentry (GPU)
