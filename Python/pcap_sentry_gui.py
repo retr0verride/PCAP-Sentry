@@ -403,6 +403,7 @@ def _default_settings():
         "llm_provider": "disabled",
         "llm_model": "llama3",
         "llm_endpoint": "http://localhost:11434",
+        "llm_auto_detect": True,
         "stop_ollama_on_exit": True,
         "theme": "system",
         "offline_mode": False,
@@ -2982,6 +2983,7 @@ class PCAPSentryApp:
             "llm_provider": self.llm_provider_var.get().strip().lower() or "disabled",
             "llm_model": self.llm_model_var.get().strip() or "llama3",
             "llm_endpoint": self.llm_endpoint_var.get().strip() or "http://localhost:11434",
+            "llm_auto_detect": False,
             "stop_ollama_on_exit": bool(self.stop_ollama_on_exit_var.get()),
             "theme": self.theme_var.get().strip().lower() or "system",
             "app_data_notice_shown": bool(self.settings.get("app_data_notice_shown")),
@@ -6042,6 +6044,9 @@ class PCAPSentryApp:
 
     def _auto_detect_llm(self):
         if self.llm_provider_var.get().strip().lower() != "disabled":
+            return
+        # Skip auto-detect if user explicitly set provider to disabled
+        if not self.settings.get("llm_auto_detect", True):
             return
 
         ports = [1234, 8000, 8080, 5000, 5001]
