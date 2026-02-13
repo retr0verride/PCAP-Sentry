@@ -7391,7 +7391,7 @@ class PCAPSentryApp:
                         print("[DEBUG] Enriching stats with threat intelligence...")
                         # Report incremental progress during TI enrichment (32-44%)
                         def _ti_progress(fraction):
-                            _report(32 + fraction * 12, f"Threat intelligence {int(fraction * 100)}%...")
+                            _report(32 + fraction * 12)
                         return ti.enrich_stats(stats, progress_cb=_ti_progress)
                 except Exception as e:
                     print(f"[DEBUG] Threat intelligence enrichment failed: {e}")
@@ -7402,7 +7402,7 @@ class PCAPSentryApp:
                 kb_vectors = _vectorize_kb(kb)
 
                 # ── Parallel Phase 2: Threat intel + IoC + baseline + flows ──
-                _report(32, "Running threat intelligence & IoC matching...")
+                _report(32)
                 with ThreadPoolExecutor(max_workers=4) as pool:
                     f_ti = pool.submit(_do_threat_intel)
                     f_ioc = pool.submit(match_iocs, stats, kb.get("ioc", {}))
@@ -7419,18 +7419,18 @@ class PCAPSentryApp:
                     baseline = f_base.result()
                     flow_df_early, _ = f_flows.result()
 
-                _report(45, "Detecting suspicious flows...")
+                _report(45)
                 suspicious_flows = detect_suspicious_flows(df, kb, flow_df=flow_df_early)
 
                 t_p2 = time.time()
                 print(f"[TIMING] Phase 2 parallel (intel+ioc+baseline+flows): {t_p2-t_start:.2f}s")
 
                 # ── Parallel Phase 3: Scoring ──
-                _report(50, "Building feature vectors...")
+                _report(50)
                 features = build_features(stats)
                 vector = _vector_from_features(features)
 
-                _report(55, "Scoring against knowledge base...")
+                _report(55)
                 with ThreadPoolExecutor(max_workers=3) as pool:
                     f_safe = pool.submit(lambda: get_top_k_similar_entries(features, kb["safe"], k=5))
                     f_mal = pool.submit(lambda: get_top_k_similar_entries(features, kb["malicious"], k=5))
@@ -7440,7 +7440,7 @@ class PCAPSentryApp:
                     _, mal_scores = f_mal.result()
                     classifier_result = f_classify.result()
 
-                _report(62, "Computing anomaly scores...")
+                _report(62)
                 anomaly_result, anomaly_reasons = anomaly_score(vector, baseline)
                 t_p3 = time.time()
                 print(f"[TIMING] Phase 3 parallel (scoring): {t_p3-t_p2:.2f}s")
@@ -7449,35 +7449,35 @@ class PCAPSentryApp:
                 kb_vectors = _vectorize_kb(kb)
 
                 # ── Sequential path ──
-                _report(32, "Running threat intelligence...")
+                _report(32)
                 threat_intel_findings = _do_threat_intel()
                 if threat_intel_findings:
                     stats.update(threat_intel_findings)
 
-                _report(38, "Matching indicators of compromise...")
+                _report(38)
                 ioc_matches = match_iocs(stats, kb.get("ioc", {}))
-                _report(42, "Computing baseline statistics...")
+                _report(42)
                 baseline = compute_baseline_from_kb(kb, kb_vectors=kb_vectors)
-                _report(46, "Analyzing network flows...")
+                _report(46)
                 flow_df_early = compute_flow_stats(df)
-                _report(48, "Detecting suspicious flows...")
+                _report(48)
                 suspicious_flows = detect_suspicious_flows(df, kb, flow_df=flow_df_early)
 
-                _report(52, "Building feature vectors...")
+                _report(52)
                 features = build_features(stats)
                 vector = _vector_from_features(features)
-                _report(56, "Scoring against knowledge base...")
+                _report(56)
                 _, safe_scores = get_top_k_similar_entries(features, kb["safe"], k=5)
                 _, mal_scores = get_top_k_similar_entries(features, kb["malicious"], k=5)
-                _report(60, "Classifying traffic patterns...")
+                _report(60)
                 classifier_result = classify_vector(vector, kb, normalizer_cache=normalizer_cache, kb_vectors=kb_vectors)
-                _report(64, "Computing anomaly scores...")
+                _report(64)
                 anomaly_result, anomaly_reasons = anomaly_score(vector, baseline)
                 t_p3 = time.time()
                 print(f"[TIMING] Sequential analysis: {t_p3-t_start:.2f}s")
 
             # ── Risk scoring (same for both paths) ──
-            _report(68, "Calculating risk score...")
+            _report(68)
             ioc_count = len(ioc_matches["ips"]) + len(ioc_matches["domains"])
             ioc_available = any(kb.get("ioc", {}).get(key) for key in ("ips", "domains", "hashes"))
             ioc_score = min(100.0, 75.0 + (ioc_count - 1) * 5.0) if ioc_count else 0.0
@@ -7506,12 +7506,12 @@ class PCAPSentryApp:
                 verdict = "Suspicious (IoC Match)"
 
             # ── Text generation ──
-            _report(75, "Generating Wireshark filters...")
+            _report(75)
             wireshark_filters = self._build_wireshark_filters(
                 stats, ioc_matches, verdict, suspicious_flows=suspicious_flows
             )
 
-            _report(80, "Building analysis report...")
+            _report(80)
             if use_multithreading:
                 with ThreadPoolExecutor(max_workers=3) as pool:
                     f_output = pool.submit(
@@ -7542,13 +7542,13 @@ class PCAPSentryApp:
                     ioc_matches, ioc_count, ioc_available, stats, safe_scores, mal_scores,
                     suspicious_flows, threat_intel_findings, use_local_model, features,
                 )
-                _report(85, "Generating explanation...")
+                _report(85)
                 why_lines = self._build_why_lines(
                     verdict, risk_score, classifier_result, anomaly_result, anomaly_reasons,
                     ioc_matches, ioc_count, ioc_available, stats, suspicious_flows,
                     threat_intel_findings, wireshark_filters,
                 )
-                _report(90, "Building education content...")
+                _report(90)
                 edu_content = self._build_education_content(
                     verdict, risk_score, stats, classifier_result,
                     anomaly_result, anomaly_reasons, ioc_matches,
@@ -7559,7 +7559,7 @@ class PCAPSentryApp:
             if wireshark_filters:
                 output_lines.append("- Wireshark filters: see Why tab")
 
-            _report(95, "Finalizing results...")
+            _report(95)
             t_end = time.time()
             mode = "multithreaded" if use_multithreading else "sequential"
             print(f"[TIMING] Total worker processing ({mode}): {t_end-t_start:.2f}s")

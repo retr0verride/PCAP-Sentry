@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html><head><style>
+body { background: #1e1e1e; color: #ccc; font-family: Segoe UI, sans-serif; text-align: center; padding: 20px; }
+h1 { color: #58a6ff; }
+h2 { color: #8b949e; margin-top: 40px; }
+.compare { display: flex; justify-content: center; gap: 60px; margin: 30px auto; max-width: 800px; align-items: flex-end; }
+.card { background: #2d2d2d; border-radius: 12px; padding: 24px; }
+.card img { width: 256px; height: 256px; image-rendering: auto; }
+.card.current { opacity: 0.8; border: 2px solid #444; }
+.card.new { border: 2px solid #58a6ff; box-shadow: 0 0 20px rgba(88,166,255,0.3); }
+.card h3 { color: #58a6ff; margin: 12px 0 5px; }
+.card p { color: #999; font-size: 13px; margin: 0; }
+.label { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 8px; }
+.label.old { color: #f85149; }
+.label.updated { color: #3fb950; }
+</style></head><body>
+<h1>PCAP Sentry Logo — Modernized</h1>
+<div class="compare">
+  <div class="card current">
+    <div class="label old">Current</div>
+    <img src="current_logo.png"/>
+    <h3>Original</h3>
+    <p>Thin wireframe hex + loose cross pattern</p>
+  </div>
+  <div class="card new">
+    <div class="label updated">Modernized</div>
+    <img src="modernized_logo.png"/>
+    <h3>Updated</h3>
+    <p>Filled hex, DNA helix, glow effects, node accents</p>
+  </div>
+</div>
+</body></html>
