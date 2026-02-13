@@ -80,7 +80,7 @@ PCAP Sentry is a malware analysis console for network packet capture (PCAP) file
 
 | Requirement | Version |
 |-------------|---------|
-| Python | 3.10 or newer |
+| Python | 3.14 or newer |
 | pandas | ≥ 2.0 |
 | scapy | ≥ 2.5 |
 | matplotlib | ≥ 3.8 |
@@ -109,7 +109,7 @@ PCAP Sentry is a malware analysis console for network packet capture (PCAP) file
    ```
    git clone https://github.com/industrial-dave/PCAP-Sentry.git
    ```
-2. Install Python 3.10 or newer from [python.org](https://www.python.org/).
+2. Install Python 3.14 or newer from [python.org](https://www.python.org/).
 3. Create and activate a virtual environment:
    ```
    python -m venv .venv
@@ -523,6 +523,11 @@ PCAP Sentry can generate visual charts for analyzed captures. After analysis com
 <h2><img src="https://img.shields.io/badge/13-Preferences_&_Settings-58a6ff?style=flat-square&labelColor=0d1117" height="28" /></h2>
 
 Open preferences via the **⚙ Preferences** button in the toolbar.
+
+
+### LLM Status Persistence
+
+Your LLM connection status (provider, model, endpoint) is now saved automatically when you close PCAP Sentry and restored on next launch. This ensures your LLM settings always default to your last-used configuration.
 
 ### Available Settings
 

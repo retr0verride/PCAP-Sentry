@@ -29,6 +29,7 @@ PCAP Sentry parses network captures (`.pcap` / `.pcapng`), summarizes traffic st
 | 🌐 | **Queries threat intelligence feeds** for known-bad indicators |
 | 🧠 | **Learns from your data** via a trainable knowledge base and optional ML model |
 | 💬 | **Chat interface** powered by a local LLM (Ollama or OpenAI-compatible) |
+| ♻️ | **LLM status is now saved and restored automatically** |
 
 ## Quick Start
 
@@ -49,7 +50,7 @@ pip install -r requirements.txt
 python Python/pcap_sentry_gui.py
 ```
 
-**Requirements:** Python 3.10+, Windows 10/11 (64-bit)
+**Requirements:** Python 3.14+, Windows 10/11 (64-bit)
 
 ## System Requirements
 

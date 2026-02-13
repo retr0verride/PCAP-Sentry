@@ -18,7 +18,7 @@ Download and run PCAP_Sentry_Setup.exe from the Releases page:
 https://github.com/industrial-dave/PCAP-Sentry/releases
 
 Running from Source
-1. Install Python 3.10+
+1. Install Python 3.14+
 2. Create virtual environment: python -m venv .venv
 3. Activate: .venv\Scripts\activate.bat
 4. Install dependencies: pip install -r requirements.txt

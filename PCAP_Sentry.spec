@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
+import sys
 from PyInstaller.utils.hooks import (
     collect_data_files,
     collect_dynamic_libs,
@@ -61,10 +62,23 @@ datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 hiddenimports += ['scapy', 'scapy.all', 'sklearn', 'joblib']
 
+
 for icon_name in ("pcap_sentry.ico", "custom.ico"):
     icon_path = os.path.join("assets", icon_name)
     if os.path.exists(icon_path):
         datas.append((icon_path, "assets"))
+
+# Explicitly include the active Python DLL to avoid runtime load errors.
+py_dll_name = f"python{sys.version_info.major}{sys.version_info.minor}.dll"
+py_dll_candidates = [
+    os.path.join(sys.base_prefix, py_dll_name),
+    os.path.join(sys.base_prefix, "DLLs", py_dll_name),
+    os.path.join(os.path.dirname(sys.executable), py_dll_name),
+]
+for py_dll in py_dll_candidates:
+    if os.path.exists(py_dll):
+        binaries.append((py_dll, "."))
+        break
 
 # Include Npcap DLLs if available for packet capture support.
 wpcap_path = r"C:\Windows\System32\Npcap\wpcap.dll"

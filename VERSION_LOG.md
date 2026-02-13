@@ -1,17 +1,14 @@
 # Version Log
 
 
-## 2026.02.13-4 - 2026-02-13
-- Minor tweaks and improvements
-## 2026.02.13-4 - 2026-02-13
-- LLM status (provider/model/endpoint) is now saved and restored automatically on program close/start.
-- LLM indicator is now a button that tests connection.
-- Bug fix: bundle python312.dll in EXE/installer for DLL load error.
-# Version Log
 
 
 
 
+## 2026.02.13-6 - 2026-02-13
+- Upgrade build/runtime to Python 3.14, bundle active Python DLL, update docs
+## 2026.02.13-5 - 2026-02-13
+- LLM status persistence, indicator button, DLL fix
 ## 2026.02.13-4 - 2026-02-13
 - Minor tweaks and improvements
 ## 2026.02.13-3 - 2026-02-13
