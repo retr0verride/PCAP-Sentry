@@ -5392,15 +5392,16 @@ class PCAPSentryApp:
         x_label = tk.Label(
             entry,
             text="\u2715",
-            font=("Segoe UI", 10, "bold"),
+            font=("Segoe UI", 9),
             fg=self.colors["danger"],
             bg=self.colors["panel"],
             cursor="hand2",
             bd=0,
-            padx=2,
+            padx=0,
             pady=0,
+            highlightthickness=0,
         )
-        x_label.place(relx=1.0, rely=0.5, anchor="e", x=-2)
+        x_label.place(relx=1.0, rely=0.5, anchor="e", x=-4, y=-1)
         x_label.bind("<Button-1>", lambda e: var.set(""))
         x_label.bind("<Enter>", lambda e: x_label.configure(fg=self.colors["danger_hover"]))
         x_label.bind("<Leave>", lambda e: x_label.configure(fg=self.colors["danger"]))
