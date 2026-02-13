@@ -3,14 +3,14 @@
 #define IncludeVCRedist
 #endif
 
-#define AppVer "2026.02.13-7"
+#define AppVer "2026.02.13-8"
 
 [Setup]
 AppId={{B8A5C2E1-7F3D-4A1B-9C6E-2D8F5A4E3B71}
 AppName=PCAP Sentry
 AppVersion={#AppVer}
 AppVerName=PCAP Sentry {#AppVer}
-VersionInfoVersion=2026.2.13.7
+VersionInfoVersion=2026.2.13.8
 AppPublisher=industrial-dave
 AppSupportURL=https://github.com/industrial-dave/PCAP-Sentry
 DefaultDirName={autopf}\PCAP Sentry
@@ -44,7 +44,7 @@ Name: "{commondesktop}\PCAP Sentry"; Filename: "{app}\PCAP_Sentry.exe"; Tasks: d
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a &desktop icon"; GroupDescription: "Additional icons:"; Flags: unchecked
-Name: "installollama"; Description: "Install Ollama (local LLM runtime)"; GroupDescription: "Optional LLM setup:"; Flags: unchecked
+Name: "installollama"; Description: "Install Ollama (local LLM runtime) (~1.5 GB + models)"; GroupDescription: "Optional LLM setup:"; Flags: unchecked
 
 [Run]
 #ifdef IncludeVCRedist
@@ -60,19 +60,100 @@ Type: filesandordirs; Name: "{app}\logs"
 [Code]
 const
   LocalAppDataFolder = '{localappdata}\PCAP_Sentry';
+  OllamaRuntimeSizeMB = 1536;
 
 var
   OllamaModelsPage: TInputOptionWizardPage;
   OllamaModelIds: array of string;
+  OllamaModelSizesMB: array of Integer;
+  OllamaSpaceNote: TNewStaticText;
+  OllamaModelsHint: TNewStaticText;
+  TasksClickHandlerSet: Boolean;
 
-procedure AddOllamaModel(const ModelId, LabelText: String; DefaultChecked: Boolean);
+function GetDiskFreeSpaceEx(lpDirectoryName: string; var FreeBytesAvailableToCaller, TotalNumberOfBytes, TotalNumberOfFreeBytes: Int64): Boolean;
+  external 'GetDiskFreeSpaceExW@kernel32.dll stdcall';
+
+function FormatSizeMB(SizeMB: Integer): String;
+var
+  SizeGB10: Integer;
+  WholeGB: Integer;
+  TenthGB: Integer;
+begin
+  if SizeMB >= 1024 then
+  begin
+    SizeGB10 := (SizeMB * 10 + 512) div 1024;
+    WholeGB := SizeGB10 div 10;
+    TenthGB := SizeGB10 mod 10;
+    Result := '~' + IntToStr(WholeGB) + '.' + IntToStr(TenthGB) + ' GB';
+  end
+  else
+  begin
+    Result := '~' + IntToStr(SizeMB) + ' MB';
+  end;
+end;
+
+function GetFreeSpaceBytes(Path: String): Int64;
+var
+  FreeBytesAvailable: Int64;
+  TotalBytes: Int64;
+  TotalFreeBytes: Int64;
+begin
+  if GetDiskFreeSpaceEx(Path, FreeBytesAvailable, TotalBytes, TotalFreeBytes) then
+    Result := TotalFreeBytes
+  else
+    Result := 0;
+end;
+
+function GetSelectedOllamaModelsSizeMB: Integer;
+var
+  I: Integer;
+begin
+  Result := 0;
+  if OllamaModelsPage = nil then
+    exit;
+  for I := 0 to GetArrayLength(OllamaModelIds) - 1 do
+  begin
+    if OllamaModelsPage.Values[I] then
+      Result := Result + OllamaModelSizesMB[I];
+  end;
+end;
+
+procedure UpdateOllamaSpaceNote;
+var
+  RequiredMB: Integer;
+  FreeBytes: Int64;
+begin
+  if OllamaSpaceNote = nil then
+    exit;
+
+  if not WizardIsTaskSelected('installollama') then
+  begin
+    OllamaSpaceNote.Caption := 'Additional space for Ollama and models: not selected.';
+    exit;
+  end;
+
+  RequiredMB := OllamaRuntimeSizeMB + GetSelectedOllamaModelsSizeMB;
+  FreeBytes := GetFreeSpaceBytes(ExpandConstant('{localappdata}'));
+  OllamaSpaceNote.Caption :=
+    'Additional space required for Ollama: ' + FormatSizeMB(RequiredMB) +
+    ' (free: ' + FormatSizeMB(Round(FreeBytes / 1024 / 1024)) + ').';
+end;
+
+procedure HandleSelectionChange(Sender: TObject);
+begin
+  UpdateOllamaSpaceNote;
+end;
+
+procedure AddOllamaModel(const ModelId, LabelText: String; SizeMB: Integer; DefaultChecked: Boolean);
 var
   Index: Integer;
 begin
-  Index := OllamaModelsPage.Add(LabelText);
+  Index := OllamaModelsPage.Add(LabelText + ' (' + FormatSizeMB(SizeMB) + ')');
   OllamaModelsPage.Values[Index] := DefaultChecked;
   SetArrayLength(OllamaModelIds, GetArrayLength(OllamaModelIds) + 1);
   OllamaModelIds[GetArrayLength(OllamaModelIds) - 1] := ModelId;
+  SetArrayLength(OllamaModelSizesMB, GetArrayLength(OllamaModelSizesMB) + 1);
+  OllamaModelSizesMB[GetArrayLength(OllamaModelSizesMB) - 1] := SizeMB;
 end;
 
 procedure InitializeWizard;
@@ -82,23 +163,47 @@ begin
     'Ollama Models',
     'Select models to download',
     'Choose one or more Ollama models to download after installation.' + #13#10 +
-    'This may take a while and requires an internet connection.',
+    'Sizes are approximate and require an internet connection.',
     True,
     False
   );
 
-  AddOllamaModel('llama3.2', 'llama3.2 (balanced, recommended)', True);
-  AddOllamaModel('qwen2.5', 'qwen2.5 (fast general-purpose)', False);
-  AddOllamaModel('phi4', 'phi4 (small, fast)', False);
-  AddOllamaModel('mistral', 'mistral (compact, solid general)', False);
-  AddOllamaModel('llama3.1', 'llama3.1 (larger, higher quality)', False);
-  AddOllamaModel('llama3:8b', 'llama3:8b (older 8B)', False);
-  AddOllamaModel('qwen2.5:14b', 'qwen2.5:14b (larger)', False);
-  AddOllamaModel('gemma2:9b', 'gemma2:9b (medium)', False);
-  AddOllamaModel('deepseek-r1:7b', 'deepseek-r1:7b (reasoning)', False);
-  AddOllamaModel('phi3.5', 'phi3.5 (small, fast)', False);
-  AddOllamaModel('tinyllama', 'tinyllama (very small)', False);
-  AddOllamaModel('codestral', 'codestral (code-focused)', False);
+  AddOllamaModel('llama3.2', 'llama3.2 (balanced, recommended)', 2048, True);
+  AddOllamaModel('qwen2.5', 'qwen2.5 (fast general-purpose)', 2048, False);
+  AddOllamaModel('phi4', 'phi4 (small, fast)', 1024, False);
+  AddOllamaModel('mistral', 'mistral (compact, solid general)', 2048, False);
+  AddOllamaModel('llama3.1', 'llama3.1 (larger, higher quality)', 4096, False);
+  AddOllamaModel('llama3:8b', 'llama3:8b (older 8B)', 4096, False);
+  AddOllamaModel('qwen2.5:14b', 'qwen2.5:14b (larger)', 8192, False);
+  AddOllamaModel('gemma2:9b', 'gemma2:9b (medium)', 4096, False);
+  AddOllamaModel('deepseek-r1:7b', 'deepseek-r1:7b (reasoning)', 4096, False);
+  AddOllamaModel('phi3.5', 'phi3.5 (small, fast)', 2048, False);
+  AddOllamaModel('tinyllama', 'tinyllama (very small)', 512, False);
+  AddOllamaModel('codestral', 'codestral (code-focused)', 4096, False);
+
+  OllamaSpaceNote := TNewStaticText.Create(WizardForm);
+  OllamaSpaceNote.Parent := WizardForm.SelectTasksPage;
+  OllamaSpaceNote.Left := ScaleX(0);
+  OllamaSpaceNote.Top := WizardForm.TasksList.Top + WizardForm.TasksList.Height + ScaleY(8);
+  OllamaSpaceNote.Width := WizardForm.SelectTasksPage.ClientWidth;
+  OllamaSpaceNote.Caption := '';
+
+  OllamaModelsHint := TNewStaticText.Create(WizardForm);
+  OllamaModelsHint.Parent := OllamaModelsPage.Surface;
+  OllamaModelsHint.Left := ScaleX(0);
+  OllamaModelsHint.Top := ScaleY(0);
+  OllamaModelsHint.Width := OllamaModelsPage.SurfaceWidth;
+  OllamaModelsHint.Caption := 'Models will be downloaded to your local app data folder.';
+
+  UpdateOllamaSpaceNote;
+
+  if not TasksClickHandlerSet then
+  begin
+    WizardForm.TasksList.OnClickCheck := @HandleSelectionChange;
+    TasksClickHandlerSet := True;
+  end;
+  if OllamaModelsPage <> nil then
+    OllamaModelsPage.CheckListBox.OnClickCheck := @HandleSelectionChange;
 end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
@@ -123,6 +228,31 @@ begin
     if OllamaModelsPage.Values[I] then
     begin
       Result := True;
+      exit;
+    end;
+  end;
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+var
+  FreeBytes: Int64;
+  RequiredMB: Integer;
+begin
+  Result := True;
+
+  if (OllamaModelsPage <> nil) and (CurPageID = OllamaModelsPage.ID) then
+  begin
+    RequiredMB := OllamaRuntimeSizeMB + GetSelectedOllamaModelsSizeMB;
+    FreeBytes := GetFreeSpaceBytes(ExpandConstant('{localappdata}'));
+    if (RequiredMB > 0) and (FreeBytes > 0) and (FreeBytes < Int64(RequiredMB) * 1024 * 1024) then
+    begin
+      MsgBox(
+        'Not enough free space for Ollama and selected models.' + #13#10 +
+        'Required: ' + FormatSizeMB(RequiredMB) + #13#10 +
+        'Free: ' + FormatSizeMB(Round(FreeBytes / 1024 / 1024)) + #13#10 +
+        'Please free up space or deselect some models.',
+        mbError, MB_OK);
+      Result := False;
       exit;
     end;
   end;
@@ -268,4 +398,9 @@ begin
       PullOllamaModels;
     end;
   end;
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  UpdateOllamaSpaceNote;
 end;

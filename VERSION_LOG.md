@@ -6,6 +6,9 @@
 
 
 
+
+## 2026.02.13-8 - 2026-02-13
+- Installer disk space estimates and checks for Ollama models
 ## 2026.02.13-7 - 2026-02-13
 - Installer option to install Ollama and pull models
 ## 2026.02.13-6 - 2026-02-13
