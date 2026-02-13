@@ -140,24 +140,24 @@ if defined DO_RELEASE (
 		echo Warning: GitHub CLI not found. Skipping release upload.>> "%LOG_PATH%"
 		echo Warning: Install gh CLI to auto-create releases: winget install GitHub.cli
 	) else (
-		set "RELEASE_TAG=v%VERSION%"
-		echo ==== Publishing GitHub Release %RELEASE_TAG% ====>> "%LOG_PATH%"
-		echo Publishing GitHub Release %RELEASE_TAG%
+		set "RELEASE_TAG=v!VERSION!"
+		echo ==== Publishing GitHub Release !RELEASE_TAG! ====>> "%LOG_PATH%"
+		echo Publishing GitHub Release !RELEASE_TAG!
 		echo Release Notes: !BUILD_NOTES!>> "%LOG_PATH%"
-		gh release view "%RELEASE_TAG%" >nul 2>&1
+		gh release view "!RELEASE_TAG!" >nul 2>&1
 		if errorlevel 1 (
-			gh release create "%RELEASE_TAG%" "dist\PCAP_Sentry_Setup.exe" --title "PCAP Sentry v%VERSION%" --notes "What's New: !BUILD_NOTES!" >> "%LOG_PATH%" 2>&1
+			gh release create "!RELEASE_TAG!" "dist\PCAP_Sentry_Setup.exe" --title "PCAP Sentry v%VERSION%" --notes "What's New: !BUILD_NOTES!" >> "%LOG_PATH%" 2>&1
 			if errorlevel 1 (
 				echo Warning: Failed to create GitHub release. See %LOG_PATH% for details.
 			) else (
-				echo Created GitHub release %RELEASE_TAG% with PCAP_Sentry_Setup.exe
+				echo Created GitHub release !RELEASE_TAG! with PCAP_Sentry_Setup.exe
 			)
 		) else (
-			gh release upload "%RELEASE_TAG%" "dist\PCAP_Sentry_Setup.exe" --clobber >> "%LOG_PATH%" 2>&1
+			gh release upload "!RELEASE_TAG!" "dist\PCAP_Sentry_Setup.exe" --clobber >> "%LOG_PATH%" 2>&1
 			if errorlevel 1 (
 				echo Warning: Failed to upload installer to GitHub release. See %LOG_PATH% for details.
 			) else (
-				echo Uploaded PCAP_Sentry_Setup.exe to GitHub release %RELEASE_TAG%
+				echo Uploaded PCAP_Sentry_Setup.exe to GitHub release !RELEASE_TAG!
 			)
 		)
 	)
