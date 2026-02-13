@@ -3,14 +3,15 @@
 #define IncludeVCRedist
 #endif
 
-#define AppVer "2026.02.13-12"
+#define AppVer "2026.02.13-13"
+#define CudaInstallerUrl "https://developer.download.nvidia.com/compute/cuda/12.1.1/local_installers/cuda_12.1.1_531.14_windows.exe"
 
 [Setup]
 AppId={{91EFC8EF-E9F8-42FC-9D82-479C14FBE67D}
 AppName=PCAP Sentry (GPU)
 AppVersion={#AppVer}
 AppVerName=PCAP Sentry (GPU) {#AppVer}
-VersionInfoVersion=2026.2.13.12
+VersionInfoVersion=2026.2.13.13
 AppPublisher=industrial-dave
 AppSupportURL=https://github.com/industrial-dave/PCAP-Sentry
 DefaultDirName={autopf}\PCAP Sentry (GPU)
@@ -45,6 +46,7 @@ Name: "{commondesktop}\PCAP Sentry (GPU)"; Filename: "{app}\PCAP_Sentry_GPU.exe"
 [Tasks]
 Name: "desktopicon"; Description: "Create a &desktop icon"; GroupDescription: "Additional icons:"; Flags: unchecked
 Name: "installollama"; Description: "Install Ollama (local LLM runtime) (~1.5 GB + models)"; GroupDescription: "Optional LLM setup:"; Flags: unchecked
+Name: "installcuda"; Description: "Install NVIDIA CUDA toolkit (for GPU acceleration)"; GroupDescription: "Optional GPU setup:"; Flags: unchecked
 
 [Run]
 #ifdef IncludeVCRedist
@@ -61,6 +63,7 @@ Type: filesandordirs; Name: "{app}\logs"
 const
   LocalAppDataFolder = '{localappdata}\PCAP_Sentry_GPU';
   OllamaRuntimeSizeMB = 1536;
+  CudaRuntimeSizeMB = 3072;
 
 var
   OllamaModelsPage: TInputOptionWizardPage;
@@ -68,6 +71,7 @@ var
   OllamaModelSizesMB: array of Integer;
   OllamaSpaceNote: TNewStaticText;
   OllamaModelsHint: TNewStaticText;
+  CudaSpaceNote: TNewStaticText;
   TasksClickHandlerSet: Boolean;
 
 function GetDiskFreeSpaceEx(lpDirectoryName: string; var FreeBytesAvailableToCaller, TotalNumberOfBytes, TotalNumberOfFreeBytes: Int64): Boolean;
@@ -139,9 +143,29 @@ begin
     ' (free: ' + FormatSizeMB(Round(FreeBytes / 1024 / 1024)) + ').';
 end;
 
+procedure UpdateCudaSpaceNote;
+var
+  FreeBytes: Int64;
+begin
+  if CudaSpaceNote = nil then
+    exit;
+
+  if not WizardIsTaskSelected('installcuda') then
+  begin
+    CudaSpaceNote.Caption := 'Additional space for CUDA: not selected.';
+    exit;
+  end;
+
+  FreeBytes := GetFreeSpaceBytes(ExpandConstant('{pf}'));
+  CudaSpaceNote.Caption :=
+    'Additional space required for CUDA: ' + FormatSizeMB(CudaRuntimeSizeMB) +
+    ' (free: ' + FormatSizeMB(Round(FreeBytes / 1024 / 1024)) + ').';
+end;
+
 procedure HandleSelectionChange(Sender: TObject);
 begin
   UpdateOllamaSpaceNote;
+  UpdateCudaSpaceNote;
 end;
 
 procedure AddOllamaModel(const ModelId, LabelText: String; SizeMB: Integer; DefaultChecked: Boolean);
@@ -188,6 +212,13 @@ begin
   OllamaSpaceNote.Width := WizardForm.SelectTasksPage.ClientWidth;
   OllamaSpaceNote.Caption := '';
 
+  CudaSpaceNote := TNewStaticText.Create(WizardForm);
+  CudaSpaceNote.Parent := WizardForm.SelectTasksPage;
+  CudaSpaceNote.Left := ScaleX(0);
+  CudaSpaceNote.Top := OllamaSpaceNote.Top + ScaleY(16);
+  CudaSpaceNote.Width := WizardForm.SelectTasksPage.ClientWidth;
+  CudaSpaceNote.Caption := '';
+
   OllamaModelsHint := TNewStaticText.Create(WizardForm);
   OllamaModelsHint.Parent := OllamaModelsPage.Surface;
   OllamaModelsHint.Left := ScaleX(0);
@@ -196,6 +227,7 @@ begin
   OllamaModelsHint.Caption := 'Models will be downloaded to your local app data folder.';
 
   UpdateOllamaSpaceNote;
+  UpdateCudaSpaceNote;
 
   if not TasksClickHandlerSet then
   begin
@@ -275,6 +307,19 @@ begin
     exit;
   end;
   Result := 'ollama.exe';
+end;
+
+function BuildCudaSetupScript: String;
+var
+  Script: String;
+begin
+  Script := '$ErrorActionPreference = ''Stop''' + #13#10 +
+    '$installer = Join-Path $env:TEMP ''cuda_setup.exe''' + #13#10 +
+    'if (-not (Test-Path $installer)) {' + #13#10 +
+    '  Invoke-WebRequest -Uri ' + #39 + '{#CudaInstallerUrl}' + #39 + ' -OutFile $installer' + #13#10 +
+    '}' + #13#10 +
+    'Start-Process -FilePath $installer' + #13#10;
+  Result := Script;
 end;
 
 function BuildOllamaSetupScript: String;
@@ -382,10 +427,21 @@ begin
         mbInformation, MB_OK);
       Exec('powershell.exe', '-NoProfile -ExecutionPolicy Bypass -File "' + ScriptPath + '"', '', SW_HIDE, ewNoWait, ResultCode);
     end;
+    if WizardIsTaskSelected('installcuda') then
+    begin
+      ScriptPath := ExpandConstant('{tmp}\pcap_cuda_setup.ps1');
+      SaveStringToFile(ScriptPath, BuildCudaSetupScript, False);
+      MsgBox(
+        'The NVIDIA CUDA installer will launch after setup closes.' + #13#10 +
+        'Admin rights may be required. You can cancel it if not needed.',
+        mbInformation, MB_OK);
+      Exec('powershell.exe', '-NoProfile -ExecutionPolicy Bypass -File "' + ScriptPath + '"', '', SW_HIDE, ewNoWait, ResultCode);
+    end;
   end;
 end;
 
 procedure CurPageChanged(CurPageID: Integer);
 begin
   UpdateOllamaSpaceNote;
+  UpdateCudaSpaceNote;
 end;

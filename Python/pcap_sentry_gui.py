@@ -43,6 +43,8 @@ except ImportError:
 _sklearn_available = None
 _tkinterdnd2_available = None
 _threat_intel_available = None
+_torch_available = None
+_gpu_enabled = True
 
 
 def _check_threat_intel():
@@ -163,6 +165,43 @@ def _check_tkinterdnd2():
     except (ImportError, ModuleNotFoundError):
         _tkinterdnd2_available = False
     return _tkinterdnd2_available
+
+
+def _check_torch():
+    global _torch_available
+    if _torch_available is not None:
+        return _torch_available
+    try:
+        import torch
+        _torch_available = True
+    except (ImportError, ModuleNotFoundError):
+        _torch_available = False
+    return _torch_available
+
+
+def _set_gpu_enabled(enabled):
+    global _gpu_enabled
+    _gpu_enabled = bool(enabled)
+
+
+def _is_gpu_enabled():
+    return _gpu_enabled
+
+
+def _get_torch():
+    import torch
+    return torch
+
+
+def _get_torch_device():
+    if not _check_torch():
+        return None
+    if not _is_gpu_enabled():
+        return None
+    torch = _get_torch()
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    return None
 
 SIZE_SAMPLE_LIMIT = 50000
 DEFAULT_MAX_ROWS = 200000
@@ -392,6 +431,7 @@ def _default_settings():
         "parse_http": True,
         "use_high_memory": False,
         "use_local_model": False,
+        "use_gpu": True,
         "use_multithreading": True,
         "turbo_parse": True,
         "backup_dir": os.path.dirname(KNOWLEDGE_BASE_FILE),
@@ -619,6 +659,17 @@ def _vector_from_features(features):
 def _compute_normalizer(vectors):
     if not vectors:
         return None
+    device = _get_torch_device()
+    if device and len(vectors) >= 2000:
+        torch = _get_torch()
+        tensor = torch.tensor(vectors, dtype=torch.float32, device=device)
+        means = tensor.mean(dim=0)
+        stds = tensor.std(dim=0, unbiased=False)
+        stds = torch.where(stds == 0, torch.ones_like(stds), stds)
+        return {
+            "mean": [float(value) for value in means.tolist()],
+            "std": [float(value) for value in stds.tolist()],
+        }
     columns = list(zip(*vectors))
     means = [sum(col) / len(col) for col in columns]
     stds = [statistics.pstdev(col) or 1.0 for col in columns]
@@ -678,6 +729,37 @@ def classify_vector(vector, kb, normalizer_cache=None):
         all_vectors = safe_vectors + mal_vectors
         normalizer = _compute_normalizer(all_vectors)
 
+    device = _get_torch_device()
+    if device and (len(safe_vectors) + len(mal_vectors)) >= 2000:
+        try:
+            torch = _get_torch()
+            mean = torch.tensor(normalizer["mean"], dtype=torch.float32, device=device)
+            std = torch.tensor(normalizer["std"], dtype=torch.float32, device=device)
+            safe_tensor = torch.tensor(safe_vectors, dtype=torch.float32, device=device)
+            mal_tensor = torch.tensor(mal_vectors, dtype=torch.float32, device=device)
+            target_tensor = torch.tensor(vector, dtype=torch.float32, device=device)
+            safe_norm = (safe_tensor - mean) / std
+            mal_norm = (mal_tensor - mean) / std
+            target_norm = (target_tensor - mean) / std
+            safe_centroid = safe_norm.mean(dim=0)
+            mal_centroid = mal_norm.mean(dim=0)
+            dist_safe = torch.linalg.vector_norm(target_norm - safe_centroid).item()
+            dist_mal = torch.linalg.vector_norm(target_norm - mal_centroid).item()
+            if dist_safe + dist_mal == 0:
+                prob_mal = 0.5
+            else:
+                prob_mal = dist_safe / (dist_safe + dist_mal)
+            score = round(prob_mal * 100.0, 1)
+            return {
+                "score": score,
+                "dist_safe": dist_safe,
+                "dist_mal": dist_mal,
+                "normalizer": normalizer,
+                "backend": "gpu",
+            }
+        except Exception:
+            pass
+
     safe_norm = [_normalize_vector(vec, normalizer) for vec in safe_vectors]
     mal_norm = [_normalize_vector(vec, normalizer) for vec in mal_vectors]
     target = _normalize_vector(vector, normalizer)
@@ -698,7 +780,13 @@ def classify_vector(vector, kb, normalizer_cache=None):
     else:
         prob_mal = dist_safe / (dist_safe + dist_mal)
     score = round(prob_mal * 100.0, 1)
-    return {"score": score, "dist_safe": dist_safe, "dist_mal": dist_mal, "normalizer": normalizer}
+    return {
+        "score": score,
+        "dist_safe": dist_safe,
+        "dist_mal": dist_mal,
+        "normalizer": normalizer,
+        "backend": "cpu",
+    }
 
 
 def _domain_matches(domain, ioc_domains):
@@ -2264,6 +2352,7 @@ class PCAPSentryApp:
         self.parse_http_var = tk.BooleanVar(value=self.settings.get("parse_http", True))
         self.use_high_memory_var = tk.BooleanVar(value=self.settings.get("use_high_memory", False))
         self.use_local_model_var = tk.BooleanVar(value=self.settings.get("use_local_model", False))
+        self.use_gpu_var = tk.BooleanVar(value=self.settings.get("use_gpu", True))
         self.use_multithreading_var = tk.BooleanVar(value=self.settings.get("use_multithreading", True))
         self.turbo_parse_var = tk.BooleanVar(value=self.settings.get("turbo_parse", True))
         self.llm_provider_var = tk.StringVar(value=self.settings.get("llm_provider", "disabled"))
@@ -2357,6 +2446,8 @@ class PCAPSentryApp:
         self.threat_intel_cache_time = 0  # Timestamp for cache validity
 
         self._build_background()
+
+        _set_gpu_enabled(self.use_gpu_var.get())
 
         self._build_header()
         self._build_tabs()
@@ -2722,25 +2813,34 @@ class PCAPSentryApp:
 
         ttk.Checkbutton(
             frame,
+            text="Enable GPU acceleration (PyTorch/CUDA)",
+            variable=self.use_gpu_var,
+            style="Quiet.TCheckbutton"
+        ).grid(row=7, column=0, sticky="w", pady=6, columnspan=2)
+        self._help_icon_grid(frame, "Uses the GPU for some math-heavy analysis steps when PyTorch and a CUDA-capable "
+            "GPU are available. Falls back to CPU automatically if not available.", row=7, column=2, sticky="w")
+
+        ttk.Checkbutton(
+            frame,
             text="Offline mode (disable threat intelligence)",
             variable=self.offline_mode_var,
             style="Quiet.TCheckbutton"
-        ).grid(row=7, column=0, sticky="w", pady=6, columnspan=2)
+        ).grid(row=8, column=0, sticky="w", pady=6, columnspan=2)
         self._help_icon_grid(frame, "Disables online threat intelligence lookups (AlienVault OTX, AbuseIPDB, etc.). "
             "Analysis will be faster and work without an internet connection, but you lose the "
-            "ability to check IPs/domains against live public threat feeds.", row=7, column=2, sticky="w")
+            "ability to check IPs/domains against live public threat feeds.", row=8, column=2, sticky="w")
 
         ttk.Checkbutton(
             frame,
             text="Multithreaded analysis (faster, uses more CPU)",
             variable=self.use_multithreading_var,
             style="Quiet.TCheckbutton"
-        ).grid(row=8, column=0, sticky="w", pady=6, columnspan=2)
+        ).grid(row=9, column=0, sticky="w", pady=6, columnspan=2)
         self._help_icon_grid(frame, "Runs analysis tasks in parallel using multiple threads. "
             "This can significantly speed up analysis on multi-core systems. "
-            "Disable if you experience stability issues or want to reduce CPU usage.", row=8, column=2, sticky="w")
+            "Disable if you experience stability issues or want to reduce CPU usage.", row=9, column=2, sticky="w")
 
-        ttk.Label(frame, text="LLM provider:").grid(row=9, column=0, sticky="w", pady=6)
+        ttk.Label(frame, text="LLM provider:").grid(row=10, column=0, sticky="w", pady=6)
         llm_provider_combo = ttk.Combobox(
             frame,
             textvariable=self.llm_provider_var,
@@ -2748,14 +2848,14 @@ class PCAPSentryApp:
             width=12,
         )
         llm_provider_combo.state(["readonly"])
-        llm_provider_combo.grid(row=9, column=1, sticky="w", pady=6)
+        llm_provider_combo.grid(row=10, column=1, sticky="w", pady=6)
         self._help_icon_grid(frame, "Choose which LLM to use for label suggestions. "
             "Ollama runs locally (offline). OpenAI-compatible may be local or cloud, depending on the endpoint. "
-            "Select 'disabled' to turn off LLM features.", row=9, column=2, sticky="w")
+            "Select 'disabled' to turn off LLM features.", row=10, column=2, sticky="w")
 
-        ttk.Label(frame, text="LLM model:").grid(row=10, column=0, sticky="w", pady=6)
+        ttk.Label(frame, text="LLM model:").grid(row=11, column=0, sticky="w", pady=6)
         model_frame = ttk.Frame(frame)
-        model_frame.grid(row=10, column=1, sticky="w", pady=6)
+        model_frame.grid(row=11, column=1, sticky="w", pady=6)
         llm_model_combo = ttk.Combobox(model_frame, textvariable=self.llm_model_var, width=27)
         llm_model_combo.pack(side=tk.LEFT)
         refresh_btn = ttk.Button(
@@ -2763,19 +2863,19 @@ class PCAPSentryApp:
             command=lambda: self._refresh_llm_models(llm_model_combo),
         )
         refresh_btn.pack(side=tk.LEFT, padx=(4, 0))
-        self._help_icon_grid(frame, "Model name for the selected provider. Click \u21BB to detect available models.", row=10, column=2, sticky="w")
+        self._help_icon_grid(frame, "Model name for the selected provider. Click \u21BB to detect available models.", row=11, column=2, sticky="w")
         self._refresh_llm_models(llm_model_combo)
 
-        ttk.Label(frame, text="LLM endpoint:").grid(row=11, column=0, sticky="w", pady=6)
+        ttk.Label(frame, text="LLM endpoint:").grid(row=12, column=0, sticky="w", pady=6)
         llm_endpoint_entry = ttk.Entry(frame, textvariable=self.llm_endpoint_var, width=40)
-        llm_endpoint_entry.grid(row=11, column=1, sticky="w", pady=6)
+        llm_endpoint_entry.grid(row=12, column=1, sticky="w", pady=6)
         self._help_icon_grid(frame, "API base URL for the LLM provider. For Ollama (offline/local), default is http://localhost:11434. "
             "For OpenAI-compatible servers, use the server base URL (no /v1). If this points to a cloud service, data is sent off-device.",
-            row=11, column=2, sticky="w")
+            row=12, column=2, sticky="w")
 
-        ttk.Label(frame, text="Test LLM:").grid(row=12, column=0, sticky="w", pady=6)
+        ttk.Label(frame, text="Test LLM:").grid(row=13, column=0, sticky="w", pady=6)
         test_frame = ttk.Frame(frame)
-        test_frame.grid(row=12, column=1, sticky="w", pady=6)
+        test_frame.grid(row=13, column=1, sticky="w", pady=6)
         ttk.Button(test_frame, text="Test Connection", style="Secondary.TButton",
                    command=self._test_llm_connection).pack(side=tk.LEFT)
         self.llm_test_status_label = tk.Label(
@@ -2787,7 +2887,7 @@ class PCAPSentryApp:
             padx=8,
         )
         self.llm_test_status_label.pack(side=tk.LEFT)
-        self._help_icon_grid(frame, "Sends a small test request to verify the current LLM settings.", row=12, column=2, sticky="w")
+        self._help_icon_grid(frame, "Sends a small test request to verify the current LLM settings.", row=13, column=2, sticky="w")
 
         def _set_llm_fields_state(*_):
             state = "normal" if self.llm_provider_var.get() != "disabled" else "disabled"
@@ -2806,12 +2906,12 @@ class PCAPSentryApp:
 
         # Backup directory row with improved spacing
 
-        ttk.Label(frame, text="Backup directory:").grid(row=13, column=0, sticky="w", pady=6)
+         ttk.Label(frame, text="Backup directory:").grid(row=14, column=0, sticky="w", pady=6)
         backup_entry = ttk.Entry(frame, textvariable=self.backup_dir_var, width=60)
-        backup_entry.grid(row=13, column=1, sticky="ew", pady=6)
+         backup_entry.grid(row=14, column=1, sticky="ew", pady=6)
         frame.grid_columnconfigure(1, weight=1)
         button_frame = ttk.Frame(frame)
-        button_frame.grid(row=13, column=2, columnspan=4, sticky="e", pady=6)
+         button_frame.grid(row=14, column=2, columnspan=4, sticky="e", pady=6)
         ttk.Button(button_frame, text="\u2715", width=2, style="Secondary.TButton",
                    command=lambda: self.backup_dir_var.set("")).pack(side=tk.LEFT, padx=2)
         ttk.Button(button_frame, text="Browse", style="Secondary.TButton",
@@ -2820,7 +2920,7 @@ class PCAPSentryApp:
         ttk.Button(button_frame, text="Cancel", style="Secondary.TButton",
                    command=window.destroy).pack(side=tk.LEFT, padx=2)
         ttk.Button(frame, text="Reset to Defaults", style="Danger.TButton",
-               command=self._reset_preferences).grid(row=14, column=0, columnspan=6, sticky="e", pady=(12, 0))
+             command=self._reset_preferences).grid(row=15, column=0, columnspan=6, sticky="e", pady=(12, 0))
 
         window.grab_set()
 
@@ -2836,6 +2936,7 @@ class PCAPSentryApp:
             "parse_http": bool(self.parse_http_var.get()),
             "use_high_memory": bool(self.use_high_memory_var.get()),
             "use_local_model": bool(self.use_local_model_var.get()),
+            "use_gpu": bool(self.use_gpu_var.get()),
             "use_multithreading": bool(self.use_multithreading_var.get()),
             "turbo_parse": bool(self.turbo_parse_var.get()),
             "offline_mode": bool(self.offline_mode_var.get()),
@@ -2848,6 +2949,7 @@ class PCAPSentryApp:
         }
         self.settings = settings
         save_settings(settings)
+        _set_gpu_enabled(self.use_gpu_var.get())
         if hasattr(self, "_sync_chat_controls"):
             self._sync_chat_controls()
 
@@ -2864,6 +2966,7 @@ class PCAPSentryApp:
         self.parse_http_var.set(defaults["parse_http"])
         self.use_high_memory_var.set(defaults["use_high_memory"])
         self.use_local_model_var.set(defaults["use_local_model"])
+        self.use_gpu_var.set(defaults.get("use_gpu", True))
         self.use_multithreading_var.set(defaults.get("use_multithreading", True))
         self.turbo_parse_var.set(defaults.get("turbo_parse", True))
         self.offline_mode_var.set(defaults.get("offline_mode", False))
