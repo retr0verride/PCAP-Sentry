@@ -36,6 +36,9 @@
 
 
 
+
+## 2026.02.13-1 - 2026-02-13
+- Bug fixes: KB cache invalidation, NaN packet filter, domain validation, duplicate tab select, unused import cleanup, missing offline_mode default
 ## 2026.02.12-27 - 2026-02-12
 - Installer build
 ## 2026.02.12-26 - 2026-02-12

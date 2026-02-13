@@ -9,7 +9,6 @@ import queue
 import random
 import re
 import shutil
-import socket
 import statistics
 import struct
 import subprocess
@@ -168,7 +167,25 @@ def _check_tkinterdnd2():
 SIZE_SAMPLE_LIMIT = 50000
 DEFAULT_MAX_ROWS = 200000
 IOC_SET_LIMIT = 50000
-APP_VERSION = "2026.02.12-27"
+
+
+def _compute_app_version():
+    today = __import__("datetime").date.today()
+    date_str = today.strftime("%Y.%m.%d")
+    try:
+        since = today.strftime("%Y-%m-%dT00:00:00")
+        result = __import__("subprocess").run(
+            ["git", "log", "--oneline", f"--since={since}"],
+            capture_output=True, text=True, timeout=3,
+            cwd=__import__("os").path.dirname(__import__("os").path.abspath(__file__)),
+        )
+        count = len(result.stdout.strip().splitlines()) if result.returncode == 0 and result.stdout.strip() else 0
+    except Exception:
+        count = 0
+    return f"{date_str}-{count}" if count > 1 else date_str
+
+
+APP_VERSION = _compute_app_version()
 
 
 def _get_pandas():
@@ -382,6 +399,7 @@ def _default_settings():
         "llm_model": "llama3",
         "llm_endpoint": "http://localhost:11434",
         "theme": "system",
+        "offline_mode": False,
         "app_data_notice_shown": False,
     }
 
@@ -4293,7 +4311,7 @@ class PCAPSentryApp:
 
         dns_http_only = self.packet_dns_http_only_var.get() if self.packet_dns_http_only_var else False
         if dns_http_only:
-            dns_filter = (df["DnsQuery"].astype(str) != "") | (df["HttpHost"].astype(str) != "")
+            dns_filter = (df["DnsQuery"].fillna("").astype(str) != "") | (df["HttpHost"].fillna("").astype(str) != "")
             df = df[dns_filter]
 
         self._update_packet_table(df)
@@ -7353,7 +7371,6 @@ class PCAPSentryApp:
                 else:
                     self.copy_filters_button.configure(state=tk.DISABLED)
 
-            print(f"[DEBUG] _analyze: self.packet_table id={id(self.packet_table)}")
             if hasattr(self, 'results_notebook') and hasattr(self, 'results_tab'):
                 try:
                     self.results_notebook.select(self.results_tab)
@@ -7366,12 +7383,6 @@ class PCAPSentryApp:
             self._update_packet_hints(df, stats, flow_df=flow_df_early)
 
             self.status_var.set("Done")
-
-            if hasattr(self, 'results_notebook') and hasattr(self, 'results_tab'):
-                try:
-                    self.results_notebook.select(self.results_tab)
-                except Exception:
-                    pass
 
             for row in self.flow_table.get_children():
                 self.flow_table.delete(row)
@@ -7436,14 +7447,9 @@ class PCAPSentryApp:
         ioc = kb.get("ioc", {})
         ioc_counts = f"IoCs: {len(ioc.get('domains', []))} domains, {len(ioc.get('ips', []))} ips"
         self.ioc_summary_var.set(ioc_counts)
-        self._invalidate_caches()
-        # Only update kb_text if it exists (may not be initialized in all contexts)
-        if hasattr(self, 'kb_text') and self.kb_text:
-            self.kb_text.delete("1.0", tk.END)
-            if kb["safe"] or kb["malicious"] or any(ioc.get(key) for key in ("domains", "ips", "hashes")):
-                self.kb_text.insert(tk.END, json.dumps(kb, indent=2))
-            else:
-                self.kb_text.insert(tk.END, "Knowledge base is empty.")
+        # Invalidate derived caches but keep kb_cache (we just refreshed it)
+        self.normalizer_cache = None
+        self.threat_intel_cache = None
 
     def _on_tab_changed(self, _event):
         self.sample_note_var.set("")

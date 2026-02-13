@@ -6,7 +6,7 @@
 
 ### User Manual
 
-![Version](https://img.shields.io/badge/Version-2026.02.12--27-58a6ff?style=for-the-badge&labelColor=0d1117)
+![Version](https://img.shields.io/badge/Version-Date_Based_(YYYY.MM.DD)-58a6ff?style=for-the-badge&labelColor=0d1117)
 ![Platform](https://img.shields.io/badge/Platform-Windows-58a6ff?style=for-the-badge&logo=windows&logoColor=white&labelColor=0d1117)
 ![License](https://img.shields.io/badge/License-See_LICENSE.txt-58a6ff?style=for-the-badge&labelColor=0d1117)
 
@@ -618,7 +618,7 @@ Click **Reset to Defaults** at the bottom of the Preferences dialog to restore a
 
 All preferences are saved to `settings.json` in the application data directory:
 ```
-%APPDATA%\PCAP Sentry\settings.json
+%LOCALAPPDATA%\PCAP_Sentry\settings.json
 ```
 
 ---
@@ -639,10 +639,14 @@ All preferences are saved to `settings.json` in the application data directory:
 
 ### Update Details
 
-- Updates are downloaded to `%APPDATA%\PCAP Sentry\updates\`
+- Updates are downloaded to `%LOCALAPPDATA%\PCAP_Sentry\updates\`
 - All connections use HTTPS with SSL verification
 - User confirmation is always required — no silent updates
 - Old update files are cleaned up automatically
+
+### Versioning Scheme
+
+PCAP Sentry uses date-based versioning: `YYYY.MM.DD` (e.g., `2026.02.13`). If multiple builds are released on the same day, a build counter is appended (e.g., `2026.02.13-2`). The version is computed automatically from the current date and git commit history.
 
 ---
 
@@ -677,7 +681,7 @@ All preferences are saved to `settings.json` in the application data directory:
 - Click **Test Connection** in Preferences to validate your settings — the error message includes the URL and server response for diagnostics.
 - If the endpoint includes `/v1`, remove it — PCAP Sentry adds the correct API path automatically.
 - Check the header indicator: **✔ LLM** (green/blue) means connected, **✘ LLM** (red) means failed.
-- Error logs are written to `%APPDATA%\PCAP Sentry\` for detailed troubleshooting.
+- Error logs are written to `%LOCALAPPDATA%\PCAP_Sentry\` for detailed troubleshooting.
 
 ### ML Model Not Working
 
@@ -706,7 +710,7 @@ All preferences are saved to `settings.json` in the application data directory:
 
 PCAP Sentry stores its data at:
 ```
-%APPDATA%\PCAP Sentry\
+%LOCALAPPDATA%\PCAP_Sentry\
 ```
 
 This directory contains:
@@ -792,13 +796,13 @@ The analysis engine evaluates numerous heuristic signals including:
 | Item | Location |
 |------|----------|
 | Application | `C:\Program Files\PCAP Sentry\` (default) |
-| User data | `%APPDATA%\PCAP Sentry\` |
-| Settings | `%APPDATA%\PCAP Sentry\settings.json` |
-| Knowledge base | `%APPDATA%\PCAP Sentry\pcap_knowledge_base_offline.json` |
-| ML model | `%APPDATA%\PCAP Sentry\pcap_local_model.joblib` |
-| KB backups | `%APPDATA%\PCAP Sentry\kb_backups\` |
-| Update downloads | `%APPDATA%\PCAP Sentry\updates\` |
-| Logs | `%APPDATA%\PCAP Sentry\*.log` |
+| User data | `%LOCALAPPDATA%\PCAP_Sentry\` |
+| Settings | `%LOCALAPPDATA%\PCAP_Sentry\settings.json` |
+| Knowledge base | `%LOCALAPPDATA%\PCAP_Sentry\pcap_knowledge_base_offline.json` |
+| ML model | `%LOCALAPPDATA%\PCAP_Sentry\pcap_local_model.joblib` |
+| KB backups | `%LOCALAPPDATA%\PCAP_Sentry\kb_backups\` |
+| Update downloads | `%LOCALAPPDATA%\PCAP_Sentry\updates\` |
+| Logs | `%LOCALAPPDATA%\PCAP_Sentry\*.log` |
 
 ### E. Getting Help & Contributing
 

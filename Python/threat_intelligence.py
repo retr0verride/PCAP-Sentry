@@ -112,7 +112,7 @@ class ThreatIntelligence:
             return {"available": False}
 
         # Basic domain validation
-        if not domain or not re.match(r'^[a-zA-Z0-9][a-zA-Z0-9.\-]+$', domain):
+        if not domain or not re.match(r'^[a-zA-Z0-9][a-zA-Z0-9.\-]*\.[a-zA-Z]{2,}$', domain):
             return {"valid": False}
 
         cache_key = f"domain:{domain}"
