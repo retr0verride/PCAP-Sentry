@@ -5396,9 +5396,18 @@ class PCAPSentryApp:
             fg=self.colors["danger"],
             bg=self.colors["panel"],
             cursor="hand2",
+            bd=0,
             padx=2,
+            pady=0,
         )
-        x_label.place(relx=1.0, rely=0.5, anchor="e", x=-4)
+        x_label.place(relx=1.0, rely=0.5, anchor="e", x=-2, y=0)
+        # Re-center after the entry is drawn and sized
+        def _reposition(event=None):
+            eh = entry.winfo_height()
+            lh = x_label.winfo_reqheight()
+            y_off = (eh - lh) // 2
+            x_label.place_configure(rely=0.0, y=y_off)
+        entry.bind("<Configure>", _reposition, add="+")
         x_label.bind("<Button-1>", lambda e: var.set(""))
         x_label.bind("<Enter>", lambda e: x_label.configure(fg=self.colors["danger_hover"]))
         x_label.bind("<Leave>", lambda e: x_label.configure(fg=self.colors["danger"]))
