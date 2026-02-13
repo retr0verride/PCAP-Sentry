@@ -103,6 +103,8 @@ PCAP Sentry is a malware analysis console for network packet capture (PCAP) file
 3. Choose an installation directory (default: `C:\Program Files\PCAP Sentry`).
 4. Optionally create a desktop shortcut.
 5. Optional: select **Install Ollama** and pick one or more models to download.
+   - Download progress is shown in real time with MB transferred and percentage.
+   - You can cancel the operation at any time — a confirmation dialog will appear.
 6. Launch PCAP Sentry from the **Start Menu** or **desktop shortcut**.
 
 ### Option 2: Run from Source
@@ -601,7 +603,12 @@ The page also includes a direct link to the Ollama model library with model desc
 
 Example preset options include `llama3.2`, `qwen2.5:14b`, `deepseek-r1:7b`, and `deepseek-r1:14b`.
 
-The installer now shows live progress while installing Ollama and while processing each selected model.
+The installer shows real-time progress while installing Ollama and while downloading each selected model:
+
+- **MB progress** — Current and total megabytes transferred are displayed during model pulls.
+- **Percentage** — A progress bar and percentage label update in real time.
+- **Cancel support** — You can cancel at any point during model downloads. A confirmation dialog asks whether to stop. Partial downloads are cleaned up automatically.
+- **Error diagnostics** — If a download fails or is cancelled, the dialog shows the path to the last output log so you can inspect what happened.
 
 During installer-based setup, Ollama is started in headless server mode for model pulls; the desktop UI is not required.
 
