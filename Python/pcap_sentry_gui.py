@@ -6136,20 +6136,42 @@ class PCAPSentryApp:
 
         def done(installer_path):
             _set_status("Installing...", self.colors.get("warning", "#d29922"))
-            try:
-                os.startfile(installer_path)
-                _set_status("Installer launched", self.colors.get("success", "#3fb950"))
-                messagebox.showinfo(
-                    "Ollama",
-                    "The Ollama installer has been launched.\n\n"
-                    "After installation completes:\n"
-                    "1. Set LLM provider to 'ollama'\n"
-                    "2. Click the refresh button to detect models\n"
-                    "3. Test the connection",
-                )
-            except Exception as e:
-                _set_status("Launch failed", self.colors.get("danger", "#f85149"))
-                messagebox.showerror("Ollama", f"Failed to launch installer:\n{e}")
+
+            def _run_installer():
+                try:
+                    result = subprocess.run(
+                        [installer_path, "/S"],
+                        capture_output=True, text=True, timeout=300,
+                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                    )
+                    return result.returncode
+                except Exception as e:
+                    return e
+
+            def _on_install_done(rc):
+                if isinstance(rc, Exception):
+                    _set_status("Install failed", self.colors.get("danger", "#f85149"))
+                    messagebox.showerror("Ollama", f"Installer failed:\n{rc}")
+                elif rc != 0:
+                    _set_status("Install failed", self.colors.get("danger", "#f85149"))
+                    messagebox.showerror("Ollama", f"Installer exited with code {rc}.")
+                else:
+                    _set_status("Installed", self.colors.get("success", "#3fb950"))
+                    messagebox.showinfo(
+                        "Ollama",
+                        "Ollama installed successfully.\n\n"
+                        "Set LLM provider to 'ollama', refresh models,\n"
+                        "and test the connection.",
+                    )
+
+            self._run_task(
+                _run_installer, _on_install_done,
+                on_error=lambda e: (
+                    _set_status("Install failed", self.colors.get("danger", "#f85149")),
+                    messagebox.showerror("Ollama", f"Installer error:\n{e}"),
+                ),
+                message="Installing Ollama...",
+            )
 
         def failed(err):
             _set_status("Download failed", self.colors.get("danger", "#f85149"))
