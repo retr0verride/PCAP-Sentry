@@ -8,6 +8,9 @@
 
 
 
+
+## 2026.02.13-10 - 2026-02-13
+- Avoid installer stall by running Ollama setup in background
 ## 2026.02.13-9 - 2026-02-13
 - Clarify offline Ollama vs cloud LLM endpoints in UI/docs
 ## 2026.02.13-8 - 2026-02-13

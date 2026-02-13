@@ -3,14 +3,14 @@
 #define IncludeVCRedist
 #endif
 
-#define AppVer "2026.02.13-9"
+#define AppVer "2026.02.13-10"
 
 [Setup]
 AppId={{B8A5C2E1-7F3D-4A1B-9C6E-2D8F5A4E3B71}
 AppName=PCAP Sentry
 AppVersion={#AppVer}
 AppVerName=PCAP Sentry {#AppVer}
-VersionInfoVersion=2026.2.13.9
+VersionInfoVersion=2026.2.13.10
 AppPublisher=industrial-dave
 AppSupportURL=https://github.com/industrial-dave/PCAP-Sentry
 DefaultDirName={autopf}\PCAP Sentry
@@ -277,61 +277,45 @@ begin
   Result := 'ollama.exe';
 end;
 
-function InstallOllama: Boolean;
+function BuildOllamaSetupScript: String;
 var
-  ResultCode: Integer;
-  DownloadPath: String;
-  DownloadCmd: String;
+  Script: String;
+  ModelsArray: String;
+  I: Integer;
 begin
-  Result := False;
-
-  if Exec('cmd.exe', '/c winget install -e --id Ollama.Ollama -h', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+  ModelsArray := '@()';
+  if AnyOllamaModelSelected then
   begin
-    if ResultCode = 0 then
+    ModelsArray := '@(';
+    for I := 0 to GetArrayLength(OllamaModelIds) - 1 do
     begin
-      Result := True;
-      exit;
-    end;
-  end;
-
-  DownloadPath := ExpandConstant('{tmp}\OllamaSetup.exe');
-  DownloadCmd := '-NoProfile -ExecutionPolicy Bypass -Command "' +
-    '$p = ''' + DownloadPath + '''; ' +
-    'Invoke-WebRequest -Uri https://ollama.com/download/OllamaSetup.exe -OutFile $p"';
-
-  if Exec('powershell.exe', DownloadCmd, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
-  begin
-    if ResultCode = 0 then
-    begin
-      if Exec(DownloadPath, '/S', '', SW_SHOW, ewWaitUntilTerminated, ResultCode) then
+      if OllamaModelsPage.Values[I] then
       begin
-        if ResultCode = 0 then
-        begin
-          Result := True;
-          exit;
-        end;
+        if ModelsArray <> '@(' then
+          ModelsArray := ModelsArray + ', ';
+        ModelsArray := ModelsArray + '''' + OllamaModelIds[I] + '''';
       end;
     end;
+    ModelsArray := ModelsArray + ')';
   end;
-end;
 
-procedure PullOllamaModels;
-var
-  I: Integer;
-  OllamaExe: String;
-  ResultCode: Integer;
-begin
-  if not AnyOllamaModelSelected then
-    exit;
-
-  OllamaExe := GetOllamaExePath;
-  for I := 0 to GetArrayLength(OllamaModelIds) - 1 do
-  begin
-    if OllamaModelsPage.Values[I] then
-    begin
-      Exec(OllamaExe, 'pull ' + OllamaModelIds[I], '', SW_SHOW, ewWaitUntilTerminated, ResultCode);
-    end;
-  end;
+  Script := '$ErrorActionPreference = ''Stop''' + #13#10 +
+    '$ollamaExe = Join-Path $env:LOCALAPPDATA ''Programs\Ollama\ollama.exe''' + #13#10 +
+    'if (-not (Test-Path $ollamaExe)) { $ollamaExe = ''ollama.exe'' }' + #13#10 +
+    'if (-not (Get-Command $ollamaExe -ErrorAction SilentlyContinue)) {' + #13#10 +
+    '  if (Get-Command winget -ErrorAction SilentlyContinue) {' + #13#10 +
+    '    winget install -e --id Ollama.Ollama -h | Out-Null' + #13#10 +
+    '  } else {' + #13#10 +
+    '    $installer = Join-Path $env:TEMP ''OllamaSetup.exe''' + #13#10 +
+    '    Invoke-WebRequest -Uri https://ollama.com/download/OllamaSetup.exe -OutFile $installer' + #13#10 +
+    '    Start-Process -Wait -FilePath $installer -ArgumentList ''/S''' + #13#10 +
+    '  }' + #13#10 +
+    '}' + #13#10 +
+    '$models = ' + ModelsArray + #13#10 +
+    'if ($models.Count -gt 0) {' + #13#10 +
+    '  foreach ($m in $models) { & $ollamaExe pull $m }' + #13#10 +
+    '}' + #13#10;
+  Result := Script;
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
@@ -383,19 +367,20 @@ end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 var
-  OllamaInstalled: Boolean;
+  ScriptPath: String;
+  ResultCode: Integer;
 begin
   if CurStep = ssPostInstall then
   begin
     if WizardIsTaskSelected('installollama') then
     begin
-      OllamaInstalled := InstallOllama;
-      if not OllamaInstalled then
-      begin
-        MsgBox('Ollama installation failed. You can install it later from https://ollama.com.', mbError, MB_OK);
-        exit;
-      end;
-      PullOllamaModels;
+      ScriptPath := ExpandConstant('{tmp}\pcap_ollama_setup.ps1');
+      SaveStringToFile(ScriptPath, BuildOllamaSetupScript, False);
+      MsgBox(
+        'Ollama and selected models will install/download in the background after setup closes.' + #13#10 +
+        'You can continue using the installer while this runs.',
+        mbInformation, MB_OK);
+      Exec('powershell.exe', '-NoProfile -ExecutionPolicy Bypass -File "' + ScriptPath + '"', '', SW_HIDE, ewNoWait, ResultCode);
     end;
   end;
 end;
