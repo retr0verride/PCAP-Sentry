@@ -681,14 +681,17 @@ Example questions:
 
 > 🎨 **App Color Palette Reference**
 >
-> PCAP Sentry uses a GitHub-inspired dark theme by default:
+> PCAP Sentry uses a GitHub-inspired color palette:
 >
 > | Role | Dark Mode | Light Mode |
 > |------|-----------|------------|
 > | Background | `#0d1117` | `#f0f2f5` |
 > | Panel | `#161b22` | `#ffffff` |
+> | Panel Alt (tabs, headings) | `#1c2333` | `#f7f8fa` |
 > | Accent (primary) | `#58a6ff` | `#2563eb` |
 > | Text | `#e6edf3` | `#1a1d23` |
+> | Muted text | `#8b949e` | `#6b7280` |
+> | Border | `#21262d` | `#e2e5ea` |
 > | Success / Safe | `#3fb950` | `#16a34a` |
 > | Warning / Suspicious | `#d29922` | `#d97706` |
 > | Danger / Malicious | `#f85149` | `#dc2626` |
