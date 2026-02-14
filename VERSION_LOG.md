@@ -5,6 +5,9 @@
 
 
 
+
+## 2026.02.13-41 - 2026-02-13
+- Fix update dialog buttons, bundle update_checker module
 ## 2026.02.13-40 - 2026-02-13
 - Fix version display: use build-stamped version in frozen EXE instead of dynamic date
 ## 2026.02.13-39 - 2026-02-13

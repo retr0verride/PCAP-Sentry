@@ -39,8 +39,12 @@ from tkinter import font as tkfont
 try:
     from update_checker import BackgroundUpdateChecker, UpdateChecker
     _update_checker_available = True
-except ImportError:
+except ImportError as _uc_err:
     _update_checker_available = False
+    # Log the failure so we can diagnose bundling issues
+    import traceback as _tb
+    print(f"[WARN] update_checker import failed: {_uc_err}")
+    _tb.print_exc()
 
 _sklearn_available = None
 _tkinterdnd2_available = None
@@ -172,7 +176,7 @@ DEFAULT_MAX_ROWS = 200000
 IOC_SET_LIMIT = 50000
 
 
-_EMBEDDED_VERSION = "2026.02.13-40"  # Stamped by update_version.ps1 at build time
+_EMBEDDED_VERSION = "2026.02.13-41"  # Stamped by update_version.ps1 at build time
 
 
 def _compute_app_version():
@@ -3612,7 +3616,7 @@ class PCAPSentryApp:
             window = tk.Toplevel(self.root)
             window.title("Update Available")
             window.resizable(True, True)
-            window.geometry("600x400")
+            window.geometry("600x450")
             window.configure(bg=self.colors["bg"])
             self._set_dark_titlebar(window)
 
@@ -3632,9 +3636,21 @@ class PCAPSentryApp:
                 frame, text=f"Available version: {latest}"
             ).pack(anchor="w", pady=(0, 15))
 
+            # Button frame at bottom FIRST (pack order matters — bottom before expanding middle)
+            button_frame = ttk.Frame(frame)
+            button_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=(10, 0))
+
+            def on_download():
+                self._download_and_install_update(latest)
+                window.destroy()
+
+            ttk.Button(button_frame, text="Download & Update", command=on_download).pack(side=tk.LEFT, padx=6)
+            ttk.Button(button_frame, text="Later", style="Secondary.TButton", command=window.destroy).pack(side=tk.LEFT)
+
+            # Release notes in the middle (expands to fill remaining space)
             ttk.Label(frame, text="Release Notes:", font=("Segoe UI", 11, "bold")).pack(anchor="w")
             text_frame = ttk.Frame(frame)
-            text_frame.pack(fill=tk.BOTH, expand=True, pady=(5, 15))
+            text_frame.pack(fill=tk.BOTH, expand=True, pady=(5, 0))
 
             scrollbar = ttk.Scrollbar(text_frame)
             scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
@@ -3648,16 +3664,6 @@ class PCAPSentryApp:
 
             text_widget.insert(tk.END, notes)
             text_widget.config(state=tk.DISABLED)
-
-            button_frame = ttk.Frame(frame)
-            button_frame.pack(fill=tk.X)
-
-            def on_download():
-                self._download_and_install_update(latest)
-                window.destroy()
-
-            ttk.Button(button_frame, text="Download & Update", command=on_download).pack(side=tk.LEFT, padx=6)
-            ttk.Button(button_frame, text="Later", style="Secondary.TButton", command=window.destroy).pack(side=tk.LEFT)
 
             window.grab_set()
         else:
