@@ -86,6 +86,15 @@ datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 hiddenimports += ['scapy', 'scapy.all', 'sklearn', 'joblib']
 
+# Ensure companion Python modules are bundled (try/except imports can fool PyInstaller)
+hiddenimports += ['update_checker', 'threat_intelligence', 'enhanced_ml_trainer']
+
+# Also add them as data files in case hiddenimports alone doesn't resolve them
+for _companion in ('update_checker.py', 'threat_intelligence.py', 'enhanced_ml_trainer.py'):
+    _companion_path = os.path.join('Python', _companion)
+    if os.path.exists(_companion_path):
+        datas.append((_companion_path, '.'))
+
 datas = _unique(datas)
 binaries = _unique(binaries)
 hiddenimports = _unique(hiddenimports)
@@ -119,7 +128,7 @@ if os.path.exists(packet_path):
 
 a = Analysis(
     ['Python\\pcap_sentry_gui.py'],
-    pathex=[],
+    pathex=['Python'],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
