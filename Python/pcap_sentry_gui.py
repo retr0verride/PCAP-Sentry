@@ -5421,7 +5421,9 @@ class PCAPSentryApp:
 
     def _set_progress(self, percent, eta_seconds=None, label=None, processed=None, total=None):
         if percent is None:
-            self.progress_percent_var.set("")
+            # No percentage — keep bar indeterminate but still update label
+            if label:
+                self.status_var.set(label)
             self._progress_target = 0.0
             self._progress_current = 0.0
             return
