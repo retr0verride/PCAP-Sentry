@@ -3,6 +3,9 @@
 
 
 
+
+## 2026.02.13-39 - 2026-02-13
+- Rebuild ICO with multi-size icons for crisp desktop display
 ## 2026.02.13-38 - 2026-02-13
 
 ### LLM Server Download Progress Enhancements
