@@ -1066,6 +1066,16 @@ def _load_local_model():
     except Exception:
         return None
 
+    # Type-check deserialized objects (defense-in-depth against pickle attacks)
+    if not isinstance(meta, dict):
+        return None
+    model = meta.get("model")
+    vectorizer = meta.get("vectorizer")
+    if model is not None and not (hasattr(model, "predict") and hasattr(model, "predict_proba")):
+        return None
+    if vectorizer is not None and not (hasattr(vectorizer, "transform") and hasattr(vectorizer, "get_feature_names_out")):
+        return None
+
     return meta
 
 
@@ -5411,21 +5421,28 @@ class PCAPSentryApp:
             self._progress_anim_id = None
 
 
-    def _set_determinate_progress(self, percent):
-        """Set progress bar to determinate mode with specific percentage."""
-        self.progress.stop()
-        self.progress.configure(mode="determinate", maximum=100)
-        self.progress["value"] = percent
-        self.progress_percent_var.set(f"{int(percent)}%")
-        self.root.update_idletasks()
-
     def _set_progress(self, percent, eta_seconds=None, label=None, processed=None, total=None):
         if percent is None:
-            # No percentage — keep bar indeterminate but still update label
+            # No percentage — switch to / keep indeterminate spinner
             if label:
                 self.status_var.set(label)
+            # Cancel any running determinate animation
+            if self._progress_anim_id is not None:
+                self.root.after_cancel(self._progress_anim_id)
+                self._progress_anim_id = None
+            self._progress_animating = False
             self._progress_target = 0.0
             self._progress_current = 0.0
+            # Switch to indeterminate mode with spinner if not already
+            try:
+                current_mode = str(self.progress.cget("mode"))
+            except Exception:
+                current_mode = ""
+            if current_mode != "indeterminate":
+                self.progress.configure(mode="indeterminate", maximum=100)
+                self.progress["value"] = 0
+                self.progress.start(10)
+            self.progress_percent_var.set("")
             return
         self.progress.stop()
         self.progress.configure(mode="determinate", maximum=100)
@@ -6479,12 +6496,17 @@ class PCAPSentryApp:
         self.llm_header_label.configure(text=text, fg=fg, bg=bg)
         self.llm_header_indicator.configure(bg=bg, highlightbackground=border)
 
+    _PROBE_MAX_BYTES = 5 * 1024 * 1024  # 5 MB safety cap for probe responses
+
     def _probe_ollama(self, endpoint):
         base = self._normalize_ollama_endpoint(endpoint)
         url = base.rstrip("/") + "/api/tags"
         req = urllib.request.Request(url, headers={"Content-Type": "application/json"})
         with urllib.request.urlopen(req, timeout=1.5) as resp:
-            raw = resp.read().decode("utf-8")
+            raw = resp.read(self._PROBE_MAX_BYTES + 1)
+            if len(raw) > self._PROBE_MAX_BYTES:
+                raise RuntimeError("Probe response exceeded size limit.")
+            raw = raw.decode("utf-8")
         payload = json.loads(raw)
         models = payload.get("models", []) if isinstance(payload, dict) else []
         if not models:
@@ -6497,7 +6519,10 @@ class PCAPSentryApp:
         url = base.rstrip("/") + "/api/tags"
         req = urllib.request.Request(url, headers={"Content-Type": "application/json"})
         with urllib.request.urlopen(req, timeout=3) as resp:
-            raw = resp.read().decode("utf-8")
+            raw = resp.read(self._PROBE_MAX_BYTES + 1)
+            if len(raw) > self._PROBE_MAX_BYTES:
+                raise RuntimeError("Probe response exceeded size limit.")
+            raw = raw.decode("utf-8")
         payload = json.loads(raw)
         models = payload.get("models", []) if isinstance(payload, dict) else []
         return [m.get("name") for m in models if isinstance(m, dict) and m.get("name")]
@@ -6509,7 +6534,10 @@ class PCAPSentryApp:
             headers["Authorization"] = f"Bearer {api_key}"
         req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, timeout=3) as resp:
-            raw = resp.read().decode("utf-8")
+            raw = resp.read(self._PROBE_MAX_BYTES + 1)
+            if len(raw) > self._PROBE_MAX_BYTES:
+                raise RuntimeError("Probe response exceeded size limit.")
+            raw = raw.decode("utf-8")
         payload = json.loads(raw)
         models = payload.get("data", []) if isinstance(payload, dict) else []
         if not models:
@@ -6525,7 +6553,10 @@ class PCAPSentryApp:
             headers["Authorization"] = f"Bearer {api_key}"
         req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, timeout=5) as resp:
-            raw = resp.read().decode("utf-8")
+            raw = resp.read(self._PROBE_MAX_BYTES + 1)
+            if len(raw) > self._PROBE_MAX_BYTES:
+                raise RuntimeError("Probe response exceeded size limit.")
+            raw = raw.decode("utf-8")
         payload = json.loads(raw)
         models = payload.get("data", []) if isinstance(payload, dict) else []
         return [m.get("id") for m in models if isinstance(m, dict) and m.get("id")]
@@ -6708,7 +6739,7 @@ class PCAPSentryApp:
                 "winget": "Ollama.Ollama",
                 "url": "https://ollama.com/download/OllamaSetup.exe",
                 "homepage": "https://ollama.com/download",
-                "silent_flag": "/S",
+                "silent_flag": "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-",
             },
             {
                 "name": "LM Studio",
@@ -6762,6 +6793,7 @@ class PCAPSentryApp:
 
         status_vars = []
         install_buttons = []
+        uninstall_buttons = []
 
         for idx, srv in enumerate(_SERVERS):
             row_frame = ttk.Frame(frame)
@@ -6773,7 +6805,7 @@ class PCAPSentryApp:
             ttk.Label(info, text=srv["name"], font=("Segoe UI", 11, "bold")).pack(anchor="w")
             ttk.Label(info, text=srv["desc"], style="Hint.TLabel").pack(anchor="w")
 
-            # Right: status + install button
+            # Right: status + install/uninstall buttons
             btn_frame = ttk.Frame(row_frame)
             btn_frame.pack(side=tk.RIGHT)
 
@@ -6786,6 +6818,15 @@ class PCAPSentryApp:
                 font=("Segoe UI", 9),
             )
             status_lbl.pack(side=tk.LEFT, padx=(0, 8))
+
+            uninstall_btn = ttk.Button(
+                btn_frame, text="Uninstall",
+                command=lambda s=srv, sv=status_var, sl=status_lbl, i=idx: self._uninstall_llm_server(
+                    s, sv, sl, install_buttons, uninstall_buttons, i),
+            )
+            uninstall_btn.pack(side=tk.LEFT, padx=(0, 4))
+            uninstall_btn.pack_forget()  # hidden until we know it's installed
+            uninstall_buttons.append(uninstall_btn)
 
             install_btn = ttk.Button(
                 btn_frame, text="Install",
@@ -6818,8 +6859,10 @@ class PCAPSentryApp:
                         if isinstance(child, tk.Label):
                             child.configure(fg=self.colors.get("success", "#3fb950"))
                     install_buttons[i].configure(text="Reinstall")
+                    uninstall_buttons[i].pack(side=tk.LEFT, padx=(0, 4))
                 else:
                     status_vars[i].set("Not installed")
+                    uninstall_buttons[i].pack_forget()
 
         def _run_checks():
             results = _check_all()
@@ -6862,78 +6905,8 @@ class PCAPSentryApp:
         status_var.set("Installing...")
         status_label.configure(fg=self.colors.get("accent", "#58a6ff"))
 
-        # Mutable slot so _request_cancel can kill the active subprocess
-        _active_proc = [None]
-        _active_resp = [None]  # mutable slot for active urllib response
-        _orig_request_cancel = self._request_cancel
-
-        def _enhanced_cancel():
-            """Extended cancel that also kills the running subprocess and download."""
-            _orig_request_cancel()
-            proc = _active_proc[0]
-            if proc is not None:
-                try:
-                    proc.kill()
-                except Exception:
-                    pass
-            resp = _active_resp[0]
-            if resp is not None:
-                try:
-                    resp.close()
-                except Exception:
-                    pass
-
-        # Temporarily replace _request_cancel so the main-window Cancel button kills the process
-        self._request_cancel = _enhanced_cancel
-        self.cancel_button.configure(command=_enhanced_cancel)
-
         def task(progress_cb):
-            def _check_cancel():
-                if self._cancel_event.is_set():
-                    raise AnalysisCancelledError("Installation cancelled by user.")
-
-            # Try winget first
-            progress_cb(0, label=f"Installing {name} — trying winget...")
-            try:
-                proc = subprocess.Popen(
-                    ["winget", "install", "-e", "--id", winget_id,
-                     "--accept-package-agreements", "--accept-source-agreements", "-h"],
-                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                    text=True, bufsize=1,
-                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                )
-                _active_proc[0] = proc
-                # Use readline() instead of iterator for responsive cancel
-                while True:
-                    _check_cancel()
-                    line = proc.stdout.readline()
-                    if not line:
-                        if proc.poll() is not None:
-                            break
-                        time.sleep(0.1)
-                        continue
-                    line = line.strip()
-                    if not line:
-                        continue
-                    pct = self._extract_percent(line)
-                    if pct is not None:
-                        progress_cb(pct, label=f"Installing {name}... {line}")
-                    else:
-                        progress_cb(None, label=f"Installing {name}... {line}")
-                _active_proc[0] = None
-                _check_cancel()
-                if proc.returncode == 0:
-                    return "winget"
-            except AnalysisCancelledError:
-                raise
-            except FileNotFoundError:
-                progress_cb(None, label=f"Installing {name} — winget not available, trying download...")
-            except Exception:
-                progress_cb(None, label=f"Installing {name} — winget failed, trying download...")
-
-            _check_cancel()
-
-            # Fallback: direct download if URL available
+            # Prefer direct download (shows real progress bar) over winget
             if download_url and silent_flag:
                 tmp_dir = None
                 try:
@@ -6947,63 +6920,123 @@ class PCAPSentryApp:
                         headers={"User-Agent": "PCAP-Sentry/1.0"},
                     )
                     resp = urllib.request.urlopen(req, timeout=120)
-                    _active_resp[0] = resp
+                    _MAX_INSTALLER_BYTES = 500 * 1024 * 1024  # 500 MB cap
                     try:
                         total_size = int(resp.headers.get("Content-Length", 0))
+                        if total_size > _MAX_INSTALLER_BYTES:
+                            raise RuntimeError(f"Installer too large ({total_size} bytes).")
                         downloaded = 0
                         with open(installer_path, "wb") as f:
                             while True:
-                                _check_cancel()
                                 chunk = resp.read(65536)
                                 if not chunk:
                                     break
                                 f.write(chunk)
                                 downloaded += len(chunk)
+                                if downloaded > _MAX_INSTALLER_BYTES:
+                                    raise RuntimeError("Installer download exceeded 500 MB limit.")
                                 if total_size > 0:
                                     pct = (downloaded / total_size) * 100
                                     dl_mb = downloaded / (1024 * 1024)
                                     total_mb = total_size / (1024 * 1024)
-                                    progress_cb(pct, label=f"Downloading {name}... {dl_mb:.1f}/{total_mb:.1f} MB")
+                                    progress_cb(pct, label=f"Downloading {name} — {dl_mb:.1f} / {total_mb:.1f} MB")
                                 else:
                                     dl_mb = downloaded / (1024 * 1024)
-                                    progress_cb(None, label=f"Downloading {name}... {dl_mb:.1f} MB")
+                                    progress_cb(None, label=f"Downloading {name} — {dl_mb:.1f} MB")
                     finally:
-                        _active_resp[0] = None
                         resp.close()
 
-                    _check_cancel()
-
-                    progress_cb(None, label=f"Installing {name}... Running installer...")
-                    inst_proc = subprocess.Popen(
-                        [installer_path, silent_flag],
-                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                        text=True,
-                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                    progress_cb(None, label=f"Installing {name}...")
+                    # Run installer elevated via ShellExecuteExW so UAC
+                    # grants admin rights and the installer runs truly silent
+                    rc = self._run_elevated(
+                        installer_path, silent_flag,
+                        progress_cb, name,
                     )
-                    _active_proc[0] = inst_proc
-                    while inst_proc.poll() is None:
-                        _check_cancel()
-                        time.sleep(0.5)
-                    _active_proc[0] = None
-                    if inst_proc.returncode == 0:
+                    if rc == 0:
+                        # Kill Ollama desktop app if it auto-launched
+                        if "ollama" in name.lower():
+                            for pn in ["ollama app.exe", "Ollama.exe"]:
+                                try:
+                                    subprocess.run(
+                                        ["taskkill", "/F", "/IM", pn],
+                                        capture_output=True, timeout=5,
+                                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                                    )
+                                except Exception:
+                                    pass
                         return "download"
-                except AnalysisCancelledError:
-                    raise
                 except Exception:
-                    pass
+                    progress_cb(None, label=f"Download failed, trying winget...")
+
                 finally:
                     if tmp_dir:
                         shutil.rmtree(tmp_dir, ignore_errors=True)
 
+            # Fallback: winget (no real progress but shows elapsed time)
+            progress_cb(None, label=f"Installing {name} via winget...")
+            try:
+                proc = subprocess.Popen(
+                    ["winget", "install", "-e", "--id", winget_id,
+                     "--accept-package-agreements", "--accept-source-agreements", "-h"],
+                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                    text=True, bufsize=1,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                )
+                line_q = queue.Queue()
+
+                def _reader():
+                    try:
+                        for ln in proc.stdout:
+                            line_q.put(ln)
+                    except Exception:
+                        pass
+                    line_q.put(None)
+
+                threading.Thread(target=_reader, daemon=True).start()
+
+                winget_start = time.time()
+                while True:
+                    try:
+                        line = line_q.get(timeout=0.5)
+                    except queue.Empty:
+                        elapsed = int(time.time() - winget_start)
+                        progress_cb(None, label=f"Installing {name} via winget ({elapsed}s)")
+                        continue
+                    if line is None:
+                        break
+                    parts = line.split('\r')
+                    for part in parts:
+                        part = part.strip()
+                        if not part:
+                            continue
+                        pct = self._extract_percent(part)
+                        if pct is not None:
+                            progress_cb(pct, label=f"Installing {name}")
+                        else:
+                            progress_cb(None, label=f"Installing {name} — {part}")
+                proc.wait()
+                if proc.returncode == 0:
+                    # Kill Ollama desktop app if it auto-launched
+                    if "ollama" in name.lower():
+                        for pn in ["ollama app.exe", "Ollama.exe"]:
+                            try:
+                                subprocess.run(
+                                    ["taskkill", "/F", "/IM", pn],
+                                    capture_output=True, timeout=5,
+                                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                                )
+                            except Exception:
+                                pass
+                    return "winget"
+            except FileNotFoundError:
+                pass
+            except Exception:
+                pass
+
             return None
 
-        def _restore_cancel():
-            """Restore the original cancel handler."""
-            self._request_cancel = _orig_request_cancel
-            self.cancel_button.configure(command=_orig_request_cancel)
-
         def _on_done(method):
-            _restore_cancel()
             try:
                 installed = server_info["check"]()
             except Exception:
@@ -7012,6 +7045,17 @@ class PCAPSentryApp:
             if installed or method is not None:
                 status_var.set("\u2714 Installed")
                 status_label.configure(fg=self.colors.get("success", "#3fb950"))
+                # Kill the Ollama desktop app if it auto-launched during install
+                if "ollama" in name.lower():
+                    for proc_name in ["ollama app.exe", "Ollama.exe"]:
+                        try:
+                            subprocess.run(
+                                ["taskkill", "/F", "/IM", proc_name],
+                                capture_output=True, timeout=5,
+                                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                            )
+                        except Exception:
+                            pass
                 # Remove auto-start shortcut that some servers (e.g. Ollama) add
                 try:
                     startup_lnk = os.path.join(
@@ -7023,6 +7067,35 @@ class PCAPSentryApp:
                         os.remove(startup_lnk)
                 except Exception:
                     pass
+                # Also check for Ollama-specific startup entry
+                if "ollama" in name.lower():
+                    try:
+                        ollama_lnk = os.path.join(
+                            os.environ.get("APPDATA", ""),
+                            "Microsoft", "Windows", "Start Menu", "Programs", "Startup",
+                            "Ollama.lnk",
+                        )
+                        if os.path.isfile(ollama_lnk):
+                            os.remove(ollama_lnk)
+                    except Exception:
+                        pass
+                    # Remove registry auto-start entry if present
+                    try:
+                        import winreg
+                        key = winreg.OpenKey(
+                            winreg.HKEY_CURRENT_USER,
+                            r"Software\Microsoft\Windows\CurrentVersion\Run",
+                            0, winreg.KEY_SET_VALUE | winreg.KEY_QUERY_VALUE,
+                        )
+                        try:
+                            winreg.QueryValueEx(key, "Ollama")
+                            winreg.DeleteValue(key, "Ollama")
+                        except FileNotFoundError:
+                            pass
+                        finally:
+                            winreg.CloseKey(key)
+                    except Exception:
+                        pass
                 messagebox.showinfo(
                     name,
                     f"{name} installed successfully.\n\n"
@@ -7040,7 +7113,6 @@ class PCAPSentryApp:
                 )
 
         def _on_failed(err):
-            _restore_cancel()
             status_var.set("Install failed")
             status_label.configure(fg=self.colors.get("danger", "#f85149"))
             messagebox.showerror(
@@ -7052,11 +7124,135 @@ class PCAPSentryApp:
 
         self._run_task(task, _on_done, on_error=_on_failed,
                       message=f"Installing {name}...", progress_label=f"Installing {name}")
+        # Hide cancel button — LLM install cannot be cleanly cancelled
+        self.cancel_button.pack_forget()
+
+    def _uninstall_llm_server(self, server_info, status_var, status_label,
+                              install_buttons, uninstall_buttons, index):
+        """Uninstall an LLM server via winget."""
+        name = server_info["name"]
+        winget_id = server_info["winget"]
+
+        if not messagebox.askyesno(
+            f"Uninstall {name}",
+            f"Are you sure you want to uninstall {name}?\n\n"
+            f"This will remove the server application.\n"
+            f"Downloaded models may remain in your user profile.",
+        ):
+            return
+
+        status_var.set("Uninstalling...")
+        status_label.configure(fg=self.colors.get("warning", "#d29922"))
+
+        def task(progress_cb):
+            # Kill running processes first (Ollama specifically)
+            if "ollama" in name.lower():
+                for proc_name in ["ollama.exe", "ollama app.exe"]:
+                    try:
+                        subprocess.run(
+                            ["taskkill", "/F", "/IM", proc_name],
+                            capture_output=True, timeout=5,
+                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                        )
+                    except Exception:
+                        pass
+                time.sleep(1)
+
+            progress_cb(None, label=f"Uninstalling {name} via winget...")
+            try:
+                proc = subprocess.Popen(
+                    ["winget", "uninstall", "--id", winget_id, "-e",
+                     "--silent", "--accept-source-agreements"],
+                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                    text=True, bufsize=1,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                )
+                line_q = queue.Queue()
+
+                def _reader():
+                    try:
+                        for ln in proc.stdout:
+                            line_q.put(ln)
+                    except Exception:
+                        pass
+                    line_q.put(None)
+
+                threading.Thread(target=_reader, daemon=True).start()
+
+                start_t = time.time()
+                while True:
+                    try:
+                        line = line_q.get(timeout=0.5)
+                    except queue.Empty:
+                        elapsed = int(time.time() - start_t)
+                        progress_cb(None, label=f"Uninstalling {name} ({elapsed}s)")
+                        continue
+                    if line is None:
+                        break
+                    part = line.strip()
+                    if part:
+                        progress_cb(None, label=f"Uninstalling {name} — {part}")
+                proc.wait()
+                return proc.returncode == 0
+            except FileNotFoundError:
+                return False
+            except Exception:
+                return False
+
+        def _on_done(success):
+            # Re-check if still installed
+            try:
+                still_installed = server_info["check"]()
+            except Exception:
+                still_installed = False
+
+            if not still_installed:
+                status_var.set("Not installed")
+                status_label.configure(fg=self.colors.get("muted", "#8b949e"))
+                install_buttons[index].configure(text="Install")
+                uninstall_buttons[index].pack_forget()
+                # Remove auto-start shortcut if it exists
+                try:
+                    startup_lnk = os.path.join(
+                        os.environ.get("APPDATA", ""),
+                        "Microsoft", "Windows", "Start Menu", "Programs", "Startup",
+                        f"{name}.lnk",
+                    )
+                    if os.path.isfile(startup_lnk):
+                        os.remove(startup_lnk)
+                except Exception:
+                    pass
+                messagebox.showinfo(
+                    name,
+                    f"{name} has been uninstalled.\n\n"
+                    f"Note: Downloaded models may still exist in your\n"
+                    f"user profile and can be deleted manually.",
+                )
+            else:
+                status_var.set("\u2714 Installed")
+                status_label.configure(fg=self.colors.get("success", "#3fb950"))
+                messagebox.showwarning(
+                    name,
+                    f"{name} could not be fully uninstalled.\n\n"
+                    f"You may need to uninstall it manually from\n"
+                    f"Windows Settings > Apps.",
+                )
+
+        def _on_failed(err):
+            status_var.set("\u2714 Installed")
+            status_label.configure(fg=self.colors.get("success", "#3fb950"))
+            messagebox.showerror(
+                name,
+                f"Failed to uninstall {name}.\n\nError: {err}",
+            )
+
+        self._run_task(task, _on_done, on_error=_on_failed,
+                      message=f"Uninstalling {name}...", progress_label=f"Uninstalling {name}")
+        self.cancel_button.pack_forget()
 
     @staticmethod
     def _extract_percent(text):
         """Extract a percentage value from a line of text (e.g. '45%' or 'Progress: 72%')."""
-        import re
         m = re.search(r'(\d{1,3})%', text)
         if m:
             val = int(m.group(1))
@@ -7064,120 +7260,73 @@ class PCAPSentryApp:
                 return val
         return None
 
-    def _install_ollama(self):
-        """Download and run the official Ollama installer for Windows."""
-        import tempfile
+    def _run_elevated(self, exe_path, params, progress_cb=None, name=""):
+        """Run an installer elevated (UAC) and wait for it to finish.
 
-        OLLAMA_URL = "https://ollama.com/download/OllamaSetup.exe"
-        status_label = getattr(self, "_install_ollama_status", None)
+        Uses ShellExecuteExW with the 'runas' verb so Windows shows a single
+        UAC prompt, then the installer runs with admin rights fully silent.
+        Returns the process exit code, or -1 on failure.
+        """
+        from ctypes import wintypes
 
-        def _set_status(text, color=None):
-            if status_label:
-                status_label.configure(
-                    text=text,
-                    fg=color or self.colors.get("muted", "#8b949e"),
-                )
+        class SHELLEXECUTEINFO(ctypes.Structure):
+            _fields_ = [
+                ("cbSize", wintypes.DWORD),
+                ("fMask", ctypes.c_ulong),
+                ("hwnd", wintypes.HANDLE),
+                ("lpVerb", ctypes.c_wchar_p),
+                ("lpFile", ctypes.c_wchar_p),
+                ("lpParameters", ctypes.c_wchar_p),
+                ("lpDirectory", ctypes.c_wchar_p),
+                ("nShow", ctypes.c_int),
+                ("hInstApp", wintypes.HINSTANCE),
+                ("lpIDList", ctypes.c_void_p),
+                ("lpClass", ctypes.c_wchar_p),
+                ("hkeyClass", wintypes.HKEY),
+                ("dwHotKey", wintypes.DWORD),
+                ("hIconOrMonitor", wintypes.HANDLE),
+                ("hProcess", wintypes.HANDLE),
+            ]
 
-        # Check if Ollama is already installed
-        try:
-            result = subprocess.run(
-                ["ollama", "--version"],
-                capture_output=True, text=True, timeout=5,
+        SEE_MASK_NOCLOSEPROCESS = 0x00000040
+        SW_HIDE = 0
+        INFINITE = 0xFFFFFFFF
+
+        sei = SHELLEXECUTEINFO()
+        sei.cbSize = ctypes.sizeof(sei)
+        sei.fMask = SEE_MASK_NOCLOSEPROCESS
+        sei.hwnd = None
+        sei.lpVerb = "runas"
+        sei.lpFile = exe_path
+        sei.lpParameters = params
+        sei.lpDirectory = None
+        sei.nShow = SW_HIDE
+        sei.hProcess = None
+
+        if not ctypes.windll.shell32.ShellExecuteExW(ctypes.byref(sei)):
+            return -1
+
+        if not sei.hProcess:
+            return -1
+
+        # Poll until the elevated process finishes, updating progress
+        inst_start = time.time()
+        while True:
+            wait_result = ctypes.windll.kernel32.WaitForSingleObject(
+                sei.hProcess, 500,  # 500 ms timeout
             )
-            if result.returncode == 0:
-                ver = result.stdout.strip() or "installed"
-                answer = messagebox.askyesno(
-                    "Ollama",
-                    f"Ollama is already installed ({ver}).\n\n"
-                    "Do you want to download and reinstall/update anyway?",
-                )
-                if not answer:
-                    return
-        except Exception:
-            pass  # Not installed — proceed
+            if wait_result == 0:  # WAIT_OBJECT_0 — process finished
+                break
+            elapsed = int(time.time() - inst_start)
+            if progress_cb:
+                progress_cb(None, label=f"Installing {name} ({elapsed}s)")
 
-        _set_status("Downloading...", self.colors.get("accent", "#58a6ff"))
-
-        def task(progress_cb):
-            tmp_dir = tempfile.mkdtemp(prefix="ollama_")
-            installer_path = os.path.join(tmp_dir, "OllamaSetup.exe")
-            req = urllib.request.Request(
-                OLLAMA_URL,
-                headers={"User-Agent": "PCAP-Sentry/1.0"},
-            )
-            with urllib.request.urlopen(req, timeout=120) as resp:
-                total = int(resp.headers.get("Content-Length", 0))
-                downloaded = 0
-                with open(installer_path, "wb") as f:
-                    while True:
-                        chunk = resp.read(65536)
-                        if not chunk:
-                            break
-                        f.write(chunk)
-                        downloaded += len(chunk)
-                        if total > 0:
-                            pct = min(downloaded / total * 100, 100)
-                            progress_cb(
-                                pct,
-                                processed=downloaded,
-                                total=total,
-                                label="Downloading Ollama...",
-                            )
-            return installer_path
-
-        def done(installer_path):
-            _set_status("Installing...", self.colors.get("warning", "#d29922"))
-            _tmp_dir = os.path.dirname(installer_path)
-
-            def _run_installer():
-                try:
-                    result = subprocess.run(
-                        [installer_path, "/S"],
-                        capture_output=True, text=True, timeout=300,
-                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                    )
-                    return result.returncode
-                except Exception as e:
-                    return e
-
-            def _on_install_done(rc):
-                # Clean up temp dir regardless of outcome
-                shutil.rmtree(_tmp_dir, ignore_errors=True)
-                if isinstance(rc, Exception):
-                    _set_status("Install failed", self.colors.get("danger", "#f85149"))
-                    messagebox.showerror("Ollama", f"Installer failed:\n{rc}")
-                elif rc != 0:
-                    _set_status("Install failed", self.colors.get("danger", "#f85149"))
-                    messagebox.showerror("Ollama", f"Installer exited with code {rc}.")
-                else:
-                    _set_status("Installed", self.colors.get("success", "#3fb950"))
-                    messagebox.showinfo(
-                        "Ollama",
-                        "Ollama installed successfully.\n\n"
-                        "Set LLM provider to 'ollama', refresh models,\n"
-                        "and test the connection.",
-                    )
-
-            self._run_task(
-                _run_installer, _on_install_done,
-                on_error=lambda e: (
-                    _set_status("Install failed", self.colors.get("danger", "#f85149")),
-                    messagebox.showerror("Ollama", f"Installer error:\n{e}"),
-                ),
-                message="Installing Ollama...",
-            )
-
-        def failed(err):
-            _set_status("Download failed", self.colors.get("danger", "#f85149"))
-            messagebox.showerror(
-                "Ollama",
-                f"Failed to download Ollama installer.\n\n"
-                f"You can download it manually from:\nhttps://ollama.com/download\n\n"
-                f"Error: {err}",
-            )
-
-        self._run_task(task, done, on_error=failed, message="Downloading Ollama...",
-                      progress_label="Downloading Ollama...")
+        exit_code = wintypes.DWORD()
+        ctypes.windll.kernel32.GetExitCodeProcess(
+            sei.hProcess, ctypes.byref(exit_code),
+        )
+        ctypes.windll.kernel32.CloseHandle(sei.hProcess)
+        return exit_code.value
 
     def _check_internet_and_set_offline(self):
         """Check internet connectivity at startup; auto-enable offline mode if unreachable."""

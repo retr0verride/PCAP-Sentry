@@ -3,14 +3,14 @@
 #define IncludeVCRedist
 #endif
 
-#define AppVer "2026.02.13-36"
+#define AppVer "2026.02.13-37"
 
 [Setup]
 AppId={{91EFC8EF-E9F8-42FC-9D82-479C14FBE67D}
 AppName=PCAP Sentry
 AppVersion={#AppVer}
 AppVerName=PCAP Sentry {#AppVer}
-VersionInfoVersion=2026.2.13.36
+VersionInfoVersion=2026.2.13.37
 AppPublisher=industrial-dave
 AppSupportURL=https://github.com/industrial-dave/PCAP-Sentry
 DefaultDirName={autopf}\PCAP Sentry
@@ -98,15 +98,33 @@ procedure CurUninstallStepChanged(
   CurUninstallStep: TUninstallStep);
 var
   KeepKB: Integer;
+  RemoveLLM: Integer;
   LocalDir, KBFile, KBBackupDir: String;
+  FindRec: TFindRec;
+  RC: Integer;
 begin
   if CurUninstallStep = usUninstall then
+  begin
     ForceStopPCAPSentryProcesses;
+    { Give processes time to fully exit and release file locks }
+    Sleep(1500);
+  end;
 
   if CurUninstallStep = usPostUninstall then
   begin
     { Force-remove the install directory and any leftover files }
     DelTree(ExpandConstant('{app}'), True, True, True);
+
+    { Check if {app} still exists and notify user }
+    if DirExists(ExpandConstant('{app}')) then
+    begin
+      MsgBox(
+        'The install folder could not be fully removed:' + CRLF + CRLF +
+        ExpandConstant('{app}') + CRLF + CRLF +
+        'Some files may still be in use. You can delete ' +
+        'this folder manually after restarting.',
+        mbInformation, MB_OK);
+    end;
 
     LocalDir := ExpandConstant(LocalAppDataFolder);
     KBFile := LocalDir + '\pcap_knowledge_base_offline.json';
@@ -130,28 +148,85 @@ begin
         DeleteFile(LocalDir + '\startup_errors.log');
         DeleteFile(LocalDir + '\app_errors.log');
         DelTree(LocalDir + '\updates', True, True, True);
+        { Remove stray backup copies outside kb_backups }
+        if FindFirst(LocalDir + '\pcap_knowledge_base_backup_*', FindRec) then
+        begin
+          try
+            repeat
+              DeleteFile(LocalDir + '\' + FindRec.Name);
+            until not FindNext(FindRec);
+          finally
+            FindClose(FindRec);
+          end;
+        end;
 
         MsgBox(
-          'Knowledge Base data has been preserved at:' + CRLF + CRLF +
+          'PCAP Sentry has been uninstalled.' + CRLF + CRLF +
+          'Your Knowledge Base data has been preserved at:' + CRLF +
           LocalDir + CRLF + CRLF +
-          'You can delete this folder manually if you ' +
-          'no longer need it.',
+          'To fully remove all data, delete that folder.',
           mbInformation, MB_OK);
       end
       else
+      begin
         DelTree(LocalDir, True, True, True);
+        { If deletion failed (locked files), notify user }
+        if DirExists(LocalDir) then
+        begin
+          MsgBox(
+            'Some application data could not be removed ' +
+            'and still exists at:' + CRLF + CRLF +
+            LocalDir + CRLF + CRLF +
+            'You may delete this folder manually.',
+            mbInformation, MB_OK);
+        end;
+      end;
     end
     else
       DelTree(LocalDir, True, True, True);
 
-    { Notify about any other related locations }
-    if DirExists(LocalDir) then
+    { ── Offer to uninstall LLM servers ──────────────────────── }
+    RemoveLLM := MsgBox(
+      'Would you like to uninstall any LLM servers that ' +
+      'were installed for use with PCAP Sentry?' + CRLF + CRLF +
+      'This will attempt to remove:' + CRLF +
+      '  • Ollama' + CRLF +
+      '  • LM Studio' + CRLF +
+      '  • GPT4All' + CRLF +
+      '  • Jan' + CRLF + CRLF +
+      'Only servers that are currently installed will be ' +
+      'removed. Choose No to keep them.',
+      mbConfirmation, MB_YESNO);
+
+    if RemoveLLM = IDYES then
     begin
+      { Stop Ollama service if running }
+      Exec(ExpandConstant('{cmd}'),
+        '/C taskkill /F /IM ollama.exe >nul 2>nul',
+        '', SW_HIDE, ewWaitUntilTerminated, RC);
+      Exec(ExpandConstant('{cmd}'),
+        '/C taskkill /F /IM "ollama app.exe" >nul 2>nul',
+        '', SW_HIDE, ewWaitUntilTerminated, RC);
+
+      { Uninstall via winget (silent, non-interactive) }
+      Exec(ExpandConstant('{cmd}'),
+        '/C winget uninstall --id Ollama.Ollama -e --silent --accept-source-agreements >nul 2>nul',
+        '', SW_HIDE, ewWaitUntilTerminated, RC);
+      Exec(ExpandConstant('{cmd}'),
+        '/C winget uninstall --id Element.LMStudio -e --silent --accept-source-agreements >nul 2>nul',
+        '', SW_HIDE, ewWaitUntilTerminated, RC);
+      Exec(ExpandConstant('{cmd}'),
+        '/C winget uninstall --id Nomic.GPT4All -e --silent --accept-source-agreements >nul 2>nul',
+        '', SW_HIDE, ewWaitUntilTerminated, RC);
+      Exec(ExpandConstant('{cmd}'),
+        '/C winget uninstall --id Jan.Jan -e --silent --accept-source-agreements >nul 2>nul',
+        '', SW_HIDE, ewWaitUntilTerminated, RC);
+
       MsgBox(
-        'Some application data could not be removed ' +
-        'and still exists at:' + CRLF + CRLF +
-        LocalDir + CRLF + CRLF +
-        'You may delete this folder manually.',
+        'LLM server uninstall commands have been sent.' + CRLF + CRLF +
+        'If any servers were installed, they should now ' +
+        'be removed. You may need to manually delete ' +
+        'leftover model data from your user profile.',
         mbInformation, MB_OK);
     end;
   end;

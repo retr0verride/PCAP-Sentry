@@ -190,12 +190,17 @@ class UpdateChecker:
 
     @staticmethod
     def _is_trusted_download_url(url: str) -> bool:
-        """Only allow downloads from known GitHub domains."""
+        """Only allow downloads from known GitHub domains and the expected repo."""
         from urllib.parse import urlparse
         try:
             parsed = urlparse(url)
             host = (parsed.hostname or "").lower()
-            return host.endswith(".github.com") or host == "github.com"
+            path = (parsed.path or "").lower()
+            if not (host.endswith(".github.com") or host == "github.com"):
+                return False
+            # Verify the URL path references the expected repository
+            expected_prefix = f"/{UpdateChecker.REPO_OWNER}/{UpdateChecker.REPO_NAME}/".lower()
+            return path.startswith(expected_prefix)
         except Exception:
             return False
 
@@ -339,6 +344,30 @@ class UpdateChecker:
             True if successfully launched, False otherwise
         """
         try:
+            # Validate path is under expected staging directory
+            real_path = os.path.realpath(installer_path)
+            real_update_dir = os.path.realpath(self.get_update_dir())
+            if not real_path.startswith(real_update_dir + os.sep):
+                print(f"Security: installer_path is not under update dir — refusing to launch.")
+                self._last_error = "Installer path validation failed."
+                return False
+            # Re-verify SHA-256 immediately before execution (prevent TOCTOU)
+            expected = getattr(self, "_expected_sha256", {}) or {}
+            filename = os.path.basename(real_path)
+            download_filename = self.download_url.rsplit("/", 1)[-1] if self.download_url else ""
+            expected_hash = expected.get(download_filename) or expected.get(filename)
+            if expected_hash:
+                sha = hashlib.sha256()
+                with open(real_path, "rb") as f:
+                    while True:
+                        chunk = f.read(65536)
+                        if not chunk:
+                            break
+                        sha.update(chunk)
+                if sha.hexdigest().lower() != expected_hash.lower():
+                    print(f"Security: SHA-256 mismatch at launch time — refusing to execute.")
+                    self._last_error = "SHA-256 verification failed before launch."
+                    return False
             subprocess.Popen([installer_path])
             return True
         except Exception as e:

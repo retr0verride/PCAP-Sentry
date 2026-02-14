@@ -62,8 +62,14 @@ class ThreatIntelligence:
                         pool_connections=8, pool_maxsize=12, max_retries=0,
                     )
                     s.mount("https://", adapter)
-                    # Note: http:// adapter intentionally omitted to prevent
-                    # accidental plaintext requests or redirect downgrades.
+                    # Block http:// to prevent accidental plaintext requests
+                    # or redirect downgrades from HTTPS → HTTP.
+                    class _BlockHTTPAdapter(requests.adapters.HTTPAdapter):
+                        def send(self, *args, **kwargs):
+                            raise ConnectionError(
+                                "HTTP requests are blocked; use HTTPS only."
+                            )
+                    s.mount("http://", _BlockHTTPAdapter())
                     self._session = s
         return self._session
 
@@ -157,7 +163,10 @@ class ThreatIntelligence:
             return {"available": False}
 
         # Basic domain validation
-        if not domain or not re.match(r'^[a-zA-Z0-9][a-zA-Z0-9.\-]*\.[a-zA-Z]{2,}$', domain):
+        if not domain or len(domain) > 253 or not re.match(r'^[a-zA-Z0-9][a-zA-Z0-9.\-]*\.[a-zA-Z]{2,}$', domain):
+            return {"valid": False}
+        # Enforce per-label max length (RFC 1035)
+        if any(len(label) > 63 for label in domain.split(".")):
             return {"valid": False}
 
         cache_key = f"domain:{domain}"
