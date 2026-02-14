@@ -26,11 +26,32 @@ except ImportError:
 class EnhancedMLTrainer:
     """Enhanced ML trainer using multiple data sources"""
 
-    # Machine-specific HMAC key derived from username + hostname.
-    # This ensures models can only be loaded on the machine that created them.
-    _HMAC_KEY = hashlib.sha256(
-        f"{os.getenv('COMPUTERNAME', 'pcap')}-{os.getenv('USERNAME', 'sentry')}".encode()
-    ).digest()
+    # Machine-specific HMAC key: a random 32-byte secret persisted in the
+    # app data directory.  Falls back to a deterministic key derived from
+    # COMPUTERNAME/USERNAME only when the data dir is unavailable.
+    @staticmethod
+    def _init_hmac_key() -> bytes:
+        app_data = os.getenv("LOCALAPPDATA") or os.getenv("APPDATA") or os.path.expanduser("~")
+        key_dir = os.path.join(app_data, "PCAP_Sentry")
+        os.makedirs(key_dir, exist_ok=True)
+        key_path = os.path.join(key_dir, ".model_hmac_key")
+        if os.path.isfile(key_path):
+            try:
+                with open(key_path, "rb") as f:
+                    key = f.read()
+                if len(key) == 32:
+                    return key
+            except OSError:
+                pass
+        key = os.urandom(32)
+        try:
+            with open(key_path, "wb") as f:
+                f.write(key)
+        except OSError:
+            pass
+        return key
+
+    _HMAC_KEY = _init_hmac_key.__func__(None)  # call staticmethod at class creation
 
     def __init__(self, model_path: str = "pcap_sentry_model.pkl"):
         self.model_path = model_path

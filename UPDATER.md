@@ -99,6 +99,9 @@ Description:
 
 - **HTTPS Only**: All GitHub API calls use HTTPS with SSL verification
 - **SHA-256 Verification**: Downloaded executables are verified against the release's `SHA256SUMS.txt` before execution; mismatches abort the update
+- **SHA-256 at Launch Time**: The installer hash is re-verified immediately before execution to prevent TOCTOU (time-of-check-to-time-of-use) attacks
+- **SHA256SUMS Built Locally**: `build_release.bat` generates checksums after all assets (EXE, installer, KB) are uploaded, guaranteeing full coverage; the GitHub Actions workflow remains as a manual fallback
+- **UAC Elevation**: Installer launch uses `os.startfile()` (ShellExecuteW) for proper Windows UAC elevation; standalone EXE replacement uses `ShellExecuteW` with `runas` verb
 - **Download Size Limit**: Downloads are capped at 500 MB and API responses at 5 MB to prevent disk-fill or memory-exhaustion attacks
 - **URL Domain Validation**: Only download URLs from `github.com` / `*.github.com` domains are accepted
 - **CMD Path Sanitization**: Paths embedded in the update batch script are sanitized to prevent command injection via special characters

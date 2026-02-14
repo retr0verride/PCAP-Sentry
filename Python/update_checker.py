@@ -368,10 +368,16 @@ class UpdateChecker:
                     print(f"Security: SHA-256 mismatch at launch time — refusing to execute.")
                     self._last_error = "SHA-256 verification failed before launch."
                     return False
-            subprocess.Popen([installer_path])
+            # Use os.startfile (ShellExecuteW) instead of subprocess.Popen
+            # so that Windows can show the UAC elevation prompt when the
+            # Inno Setup installer requests admin privileges.
+            # subprocess.Popen uses CreateProcessW which cannot elevate and
+            # would fail with WinError 740.
+            os.startfile(real_path)
             return True
         except Exception as e:
             print(f"Error launching installer: {e}")
+            self._last_error = str(e)
             return False
 
     def replace_executable(
@@ -449,11 +455,19 @@ class UpdateChecker:
             with open(script_path, "w", encoding="utf-8", newline="\r\n") as f:
                 f.write("\r\n".join(script_lines) + "\r\n")
 
-            creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-            subprocess.Popen(
-                ["cmd", "/c", script_path],
-                creationflags=creation_flags,
+            # Use ShellExecuteW with "runas" to elevate the replacement
+            # script.  The script needs write access to the install
+            # directory (often Program Files) which requires admin rights.
+            import ctypes
+            result = ctypes.windll.shell32.ShellExecuteW(
+                None, "runas", "cmd.exe",
+                f'/c "{script_path}"', None, 0,  # SW_HIDE
             )
+            if result <= 32:
+                raise RuntimeError(
+                    f"ShellExecuteW failed (code {result}). "
+                    "Could not elevate the update script."
+                )
             return True
 
         except Exception as e:

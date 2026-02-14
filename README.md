@@ -78,10 +78,12 @@ python Python/pcap_sentry_gui.py
 ## Security Automation
 
 - **CodeQL scanning** runs on pushes, pull requests, and a weekly schedule via `.github/workflows/codeql.yml`.
-- **Release checksums** are generated and uploaded as `SHA256SUMS.txt` for each published GitHub release via `.github/workflows/release-checksums.yml`.
-- **Download verification**: The built-in updater automatically verifies downloaded EXE files against the published `SHA256SUMS.txt` hashes before execution.
-- **ML model integrity**: Trained models are signed with HMAC-SHA256 and verified before loading to prevent deserialization attacks.
+- **Release checksums** are generated locally by `build_release.bat` after all assets are uploaded and published as `SHA256SUMS.txt`; a manual-trigger GitHub Actions workflow (`.github/workflows/release-checksums.yml`) is available as a fallback.
+- **Download verification**: The built-in updater automatically verifies downloaded EXE files against the published `SHA256SUMS.txt` hashes before execution, with a second verification at launch time (TOCTOU prevention).
+- **ML model integrity**: Trained models are signed with HMAC-SHA256 using a persisted random secret key and verified before loading to prevent deserialization attacks.
 - **Credential storage**: LLM API keys are stored in the OS credential manager (Windows Credential Manager via `keyring`) when available, with automatic migration from plaintext settings.
+- **LLM endpoint validation**: Only `http://` and `https://` schemes are accepted; plaintext HTTP to non-localhost hosts is blocked.
+- **Atomic file writes**: Settings and knowledge base saves use `tempfile.mkstemp` + `os.replace` to prevent symlink/race attacks.
 - Users can verify downloaded artifacts against the published SHA-256 checksum file.
 
 ## Project Structure

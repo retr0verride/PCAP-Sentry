@@ -3,8 +3,23 @@
 
 
 
+## 2026.02.13 — Security Hardening & Optimization
 
+### Security Fixes
+- **Randomized HMAC key** — ML model integrity keys are now `os.urandom(32)` persisted to app data instead of being derived from predictable `COMPUTERNAME`/`USERNAME` environment variables; applies to both `pcap_sentry_gui.py` and `enhanced_ml_trainer.py`
+- **Atomic settings save** — `save_settings()` now uses `tempfile.mkstemp` + `os.replace` instead of a predictable `.tmp` path, preventing symlink race attacks
+- **LLM endpoint scheme validation** — `_llm_http_request()` now rejects `file://`, `ftp://`, and other non-HTTP schemes; blocks all plaintext HTTP to non-localhost hosts (not just when API key is present)
+- **Drag-and-drop path hardening** — `_extract_drop_path()` now canonicalizes paths with `os.path.realpath()` and validates against allowed PCAP extensions (`.pcap`, `.pcapng`, `.cap`, `.pcap.gz`, `.pcapng.gz`)
+- **UAC elevation for updates** — `launch_installer()` now uses `os.startfile()` (ShellExecuteW) and `replace_executable()` uses `ShellExecuteW` with `runas` verb, fixing the WinError 740 that prevented installers from launching
 
+### Optimization
+- **Eliminated double DataFrame copy** — `detect_suspicious_flows()` no longer copies the DataFrame returned by `compute_flow_stats()` (already a new object)
+- **Cached sklearn imports** — `_get_sklearn()` results are cached in a module-level variable, avoiding repeated import lookups
+- **Chat history cap** — `chat_history` is now capped at 50 entries to prevent unbounded memory growth in long sessions
+
+### Build Pipeline
+- **Local SHA256SUMS generation** — `build_release.bat` now generates and uploads `SHA256SUMS.txt` locally after all assets are uploaded, ensuring the installer hash is always included
+- **Removed auto-trigger from checksums workflow** — `release-checksums.yml` no longer fires on `release: published` (which raced the build); kept as `workflow_dispatch` fallback
 
 
 ## 2026.02.13-42 - 2026-02-13

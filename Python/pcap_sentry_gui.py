@@ -310,12 +310,19 @@ def _extract_tls_metadata(pkt, tls_support):
     return "", tls_version, ""
 
 
+_sklearn_cache = None
+
+
 def _get_sklearn():
+    global _sklearn_cache
+    if _sklearn_cache is not None:
+        return _sklearn_cache
     from joblib import dump as _joblib_dump
     from joblib import load as _joblib_load
     from sklearn.feature_extraction import DictVectorizer
     from sklearn.linear_model import LogisticRegression
-    return _joblib_dump, _joblib_load, DictVectorizer, LogisticRegression
+    _sklearn_cache = (_joblib_dump, _joblib_load, DictVectorizer, LogisticRegression)
+    return _sklearn_cache
 
 
 def _get_tkinterdnd2():
@@ -505,10 +512,21 @@ def save_settings(settings):
             # Remove plaintext key from settings file
             settings = dict(settings)
             settings.pop("llm_api_key", None)
-        tmp = SETTINGS_FILE + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(settings, f, indent=2)
-        os.replace(tmp, SETTINGS_FILE)
+        # Use tempfile.mkstemp for atomic write (avoids symlink race on
+        # a predictable ".tmp" path).
+        fd, tmp = tempfile.mkstemp(
+            dir=os.path.dirname(SETTINGS_FILE), suffix=".tmp"
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(settings, f, indent=2)
+            os.replace(tmp, SETTINGS_FILE)
+        except BaseException:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
     except Exception:
         pass
 
@@ -1016,10 +1034,40 @@ def _train_local_model(kb):
 
 
 # Machine-specific HMAC key for model integrity verification.
-# Ensures models can only be loaded on the machine that created them.
-_MODEL_HMAC_KEY = hashlib.sha256(
-    f"{os.getenv('COMPUTERNAME', 'pcap')}-{os.getenv('USERNAME', 'sentry')}".encode()
-).digest()
+# A random 32-byte secret is generated on first use and persisted in the
+# app data directory.  This is far stronger than deriving a key from
+# predictable environment variables (COMPUTERNAME/USERNAME).
+def _get_model_hmac_key() -> bytes:
+    key_path = os.path.join(_get_app_data_dir(), ".model_hmac_key")
+    if os.path.isfile(key_path):
+        try:
+            with open(key_path, "rb") as f:
+                key = f.read()
+            if len(key) == 32:
+                return key
+        except OSError:
+            pass
+    # Generate a new random key and persist it
+    key = os.urandom(32)
+    try:
+        fd, tmp = tempfile.mkstemp(dir=os.path.dirname(key_path))
+        try:
+            os.write(fd, key)
+            os.close(fd)
+            os.replace(tmp, key_path)
+        except BaseException:
+            os.close(fd) if not None else None  # noqa
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
+    except OSError:
+        pass  # key is still usable in-memory for this session
+    return key
+
+
+_MODEL_HMAC_KEY = _get_model_hmac_key()
 
 
 def _model_hmac_path():
@@ -2227,9 +2275,9 @@ def detect_suspicious_flows(df, kb, max_items=8, flow_df=None):
         return []
     pd = _get_pandas()
     if flow_df is None:
-        flow_df = compute_flow_stats(df).copy()
+        flow_df = compute_flow_stats(df)  # already returns a new DataFrame
     else:
-        flow_df = flow_df.copy()
+        flow_df = flow_df.copy()  # caller's DF — copy before mutating
     ioc_ips = set(kb.get("ioc", {}).get("ips", []))
     if ioc_ips:
         flow_df["ioc_match"] = flow_df["Src"].isin(ioc_ips) | flow_df["Dst"].isin(ioc_ips)
@@ -4037,13 +4085,21 @@ class PCAPSentryApp:
     @staticmethod
     def _llm_http_request(url, data, timeout=30, max_retries=2, api_key=""):
         """Send an HTTP POST to an LLM endpoint with automatic retry on transient errors."""
-        # Warn if sending API key over plain HTTP to a non-local endpoint
-        if api_key and url.lower().startswith("http://"):
+        # Only allow http:// and https:// schemes (block file://, ftp://, etc.)
+        url_lower = url.lower()
+        if not (url_lower.startswith("http://") or url_lower.startswith("https://")):
+            raise RuntimeError(
+                f"Unsupported URL scheme: {url.split(':', 1)[0]}://\n"
+                "Only http:// and https:// endpoints are supported."
+            )
+        # Block sending data (PCAP analysis, sensitive network info) over
+        # plain HTTP to non-local hosts, even without an API key.
+        if url_lower.startswith("http://"):
             from urllib.parse import urlparse
             host = urlparse(url).hostname or ""
             if host not in ("localhost", "127.0.0.1", "0.0.0.0", "::1"):
                 raise RuntimeError(
-                    f"Refusing to send API key over unencrypted HTTP to remote host '{host}'.\n"
+                    f"Refusing to send data over unencrypted HTTP to remote host '{host}'.\n"
                     "Please use an https:// endpoint for remote LLM servers."
                 )
         max_bytes = PCAPSentryApp._LLM_MAX_RESPONSE_BYTES
@@ -4112,6 +4168,10 @@ class PCAPSentryApp:
             return
         self.chat_entry_var.set("")
         self.chat_history.append({"role": "user", "content": message})
+        # Cap chat history to prevent unbounded memory growth
+        _MAX_CHAT_HISTORY = 50
+        if len(self.chat_history) > _MAX_CHAT_HISTORY:
+            self.chat_history = self.chat_history[-_MAX_CHAT_HISTORY:]
         self._append_chat_message("user", message)
         self.sample_note_var.set("Chat: thinking...")
 
@@ -6036,6 +6096,10 @@ class PCAPSentryApp:
         bind_drop(self.analyze_tab, self.target_path_var.set)
         bind_drop(self.result_text, self.target_path_var.set)
 
+    _ALLOWED_DROP_EXTENSIONS = {
+        ".pcap", ".pcapng", ".cap", ".pcap.gz", ".pcapng.gz",
+    }
+
     def _extract_drop_path(self, data):
         if not data:
             return ""
@@ -6054,6 +6118,11 @@ class PCAPSentryApp:
                 if sys.platform.startswith("win") and path.startswith("/"):
                     path = path[1:]
                 text = path or text
+            # Canonicalize to prevent traversal and validate extension
+            text = os.path.realpath(text)
+            lower = text.lower()
+            if not any(lower.endswith(ext) for ext in self._ALLOWED_DROP_EXTENSIONS):
+                return ""
             return text
 
         try:

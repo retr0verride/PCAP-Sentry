@@ -1,8 +1,9 @@
 name: Release Checksums
 
 on:
-  release:
-    types: [published]
+  # Checksums are now generated locally by build_release.bat and uploaded
+  # alongside the release assets.  This workflow serves as a manual
+  # fallback to regenerate / verify checksums for any release.
   workflow_dispatch:
     inputs:
       tag:
