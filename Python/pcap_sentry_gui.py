@@ -172,7 +172,14 @@ DEFAULT_MAX_ROWS = 200000
 IOC_SET_LIMIT = 50000
 
 
+_EMBEDDED_VERSION = "2026.02.13-40"  # Stamped by update_version.ps1 at build time
+
+
 def _compute_app_version():
+    # In a frozen (PyInstaller) build, use the version stamped at build time.
+    if getattr(sys, "frozen", False):
+        return _EMBEDDED_VERSION
+    # During development, compute dynamically from date + git commit count.
     today = datetime.now(timezone.utc).date()
     date_str = today.strftime("%Y.%m.%d")
     try:

@@ -4,6 +4,9 @@
 
 
 
+
+## 2026.02.13-40 - 2026-02-13
+- Fix version display: use build-stamped version in frozen EXE instead of dynamic date
 ## 2026.02.13-39 - 2026-02-13
 - Rebuild ICO with multi-size icons for crisp desktop display
 ## 2026.02.13-38 - 2026-02-13
