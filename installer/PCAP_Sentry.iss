@@ -1,13 +1,13 @@
 #define VCRedistPath "..\assets\vcredist_x64.exe"
 
-#define AppVer "2026.02.13-53"
+#define AppVer "2026.02.14-1"
 
 [Setup]
 AppId={{91EFC8EF-E9F8-42FC-9D82-479C14FBE67D}
 AppName=PCAP Sentry
 AppVersion={#AppVer}
 AppVerName=PCAP Sentry {#AppVer}
-VersionInfoVersion=2026.2.13.53
+VersionInfoVersion=2026.2.14.1
 AppPublisher=industrial-dave
 AppSupportURL=https://github.com/industrial-dave/PCAP-Sentry
 DefaultDirName={autopf}\PCAP Sentry
@@ -43,7 +43,7 @@ Name: "{commondesktop}\PCAP Sentry"; Filename: "{app}\PCAP_Sentry.exe"; IconFile
 Name: "desktopicon"; Description: "Create a &desktop icon"; GroupDescription: "Additional icons:"; Flags: unchecked
 
 [Run]
-Filename: "{tmp}\vcredist_x64.exe"; Parameters: "/install /quiet /norestart"; StatusMsg: "Installing VC++ Runtime..."; Flags: waituntilterminated skipifsilent
+Filename: "{tmp}\vcredist_x64.exe"; Parameters: "/install /quiet /norestart"; StatusMsg: "Installing VC++ Runtime..."; Flags: waituntilterminated skipifsilent; Check: NeedsVCRuntime
 Filename: "{app}\PCAP_Sentry.exe"; Description: "Launch PCAP Sentry"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
@@ -62,6 +62,51 @@ Type: dirifempty; Name: "{app}"
 [Code]
 const
   LocalAppDataFolder = '{localappdata}\PCAP_Sentry';
+
+function NeedsVCRuntime: Boolean;
+var
+  UninstallKey: String;
+  Name: String;
+begin
+  Result := True;
+  UninstallKey := 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall';
+  if RegValueExists(HKLM, UninstallKey + '\{0D3E9FC2-5C57-4DB4-8C0F-5A0F6DFE9F79}', 'DisplayName') then
+    Result := False
+  else if RegValueExists(HKLM, UninstallKey + '\{1B6E5B1A-4D6E-4E9E-9E45-0B65E4B56A57}', 'DisplayName') then
+    Result := False
+  else if RegValueExists(HKLM, UninstallKey + '\{A9E8B4EA-1B76-4E5E-9AC7-6F7E5D3A3A52}', 'DisplayName') then
+    Result := False
+  else if RegValueExists(HKLM, UninstallKey + '\{B9C07E2F-1B54-4D41-9E08-3515ABF8C1B4}', 'DisplayName') then
+    Result := False
+  else if RegValueExists(HKLM, UninstallKey + '\{C0B6CC0D-2E7D-4F36-9DB2-7C2FDC6B5FE1}', 'DisplayName') then
+    Result := False
+  else if RegValueExists(HKLM, UninstallKey + '\{D5F6E8F5-1F31-4F79-8A62-9A4B7AC0E1B5}', 'DisplayName') then
+    Result := False
+  else if RegValueExists(HKLM, UninstallKey + '\{0D3E9FC2-5C57-4DB4-8C0F-5A0F6DFE9F79}_x64', 'DisplayName') then
+    Result := False
+  else if RegValueExists(HKLM, UninstallKey + '\{1B6E5B1A-4D6E-4E9E-9E45-0B65E4B56A57}_x64', 'DisplayName') then
+    Result := False
+  else if RegValueExists(HKLM, UninstallKey + '\{A9E8B4EA-1B76-4E5E-9AC7-6F7E5D3A3A52}_x64', 'DisplayName') then
+    Result := False
+  else if RegValueExists(HKLM, UninstallKey + '\{B9C07E2F-1B54-4D41-9E08-3515ABF8C1B4}_x64', 'DisplayName') then
+    Result := False
+  else if RegValueExists(HKLM, UninstallKey + '\{C0B6CC0D-2E7D-4F36-9DB2-7C2FDC6B5FE1}_x64', 'DisplayName') then
+    Result := False
+  else if RegValueExists(HKLM, UninstallKey + '\{D5F6E8F5-1F31-4F79-8A62-9A4B7AC0E1B5}_x64', 'DisplayName') then
+    Result := False
+  else if RegQueryStringValue(HKLM, UninstallKey + '\{0D3E9FC2-5C57-4DB4-8C0F-5A0F6DFE9F79}', 'DisplayName', Name) then
+    Result := False
+  else if RegQueryStringValue(HKLM, UninstallKey + '\{1B6E5B1A-4D6E-4E9E-9E45-0B65E4B56A57}', 'DisplayName', Name) then
+    Result := False
+  else if RegQueryStringValue(HKLM, UninstallKey + '\{A9E8B4EA-1B76-4E5E-9AC7-6F7E5D3A3A52}', 'DisplayName', Name) then
+    Result := False
+  else if RegQueryStringValue(HKLM, UninstallKey + '\{B9C07E2F-1B54-4D41-9E08-3515ABF8C1B4}', 'DisplayName', Name) then
+    Result := False
+  else if RegQueryStringValue(HKLM, UninstallKey + '\{C0B6CC0D-2E7D-4F36-9DB2-7C2FDC6B5FE1}', 'DisplayName', Name) then
+    Result := False
+  else if RegQueryStringValue(HKLM, UninstallKey + '\{D5F6E8F5-1F31-4F79-8A62-9A4B7AC0E1B5}', 'DisplayName', Name) then
+    Result := False;
+end;
 
 var
   CRLF: String;
