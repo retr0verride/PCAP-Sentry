@@ -1,13 +1,13 @@
 #define VCRedistPath "..\assets\vcredist_x64.exe"
 
-#define AppVer "2026.02.14-2"
+#define AppVer "2026.02.14-3"
 
 [Setup]
 AppId={{91EFC8EF-E9F8-42FC-9D82-479C14FBE67D}
 AppName=PCAP Sentry
 AppVersion={#AppVer}
 AppVerName=PCAP Sentry {#AppVer}
-VersionInfoVersion=2026.2.14.2
+VersionInfoVersion=2026.2.14.3
 AppPublisher=industrial-dave
 AppSupportURL=https://github.com/industrial-dave/PCAP-Sentry
 DefaultDirName={autopf}\PCAP Sentry
@@ -43,7 +43,6 @@ Name: "{commondesktop}\PCAP Sentry"; Filename: "{app}\PCAP_Sentry.exe"; IconFile
 Name: "desktopicon"; Description: "Create a &desktop icon"; GroupDescription: "Additional icons:"; Flags: unchecked
 
 [Run]
-Filename: "{tmp}\vcredist_x64.exe"; Parameters: "/install /quiet /norestart"; StatusMsg: "Installing VC++ Runtime..."; Flags: waituntilterminated skipifsilent; Check: NeedsVCRuntime
 Filename: "{app}\PCAP_Sentry.exe"; Description: "Launch PCAP Sentry"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
@@ -67,8 +66,16 @@ function NeedsVCRuntime: Boolean;
 var
   UninstallKey: String;
   Name: String;
+  InstalledFlag: Cardinal;
 begin
   Result := True;
+  if RegQueryDWordValue(HKLM, 'SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64', 'Installed', InstalledFlag) then
+    if InstalledFlag = 1 then
+      Result := False
+    else
+      Result := True;
+  if not Result then
+    exit;
   UninstallKey := 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall';
   if RegValueExists(HKLM, UninstallKey + '\{0D3E9FC2-5C57-4DB4-8C0F-5A0F6DFE9F79}', 'DisplayName') then
     Result := False
@@ -114,6 +121,54 @@ var
 procedure InitializeWizard;
 begin
   CRLF := Chr(13) + Chr(10);
+end;
+
+procedure InstallVCRuntime;
+var
+  ResultCode: Integer;
+  LogPath: String;
+  Args: String;
+  ExePath: String;
+begin
+  if not NeedsVCRuntime then
+    exit;
+
+  ExePath := ExpandConstant('{tmp}\vcredist_x64.exe');
+  if not FileExists(ExePath) then
+  begin
+    MsgBox(
+      'VC++ runtime installer was not found.' + CRLF +
+      'Please reinstall PCAP Sentry or run vcredist_x64.exe manually.',
+      mbError, MB_OK);
+    Abort;
+  end;
+
+  LogPath := ExpandConstant('{tmp}\vcredist_install.log');
+  Args := '/install /quiet /norestart /log "' + LogPath + '"';
+
+  if not Exec(ExePath, Args, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+  begin
+    MsgBox(
+      'Failed to launch the VC++ runtime installer.' + CRLF +
+      'Please run vcredist_x64.exe manually.',
+      mbError, MB_OK);
+    Abort;
+  end;
+
+  if (ResultCode <> 0) and (ResultCode <> 3010) and (ResultCode <> 1638) then
+  begin
+    MsgBox(
+      'VC++ runtime installer failed with code ' + IntToStr(ResultCode) + '.' + CRLF +
+      'Log file: ' + LogPath,
+      mbError, MB_OK);
+    Abort;
+  end;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssInstall then
+    InstallVCRuntime;
 end;
 
 { ── Process management ───────────────────────────────────────── }
