@@ -6864,15 +6864,22 @@ class PCAPSentryApp:
 
         # Mutable slot so _request_cancel can kill the active subprocess
         _active_proc = [None]
+        _active_resp = [None]  # mutable slot for active urllib response
         _orig_request_cancel = self._request_cancel
 
         def _enhanced_cancel():
-            """Extended cancel that also kills the running subprocess."""
+            """Extended cancel that also kills the running subprocess and download."""
             _orig_request_cancel()
             proc = _active_proc[0]
             if proc is not None:
                 try:
                     proc.kill()
+                except Exception:
+                    pass
+            resp = _active_resp[0]
+            if resp is not None:
+                try:
+                    resp.close()
                 except Exception:
                     pass
 
@@ -6896,8 +6903,15 @@ class PCAPSentryApp:
                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                 )
                 _active_proc[0] = proc
-                for line in proc.stdout:
+                # Use readline() instead of iterator for responsive cancel
+                while True:
                     _check_cancel()
+                    line = proc.stdout.readline()
+                    if not line:
+                        if proc.poll() is not None:
+                            break
+                        time.sleep(0.1)
+                        continue
                     line = line.strip()
                     if not line:
                         continue
@@ -6906,7 +6920,6 @@ class PCAPSentryApp:
                         progress_cb(pct, label=f"Installing {name}... {line}")
                     else:
                         progress_cb(None, label=f"Installing {name}... {line}")
-                proc.wait(timeout=600)
                 _active_proc[0] = None
                 _check_cancel()
                 if proc.returncode == 0:
@@ -6933,7 +6946,9 @@ class PCAPSentryApp:
                         download_url,
                         headers={"User-Agent": "PCAP-Sentry/1.0"},
                     )
-                    with urllib.request.urlopen(req, timeout=120) as resp:
+                    resp = urllib.request.urlopen(req, timeout=120)
+                    _active_resp[0] = resp
+                    try:
                         total_size = int(resp.headers.get("Content-Length", 0))
                         downloaded = 0
                         with open(installer_path, "wb") as f:
@@ -6952,16 +6967,25 @@ class PCAPSentryApp:
                                 else:
                                     dl_mb = downloaded / (1024 * 1024)
                                     progress_cb(None, label=f"Downloading {name}... {dl_mb:.1f} MB")
+                    finally:
+                        _active_resp[0] = None
+                        resp.close()
 
                     _check_cancel()
 
                     progress_cb(None, label=f"Installing {name}... Running installer...")
-                    result = subprocess.run(
+                    inst_proc = subprocess.Popen(
                         [installer_path, silent_flag],
-                        capture_output=True, text=True, timeout=300,
+                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                        text=True,
                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                     )
-                    if result.returncode == 0:
+                    _active_proc[0] = inst_proc
+                    while inst_proc.poll() is None:
+                        _check_cancel()
+                        time.sleep(0.5)
+                    _active_proc[0] = None
+                    if inst_proc.returncode == 0:
                         return "download"
                 except AnalysisCancelledError:
                     raise

@@ -3,14 +3,14 @@
 #define IncludeVCRedist
 #endif
 
-#define AppVer "2026.02.13-35"
+#define AppVer "2026.02.13-36"
 
 [Setup]
 AppId={{91EFC8EF-E9F8-42FC-9D82-479C14FBE67D}
 AppName=PCAP Sentry
 AppVersion={#AppVer}
 AppVerName=PCAP Sentry {#AppVer}
-VersionInfoVersion=2026.2.13.35
+VersionInfoVersion=2026.2.13.36
 AppPublisher=industrial-dave
 AppSupportURL=https://github.com/industrial-dave/PCAP-Sentry
 DefaultDirName={autopf}\PCAP Sentry
@@ -55,6 +55,14 @@ Filename: "{app}\PCAP_Sentry.exe"; Description: "Launch PCAP Sentry"; Flags: now
 ; Remove app-created subdirectories under the install directory
 Type: filesandordirs; Name: "{app}\data"
 Type: filesandordirs; Name: "{app}\logs"
+Type: filesandordirs; Name: "{app}\__pycache__"
+Type: filesandordirs; Name: "{app}\models"
+Type: filesandordirs; Name: "{app}\Python"
+Type: files; Name: "{app}\*.log"
+Type: files; Name: "{app}\*.pyc"
+Type: files; Name: "{app}\*.json"
+; Remove the install directory itself if anything remains
+Type: dirifempty; Name: "{app}"
 
 [Code]
 const
@@ -97,6 +105,9 @@ begin
 
   if CurUninstallStep = usPostUninstall then
   begin
+    { Force-remove the install directory and any leftover files }
+    DelTree(ExpandConstant('{app}'), True, True, True);
+
     LocalDir := ExpandConstant(LocalAppDataFolder);
     KBFile := LocalDir + '\pcap_knowledge_base_offline.json';
     KBBackupDir := LocalDir + '\kb_backups';
@@ -119,11 +130,29 @@ begin
         DeleteFile(LocalDir + '\startup_errors.log');
         DeleteFile(LocalDir + '\app_errors.log');
         DelTree(LocalDir + '\updates', True, True, True);
+
+        MsgBox(
+          'Knowledge Base data has been preserved at:' + CRLF + CRLF +
+          LocalDir + CRLF + CRLF +
+          'You can delete this folder manually if you ' +
+          'no longer need it.',
+          mbInformation, MB_OK);
       end
       else
         DelTree(LocalDir, True, True, True);
     end
     else
       DelTree(LocalDir, True, True, True);
+
+    { Notify about any other related locations }
+    if DirExists(LocalDir) then
+    begin
+      MsgBox(
+        'Some application data could not be removed ' +
+        'and still exists at:' + CRLF + CRLF +
+        LocalDir + CRLF + CRLF +
+        'You may delete this folder manually.',
+        mbInformation, MB_OK);
+    end;
   end;
 end;
