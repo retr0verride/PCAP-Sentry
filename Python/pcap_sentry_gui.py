@@ -6850,7 +6850,7 @@ class PCAPSentryApp:
         return False
 
     def _install_llm_server(self, server_info, status_var, status_label, parent_window):
-        """Install a local LLM server via winget or direct download with real-time progress."""
+        """Install a local LLM server via winget or direct download with progress in main window."""
         name = server_info["name"]
         winget_id = server_info["winget"]
         download_url = server_info["url"]
@@ -6860,51 +6860,13 @@ class PCAPSentryApp:
         status_var.set("Installing...")
         status_label.configure(fg=self.colors.get("accent", "#58a6ff"))
 
-        # --- Cancel support ---
-        _install_cancel = threading.Event()
-        _active_proc = [None]          # mutable slot for the running subprocess
+        # Mutable slot so _request_cancel can kill the active subprocess
+        _active_proc = [None]
+        _orig_request_cancel = self._request_cancel
 
-        # --- Progress dialog ---
-        prog_win = tk.Toplevel(parent_window)
-        prog_win.title(f"Installing {name}")
-        prog_win.resizable(False, False)
-        prog_win.configure(bg=self.colors["bg"])
-        prog_win.transient(parent_window)
-        prog_win.grab_set()
-
-        prog_frame = ttk.Frame(prog_win, padding=20)
-        prog_frame.pack(fill=tk.BOTH, expand=True)
-
-        prog_title_var = tk.StringVar(value=f"Installing {name}...")
-        prog_detail_var = tk.StringVar(value="Preparing...")
-        prog_pct_var = tk.StringVar(value="")
-
-        tk.Label(prog_frame, textvariable=prog_title_var,
-                 font=("Segoe UI", 11, "bold"),
-                 fg=self.colors.get("text", "#e6edf3"),
-                 bg=self.colors.get("bg", "#0d1117")).pack(anchor="w", pady=(0, 8))
-
-        prog_bar = ttk.Progressbar(prog_frame, length=400, mode="indeterminate", maximum=100)
-        prog_bar.pack(fill=tk.X, pady=(0, 4))
-        prog_bar.start(12)
-
-        detail_frame = ttk.Frame(prog_frame)
-        detail_frame.pack(fill=tk.X)
-        tk.Label(detail_frame, textvariable=prog_detail_var,
-                 fg=self.colors.get("muted", "#8b949e"),
-                 bg=self.colors.get("bg", "#0d1117"),
-                 font=("Segoe UI", 9), anchor="w").pack(side=tk.LEFT, fill=tk.X, expand=True)
-        tk.Label(detail_frame, textvariable=prog_pct_var,
-                 fg=self.colors.get("muted", "#8b949e"),
-                 bg=self.colors.get("bg", "#0d1117"),
-                 font=("Segoe UI", 9), anchor="e").pack(side=tk.RIGHT)
-
-        # Cancel button inside progress dialog
-        def _on_cancel_install():
-            _install_cancel.set()
-            prog_title_var.set("Cancelling...")
-            cancel_btn.configure(state=tk.DISABLED)
-            # Kill any running subprocess
+        def _enhanced_cancel():
+            """Extended cancel that also kills the running subprocess."""
+            _orig_request_cancel()
             proc = _active_proc[0]
             if proc is not None:
                 try:
@@ -6912,54 +6874,17 @@ class PCAPSentryApp:
                 except Exception:
                     pass
 
-        cancel_btn = ttk.Button(prog_frame, text="Cancel", command=_on_cancel_install)
-        cancel_btn.pack(pady=(10, 0))
+        # Temporarily replace _request_cancel so the main-window Cancel button kills the process
+        self._request_cancel = _enhanced_cancel
+        self.cancel_button.configure(command=_enhanced_cancel)
 
-        prog_win.protocol("WM_DELETE_WINDOW", _on_cancel_install)
+        def task(progress_cb):
+            def _check_cancel():
+                if self._cancel_event.is_set():
+                    raise AnalysisCancelledError("Installation cancelled by user.")
 
-        # Center the progress dialog
-        prog_win.update_idletasks()
-        pw = prog_win.winfo_reqwidth()
-        ph = prog_win.winfo_reqheight()
-        px = parent_window.winfo_x() + (parent_window.winfo_width() - pw) // 2
-        py = parent_window.winfo_y() + (parent_window.winfo_height() - ph) // 2
-        prog_win.geometry(f"+{px}+{py}")
-
-        progress_queue = queue.Queue()
-
-        def _post_progress(phase, detail="", percent=None):
-            """Thread-safe progress update."""
-            progress_queue.put((phase, detail, percent))
-
-        def _poll_progress():
-            """Poll progress queue and update UI."""
-            try:
-                while True:
-                    phase, detail, percent = progress_queue.get_nowait()
-                    prog_title_var.set(phase)
-                    if detail:
-                        prog_detail_var.set(detail)
-                    if percent is not None:
-                        prog_bar.stop()
-                        prog_bar.configure(mode="determinate", maximum=100)
-                        prog_bar["value"] = percent
-                        prog_pct_var.set(f"{percent:.0f}%")
-                    elif percent is None and phase:
-                        # Switch back to indeterminate for phases without percent
-                        if str(prog_bar.cget("mode")) != "indeterminate":
-                            prog_bar.configure(mode="indeterminate", maximum=100)
-                            prog_bar.start(12)
-                        prog_pct_var.set("")
-            except queue.Empty:
-                pass
-            if prog_win.winfo_exists():
-                prog_win.after(80, _poll_progress)
-
-        prog_win.after(80, _poll_progress)
-
-        def task():
             # Try winget first
-            _post_progress(f"Installing {name}...", "Trying winget...")
+            progress_cb(0, label=f"Installing {name} — trying winget...")
             try:
                 proc = subprocess.Popen(
                     ["winget", "install", "-e", "--id", winget_id,
@@ -6970,33 +6895,28 @@ class PCAPSentryApp:
                 )
                 _active_proc[0] = proc
                 for line in proc.stdout:
-                    if _install_cancel.is_set():
-                        proc.kill()
-                        raise AnalysisCancelledError("Installation cancelled by user.")
+                    _check_cancel()
                     line = line.strip()
                     if not line:
                         continue
-                    # Try to extract percentage from winget output
                     pct = self._extract_percent(line)
                     if pct is not None:
-                        _post_progress(f"Installing {name}...", line, pct)
+                        progress_cb(pct, label=f"Installing {name}... {line}")
                     else:
-                        _post_progress(f"Installing {name}...", line)
+                        progress_cb(None, label=f"Installing {name}... {line}")
                 proc.wait(timeout=600)
                 _active_proc[0] = None
-                if _install_cancel.is_set():
-                    raise AnalysisCancelledError("Installation cancelled by user.")
+                _check_cancel()
                 if proc.returncode == 0:
                     return "winget"
             except AnalysisCancelledError:
                 raise
             except FileNotFoundError:
-                _post_progress(f"Installing {name}...", "winget not available, trying direct download...")
+                progress_cb(None, label=f"Installing {name} — winget not available, trying download...")
             except Exception:
-                _post_progress(f"Installing {name}...", "winget failed, trying direct download...")
+                progress_cb(None, label=f"Installing {name} — winget failed, trying download...")
 
-            if _install_cancel.is_set():
-                raise AnalysisCancelledError("Installation cancelled by user.")
+            _check_cancel()
 
             # Fallback: direct download if URL available
             if download_url and silent_flag:
@@ -7005,7 +6925,7 @@ class PCAPSentryApp:
                     tmp_dir = tempfile.mkdtemp(prefix=f"{name.lower().replace(' ', '_')}_")
                     installer_path = os.path.join(tmp_dir, f"{name}_setup.exe")
 
-                    _post_progress(f"Downloading {name}...", f"Connecting to {download_url.split('/')[2]}...")
+                    progress_cb(0, label=f"Downloading {name}...")
 
                     req = urllib.request.Request(
                         download_url,
@@ -7016,8 +6936,7 @@ class PCAPSentryApp:
                         downloaded = 0
                         with open(installer_path, "wb") as f:
                             while True:
-                                if _install_cancel.is_set():
-                                    raise AnalysisCancelledError("Installation cancelled by user.")
+                                _check_cancel()
                                 chunk = resp.read(65536)
                                 if not chunk:
                                     break
@@ -7027,22 +6946,14 @@ class PCAPSentryApp:
                                     pct = (downloaded / total_size) * 100
                                     dl_mb = downloaded / (1024 * 1024)
                                     total_mb = total_size / (1024 * 1024)
-                                    _post_progress(
-                                        f"Downloading {name}...",
-                                        f"{dl_mb:.1f} MB / {total_mb:.1f} MB",
-                                        pct,
-                                    )
+                                    progress_cb(pct, label=f"Downloading {name}... {dl_mb:.1f}/{total_mb:.1f} MB")
                                 else:
                                     dl_mb = downloaded / (1024 * 1024)
-                                    _post_progress(
-                                        f"Downloading {name}...",
-                                        f"{dl_mb:.1f} MB downloaded",
-                                    )
+                                    progress_cb(None, label=f"Downloading {name}... {dl_mb:.1f} MB")
 
-                    if _install_cancel.is_set():
-                        raise AnalysisCancelledError("Installation cancelled by user.")
+                    _check_cancel()
 
-                    _post_progress(f"Installing {name}...", "Running installer...")
+                    progress_cb(None, label=f"Installing {name}... Running installer...")
                     result = subprocess.run(
                         [installer_path, silent_flag],
                         capture_output=True, text=True, timeout=300,
@@ -7060,17 +6971,13 @@ class PCAPSentryApp:
 
             return None
 
-        def _close_prog_win():
-            if prog_win.winfo_exists():
-                prog_win.grab_release()
-                prog_win.destroy()
+        def _restore_cancel():
+            """Restore the original cancel handler."""
+            self._request_cancel = _orig_request_cancel
+            self.cancel_button.configure(command=_orig_request_cancel)
 
         def _on_done(method):
-            _close_prog_win()
-            if _install_cancel.is_set():
-                status_var.set("Cancelled")
-                status_label.configure(fg=self.colors.get("muted", "#8b949e"))
-                return
+            _restore_cancel()
             try:
                 installed = server_info["check"]()
             except Exception:
@@ -7107,11 +7014,7 @@ class PCAPSentryApp:
                 )
 
         def _on_failed(err):
-            _close_prog_win()
-            if _install_cancel.is_set():
-                status_var.set("Cancelled")
-                status_label.configure(fg=self.colors.get("muted", "#8b949e"))
-                return
+            _restore_cancel()
             status_var.set("Install failed")
             status_label.configure(fg=self.colors.get("danger", "#f85149"))
             messagebox.showerror(
@@ -7122,7 +7025,7 @@ class PCAPSentryApp:
             )
 
         self._run_task(task, _on_done, on_error=_on_failed,
-                      message=f"Installing {name}...")
+                      message=f"Installing {name}...", progress_label=f"Installing {name}")
 
     @staticmethod
     def _extract_percent(text):
