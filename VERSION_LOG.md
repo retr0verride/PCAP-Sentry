@@ -4,6 +4,9 @@
 
 
 
+
+## 2026.02.13-44 - 2026-02-13
+- Restore original logo and high-res icon assets
 ## 2026.02.13-43 - 2026-02-13
 - Security hardening, UAC elevation fix, optimization, SHA256 pipeline
 ## 2026.02.13 — Security Hardening & Optimization
