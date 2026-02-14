@@ -2869,6 +2869,7 @@ class PCAPSentryApp:
         window.title("App Data Location")
         window.resizable(False, False)
         window.configure(bg=self.colors["bg"])
+        self._set_dark_titlebar(window)
 
         frame = ttk.Frame(window, padding=16)
         frame.pack(fill=tk.BOTH, expand=True)
@@ -3152,6 +3153,7 @@ class PCAPSentryApp:
         window.title("Preferences")
         window.resizable(False, False)
         window.configure(bg=self.colors["bg"])
+        self._set_dark_titlebar(window)
 
         frame = ttk.Frame(window, padding=20)
         frame.pack(fill=tk.BOTH, expand=True)
@@ -3241,14 +3243,13 @@ class PCAPSentryApp:
             "This can significantly speed up analysis on multi-core systems. "
             "Disable if you experience stability issues or want to reduce CPU usage.", row=9, column=2, sticky="w")
 
-        # Install LLM server row (placed before LLM server dropdown)
-        ttk.Label(frame, text="Install server:").grid(row=10, column=0, sticky="w", pady=6)
+        # Manage LLM servers row (placed before LLM server dropdown)
+        ttk.Label(frame, text="LLM servers:").grid(row=10, column=0, sticky="w", pady=6)
         install_frame = ttk.Frame(frame)
         install_frame.grid(row=10, column=1, sticky="w", pady=6)
-        ttk.Button(install_frame, text="Install LLM Server\u2026", style="Secondary.TButton",
+        ttk.Button(install_frame, text="Manage LLM Servers\u2026", style="Secondary.TButton",
                    command=self._open_install_llm_dialog).pack(side=tk.LEFT)
-        self._help_icon_grid(frame, "Opens a dialog to install a local LLM server (Ollama, LM Studio, GPT4All, or Jan). "
-            "Use this if you skipped the installer\u2019s LLM setup or want to add another server.",
+        self._help_icon_grid(frame, "Opens a dialog to install or uninstall a local LLM server (Ollama, LM Studio, GPT4All, or Jan).",
             row=10, column=2, sticky="w")
 
         # --- Unified LLM server dropdown ---
@@ -3606,6 +3607,7 @@ class PCAPSentryApp:
             window.resizable(True, True)
             window.geometry("600x400")
             window.configure(bg=self.colors["bg"])
+            self._set_dark_titlebar(window)
 
             frame = ttk.Frame(window, padding=16)
             frame.pack(fill=tk.BOTH, expand=True)
@@ -3662,6 +3664,7 @@ class PCAPSentryApp:
                 window.resizable(True, True)
                 window.geometry("550x350")
                 window.configure(bg=self.colors["bg"])
+                self._set_dark_titlebar(window)
 
                 frame = ttk.Frame(window, padding=16)
                 frame.pack(fill=tk.BOTH, expand=True)
@@ -3716,6 +3719,7 @@ class PCAPSentryApp:
         progress_window.resizable(False, False)
         progress_window.geometry("400x120")
         progress_window.configure(bg=self.colors["bg"])
+        self._set_dark_titlebar(progress_window)
 
         frame = ttk.Frame(progress_window, padding=16)
         frame.pack(fill=tk.BOTH, expand=True)
@@ -5869,13 +5873,14 @@ class PCAPSentryApp:
 
         style.configure("TSeparator", background=border)
 
-    def _set_dark_titlebar(self):
+    def _set_dark_titlebar(self, window=None):
         """Force the Windows title bar to use dark mode via DWM."""
         if not sys.platform.startswith("win"):
             return
         try:
             import ctypes
-            hwnd = ctypes.windll.user32.GetParent(self.root.winfo_id())
+            target = window or self.root
+            hwnd = ctypes.windll.user32.GetParent(target.winfo_id())
             DWMWA_USE_IMMERSIVE_DARK_MODE = 20
             value = ctypes.c_int(1)
             ctypes.windll.dwmapi.DwmSetWindowAttribute(
@@ -6779,14 +6784,15 @@ class PCAPSentryApp:
         ]
 
         window = tk.Toplevel(self.root)
-        window.title("Install LLM Server")
+        window.title("Manage LLM Servers")
         window.resizable(False, False)
         window.configure(bg=self.colors["bg"])
+        self._set_dark_titlebar(window)
 
         frame = ttk.Frame(window, padding=20)
         frame.pack(fill=tk.BOTH, expand=True)
 
-        ttk.Label(frame, text="Install LLM Server", style="Heading.TLabel").pack(anchor="w", pady=(0, 4))
+        ttk.Label(frame, text="Manage LLM Servers", style="Heading.TLabel").pack(anchor="w", pady=(0, 4))
         ttk.Label(frame, text="Select a local LLM server to install. "
             "These run on your machine for fully offline AI analysis.",
             style="Hint.TLabel", wraplength=460).pack(anchor="w", pady=(0, 12))
@@ -6820,18 +6826,19 @@ class PCAPSentryApp:
             status_lbl.pack(side=tk.LEFT, padx=(0, 8))
 
             uninstall_btn = ttk.Button(
-                btn_frame, text="Uninstall",
-                command=lambda s=srv, sv=status_var, sl=status_lbl, i=idx: self._uninstall_llm_server(
-                    s, sv, sl, install_buttons, uninstall_buttons, i),
+                btn_frame, text="Uninstall", style="Danger.TButton",
+                command=lambda s=srv: (
+                    window.destroy(),
+                    self._uninstall_llm_server(s)),
             )
-            uninstall_btn.pack(side=tk.LEFT, padx=(0, 4))
-            uninstall_btn.pack_forget()  # hidden until we know it's installed
+            uninstall_btn.pack_forget()  # shown only when installed
             uninstall_buttons.append(uninstall_btn)
 
             install_btn = ttk.Button(
                 btn_frame, text="Install",
-                command=lambda s=srv, sv=status_var, sl=status_lbl: self._install_llm_server(
-                    s, sv, sl, window),
+                command=lambda s=srv: (
+                    window.destroy(),
+                    self._install_llm_server(s)),
             )
             install_btn.pack(side=tk.LEFT)
             install_buttons.append(install_btn)
@@ -6858,11 +6865,12 @@ class PCAPSentryApp:
                     for child in parent.winfo_children():
                         if isinstance(child, tk.Label):
                             child.configure(fg=self.colors.get("success", "#3fb950"))
-                    install_buttons[i].configure(text="Reinstall")
-                    uninstall_buttons[i].pack(side=tk.LEFT, padx=(0, 4))
+                    install_buttons[i].pack_forget()
+                    uninstall_buttons[i].pack(side=tk.LEFT)
                 else:
                     status_vars[i].set("Not installed")
                     uninstall_buttons[i].pack_forget()
+                    install_buttons[i].pack(side=tk.LEFT)
 
         def _run_checks():
             results = _check_all()
@@ -6870,7 +6878,7 @@ class PCAPSentryApp:
 
         threading.Thread(target=_run_checks, daemon=True).start()
 
-        ttk.Button(frame, text="Close", command=window.destroy).pack(anchor="e", pady=(8, 0))
+        ttk.Button(frame, text="Close", style="Secondary.TButton", command=window.destroy).pack(anchor="e", pady=(8, 0))
         window.transient(self.root)
         window.grab_set()
 
@@ -6894,16 +6902,13 @@ class PCAPSentryApp:
                 return True
         return False
 
-    def _install_llm_server(self, server_info, status_var, status_label, parent_window):
+    def _install_llm_server(self, server_info):
         """Install a local LLM server via winget or direct download with progress in main window."""
         name = server_info["name"]
         winget_id = server_info["winget"]
         download_url = server_info["url"]
         homepage = server_info["homepage"]
         silent_flag = server_info["silent_flag"]
-
-        status_var.set("Installing...")
-        status_label.configure(fg=self.colors.get("accent", "#58a6ff"))
 
         def task(progress_cb):
             # Prefer direct download (shows real progress bar) over winget
@@ -7043,8 +7048,7 @@ class PCAPSentryApp:
                 installed = False
 
             if installed or method is not None:
-                status_var.set("\u2714 Installed")
-                status_label.configure(fg=self.colors.get("success", "#3fb950"))
+                self.status_var.set(f"\u2714 {name} installed")
                 # Kill the Ollama desktop app if it auto-launched during install
                 if "ollama" in name.lower():
                     for proc_name in ["ollama app.exe", "Ollama.exe"]:
@@ -7103,8 +7107,7 @@ class PCAPSentryApp:
                     f"refresh models, and test the connection.",
                 )
             else:
-                status_var.set("Manual install needed")
-                status_label.configure(fg=self.colors.get("warning", "#d29922"))
+                self.status_var.set(f"{name}: manual install needed")
                 messagebox.showinfo(
                     name,
                     f"{name} could not be installed automatically.\n\n"
@@ -7113,8 +7116,7 @@ class PCAPSentryApp:
                 )
 
         def _on_failed(err):
-            status_var.set("Install failed")
-            status_label.configure(fg=self.colors.get("danger", "#f85149"))
+            self.status_var.set(f"{name} install failed")
             messagebox.showerror(
                 name,
                 f"Failed to install {name}.\n\n"
@@ -7127,8 +7129,7 @@ class PCAPSentryApp:
         # Hide cancel button — LLM install cannot be cleanly cancelled
         self.cancel_button.pack_forget()
 
-    def _uninstall_llm_server(self, server_info, status_var, status_label,
-                              install_buttons, uninstall_buttons, index):
+    def _uninstall_llm_server(self, server_info):
         """Uninstall an LLM server via winget."""
         name = server_info["name"]
         winget_id = server_info["winget"]
@@ -7140,9 +7141,6 @@ class PCAPSentryApp:
             f"Downloaded models may remain in your user profile.",
         ):
             return
-
-        status_var.set("Uninstalling...")
-        status_label.configure(fg=self.colors.get("warning", "#d29922"))
 
         def task(progress_cb):
             # Kill running processes first (Ollama specifically)
@@ -7207,10 +7205,7 @@ class PCAPSentryApp:
                 still_installed = False
 
             if not still_installed:
-                status_var.set("Not installed")
-                status_label.configure(fg=self.colors.get("muted", "#8b949e"))
-                install_buttons[index].configure(text="Install")
-                uninstall_buttons[index].pack_forget()
+                self.status_var.set(f"{name} uninstalled")
                 # Remove auto-start shortcut if it exists
                 try:
                     startup_lnk = os.path.join(
@@ -7229,8 +7224,7 @@ class PCAPSentryApp:
                     f"user profile and can be deleted manually.",
                 )
             else:
-                status_var.set("\u2714 Installed")
-                status_label.configure(fg=self.colors.get("success", "#3fb950"))
+                self.status_var.set(f"{name} uninstall incomplete")
                 messagebox.showwarning(
                     name,
                     f"{name} could not be fully uninstalled.\n\n"
@@ -7239,8 +7233,7 @@ class PCAPSentryApp:
                 )
 
         def _on_failed(err):
-            status_var.set("\u2714 Installed")
-            status_label.configure(fg=self.colors.get("success", "#3fb950"))
+            self.status_var.set(f"{name} uninstall failed")
             messagebox.showerror(
                 name,
                 f"Failed to uninstall {name}.\n\nError: {err}",
@@ -9204,6 +9197,7 @@ class PCAPSentryApp:
         window.title("PCAP Charts")
         window.geometry("1000x800")
         window.configure(bg=self.colors["bg"])
+        self._set_dark_titlebar(window)
 
         notebook = ttk.Notebook(window)
         notebook.pack(fill=tk.BOTH, expand=True)

@@ -40,13 +40,8 @@ PCAP Sentry parses network captures (`.pcap` / `.pcapng`), summarizes traffic st
 
 1. Download **PCAP_Sentry_Setup.exe** from the [Releases](https://github.com/industrial-dave/PCAP-Sentry/releases) page.
 2. Run the installer and follow the prompts.
-3. Optional: choose **Install Ollama** and select one or more models to pull.
-	- The Ollama Models page supports selecting multiple models via checkboxes.
-	- The page includes a link to the Ollama model library with descriptions.
-	- Installer progress is shown for runtime setup and each selected model.
-	- Ollama is started headless for model pulls; the desktop UI is not required.
-	- The installer kills the Ollama desktop app and disables auto-start after install.
-4. Launch PCAP Sentry from the Start Menu or desktop shortcut.
+3. Launch PCAP Sentry from the Start Menu or desktop shortcut.
+4. To set up a local LLM, open **Preferences** and click **Manage LLM Servers…** to install Ollama, LM Studio, GPT4All, or Jan.
 5. On exit, PCAP Sentry will ask whether to stop any running local LLM server.
 
 Optional: download `pcap_knowledge_base_offline.json` from the [Releases](https://github.com/industrial-dave/PCAP-Sentry/releases) page and import it via **Knowledge Base** > **Restore** to use it as a starter KB.
@@ -111,7 +106,7 @@ assets/
 ├── custom.ico                 # Optional preferred icon if present
 ├── vcredist_x64.exe           # Optional bundled VC++ redistributable (if downloaded)
 installer/
-├── PCAP_Sentry.iss            # Inno Setup installer (Ollama model management, uninstall prompts)
+├── PCAP_Sentry.iss            # Inno Setup installer (uninstall prompts, KB cleanup)
 dist/                          # Build outputs (PCAP_Sentry.exe, PCAP_Sentry_Setup.exe)
 ```
 
