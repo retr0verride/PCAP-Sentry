@@ -176,7 +176,7 @@ DEFAULT_MAX_ROWS = 200000
 IOC_SET_LIMIT = 50000
 
 
-_EMBEDDED_VERSION = "2026.02.13-50"  # Stamped by update_version.ps1 at build time
+_EMBEDDED_VERSION = "2026.02.13-51"  # Stamped by update_version.ps1 at build time
 
 
 def _compute_app_version():
@@ -6685,6 +6685,9 @@ class PCAPSentryApp:
     def _refresh_llm_models(self, combo=None):
         provider = self.llm_provider_var.get().strip().lower()
         endpoint = self.llm_endpoint_var.get().strip()
+        if provider == "ollama" and not endpoint:
+            endpoint = "http://localhost:11434"
+            self.llm_endpoint_var.set(endpoint)
         if provider == "disabled" or not endpoint:
             if combo is not None:
                 combo["values"] = []
@@ -6706,7 +6709,21 @@ class PCAPSentryApp:
         def worker():
             try:
                 if provider == "ollama":
-                    return self._list_ollama_models(endpoint)
+                    names = self._list_ollama_models(endpoint)
+                    if names:
+                        return names
+                    # Try to start Ollama and retry once if no models are returned.
+                    try:
+                        subprocess.Popen(
+                            ["ollama", "serve"],
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                        )
+                        time.sleep(1.2)
+                        return self._list_ollama_models(endpoint)
+                    except Exception:
+                        return []
                 if provider == "openai_compatible":
                     api_key = self.llm_api_key_var.get().strip()
                     return self._list_openai_compat_models(endpoint, api_key=api_key)
