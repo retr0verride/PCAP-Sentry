@@ -176,15 +176,28 @@ DEFAULT_MAX_ROWS = 200000
 IOC_SET_LIMIT = 50000
 
 
-_EMBEDDED_VERSION = "2026.02.13-48"  # Stamped by update_version.ps1 at build time
+_EMBEDDED_VERSION = "2026.02.13-49"  # Stamped by update_version.ps1 at build time
 
 
 def _compute_app_version():
     # In a frozen (PyInstaller) build, use the version stamped at build time.
     if getattr(sys, "frozen", False):
         return _EMBEDDED_VERSION
+    # Prefer version_info.txt when running from source so UI matches release tags.
+    try:
+        root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+        version_path = os.path.join(root_dir, "version_info.txt")
+        if os.path.exists(version_path):
+            with open(version_path, "r", encoding="utf-8") as handle:
+                raw = handle.read()
+            match = re.search(r"filevers=\((\d+),\s*(\d+),\s*(\d+),\s*(\d+)\)", raw)
+            if match:
+                year, month, day, build = (int(match.group(i)) for i in range(1, 5))
+                return f"{year}.{month:02d}.{day:02d}-{build}"
+    except Exception:
+        pass
     # During development, compute dynamically from date + git commit count.
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now().date()
     date_str = today.strftime("%Y.%m.%d")
     try:
         since = today.strftime("%Y-%m-%dT00:00:00")
@@ -6704,9 +6717,14 @@ class PCAPSentryApp:
         def apply(names):
             names = _dedupe_names(names)
             if combo is not None:
-                combo["values"] = names
-                if names and not self.llm_model_var.get().strip():
-                    self.llm_model_var.set(names[0])
+                try:
+                    if not combo.winfo_exists():
+                        return
+                    combo["values"] = names
+                    if names and not self.llm_model_var.get().strip():
+                        self.llm_model_var.set(names[0])
+                except tk.TclError:
+                    return
 
         def run():
             names = worker()
