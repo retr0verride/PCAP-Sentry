@@ -106,16 +106,26 @@ for icon_name in ("pcap_sentry.ico", "pcap_sentry_512.png", "pcap_sentry_256.png
         datas.append((icon_path, "assets"))
 
 # Explicitly include the active Python DLL to avoid runtime load errors.
+# Python 3.14+ requires extra care with onefile mode.
 py_dll_name = f"python{sys.version_info.major}{sys.version_info.minor}.dll"
 py_dll_candidates = [
     os.path.join(sys.base_prefix, py_dll_name),
     os.path.join(sys.base_prefix, "DLLs", py_dll_name),
     os.path.join(os.path.dirname(sys.executable), py_dll_name),
 ]
+py_dll_found = None
 for py_dll in py_dll_candidates:
     if os.path.exists(py_dll):
+        py_dll_found = py_dll
         binaries.append((py_dll, "."))
+        print(f"Including Python DLL: {py_dll}")
         break
+
+if not py_dll_found:
+    print(f"WARNING: Could not find {py_dll_name}! The EXE may not run.")
+else:
+    # Also add to datas as a fallback for Python 3.14+ compatibility
+    datas.append((py_dll_found, "."))
 
 # Bundle VC++ runtime DLLs so the app runs even if the redist is missing.
 vc_runtime_dlls = [
@@ -172,16 +182,13 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
+    exclude_binaries=True,  # Changed to onedir mode for Python 3.14+ compatibility
     name='PCAP_Sentry',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
+    upx=False,
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
@@ -192,4 +199,14 @@ exe = EXE(
     icon=[
         'assets\\pcap_sentry.ico' if os.path.exists('assets\\pcap_sentry.ico') else 'assets\\custom.ico'
     ],
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    name='PCAP_Sentry',
 )

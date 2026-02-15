@@ -2,9 +2,8 @@
 Regenerate the PCAP Sentry logo at high resolution (512x512).
 
 Design: Pointy-top hexagon outline in cyan on a dark navy background,
-with three network nodes (cyan circles) connected by magenta lines
-forming a triangle inside the hexagon – the original "network shield"
-icon from the initial release.
+with a DNA double helix in the center (cyan/magenta strands with connecting rungs),
+representing genetic-level packet inspection and deep analysis capabilities.
 """
 
 from PIL import Image, ImageDraw, ImageFilter
@@ -15,6 +14,8 @@ import math, struct, io, os
 DARK_BG      = (10, 12, 17, 255)        # dark navy background
 HEX_CYAN     = (63, 169, 245, 255)      # hexagon outline & nodes
 CONN_MAGENTA = (194, 53, 168, 255)      # connection lines
+HELIX_BRIGHT = (140, 220, 255, 255)     # bright cyan for helix strand
+HELIX_ACCENT = (220, 80, 200, 255)      # bright magenta for helix strand
 
 
 def _hex_vertices(cx, cy, r):
@@ -48,8 +49,8 @@ def generate_logo(size=512):
     # ── 1. Subtle outer glow behind the hexagon ────────────────
     def draw_glow(d, s):
         pts = [(x * s, y * s) for x, y in _hex_vertices(cx, cy, r + size * 0.012)]
-        d.line(pts + [pts[0]], fill=(*HEX_CYAN[:3], 40),
-               width=max(2, int(size * 0.04 * s)), joint="curve")
+        d.polygon(pts, outline=(*HEX_CYAN[:3], 40),
+               width=max(2, int(size * 0.04 * s)), fill=None)
 
     glow = _draw_aa(size, draw_glow, blur=size // 30)
     img.alpha_composite(glow)
@@ -59,62 +60,77 @@ def generate_logo(size=512):
 
     def draw_hex(d, s):
         pts = [(x * s, y * s) for x, y in hex_pts]
-        d.line(pts + [pts[0]], fill=HEX_CYAN,
-               width=int(lw_hex * s), joint="curve")
+        # Draw as polygon with outline to ensure clean closed border
+        d.polygon(pts, outline=HEX_CYAN, width=int(lw_hex * s), fill=None)
 
     hex_layer = _draw_aa(size, draw_hex)
     img.alpha_composite(hex_layer)
 
-    # ── 3. Network nodes & connections ─────────────────────────
-    # Three nodes proportionally placed from the original 48/64px icon.
-    # Offsets are fractions of the hex circumradius, measured from centre.
-    node_offsets = [
-        (+0.33,  -0.07),       # upper-right  node
-        (-0.48,  +0.04),       # left          node
-        (-0.15,  +0.30),       # lower-centre  node
-    ]
-    nodes = [(cx + dx * r, cy + dy * r) for dx, dy in node_offsets]
-
-    node_r = max(4, int(size * 0.028))      # ~14px at 512
-    lw_conn = max(3, int(size * 0.013))     # ~6-7px at 512
-
-    # -- connection lines (magenta) --
-    def draw_connections(d, s):
-        for i in range(3):
-            j = (i + 1) % 3
-            d.line([(nodes[i][0] * s, nodes[i][1] * s),
-                    (nodes[j][0] * s, nodes[j][1] * s)],
-                   fill=CONN_MAGENTA, width=int(lw_conn * s))
-
-    conn_layer = _draw_aa(size, draw_connections)
-    img.alpha_composite(conn_layer)
-
-    # Soft glow on connections
-    conn_glow = _draw_aa(size, draw_connections, blur=size // 80)
-    img.alpha_composite(conn_glow)
-
-    # -- node circles (cyan, drawn on top of lines) --
-    def draw_nodes(d, s):
-        for nx, ny in nodes:
-            d.ellipse([
-                (nx - node_r) * s, (ny - node_r) * s,
-                (nx + node_r) * s, (ny + node_r) * s
-            ], fill=HEX_CYAN, outline=(*HEX_CYAN[:3], 200))
-
-    node_layer = _draw_aa(size, draw_nodes)
-    img.alpha_composite(node_layer)
-
-    # Small bright highlight at node centres
-    def draw_highlights(d, s):
-        hr = max(2, node_r // 3)
-        for nx, ny in nodes:
-            d.ellipse([
-                (nx - hr) * s, (ny - hr) * s,
-                (nx + hr) * s, (ny + hr) * s
-            ], fill=(180, 220, 255, 220))
-
-    hl_layer = _draw_aa(size, draw_highlights)
-    img.alpha_composite(hl_layer)
+    # ── 2.5. Double Helix (DNA strand) in center ───────────────
+    # Draw a vertical DNA double helix through the center
+    helix_height = r * 1.4                   # height of helix
+    helix_width = r * 0.28                   # horizontal spread
+    helix_top = cy - helix_height * 0.55     # centered vertically
+    helix_bottom = cy + helix_height * 0.55  # centered vertically
+    turns = 2.0                              # complete cycles for clean end
+    segments = 60                            # smoothness of curve
+    
+    def draw_helix(d, s):
+        strand_width = max(2, int(size * 0.008 * s))
+        connector_width = max(1, int(size * 0.004 * s))
+        
+        # Calculate helix points for both strands
+        strand1_points = []
+        strand2_points = []
+        connector_pairs = []
+        
+        for i in range(segments + 1):
+            t = i / segments
+            y = helix_top + t * (helix_bottom - helix_top)
+            angle = t * turns * 2 * math.pi
+            
+            # Strand 1 (cyan)
+            x1 = cx + helix_width * math.sin(angle)
+            strand1_points.append((x1 * s, y * s))
+            
+            # Strand 2 (magenta) - 180 degrees out of phase
+            x2 = cx + helix_width * math.sin(angle + math.pi)
+            strand2_points.append((x2 * s, y * s))
+            
+            # Draw connectors at crossover points (every ~15 segments)
+            if i % 8 == 0 and i > 0:
+                connector_pairs.append(((x1 * s, y * s), (x2 * s, y * s)))
+        
+        # Draw connecting bars (rungs of the DNA ladder)
+        for p1, p2 in connector_pairs:
+            d.line([p1, p2], fill=(*CONN_MAGENTA[:3], 120), width=connector_width)
+        
+        # Draw the two strands with gradient effect
+        # Strand 1 (cyan with subtle glow)
+        d.line(strand1_points, fill=HELIX_BRIGHT, width=strand_width, joint="curve")
+        
+        # Strand 2 (magenta with subtle glow)
+        d.line(strand2_points, fill=HELIX_ACCENT, width=strand_width, joint="curve")
+        
+        # Add small spheres at key points for depth
+        sphere_r = max(2, int(size * 0.01 * s))
+        for i in range(0, len(strand1_points), 10):
+            x1, y1 = strand1_points[i]
+            d.ellipse([x1 - sphere_r, y1 - sphere_r, 
+                      x1 + sphere_r, y1 + sphere_r], 
+                     fill=HELIX_BRIGHT)
+            
+            x2, y2 = strand2_points[i]
+            d.ellipse([x2 - sphere_r, y2 - sphere_r, 
+                      x2 + sphere_r, y2 + sphere_r], 
+                     fill=HELIX_ACCENT)
+    
+    helix_layer = _draw_aa(size, draw_helix)
+    img.alpha_composite(helix_layer)
+    
+    # Add soft glow to helix
+    helix_glow = _draw_aa(size, draw_helix, blur=size // 100)
+    img.alpha_composite(helix_glow)
 
     return img
 
