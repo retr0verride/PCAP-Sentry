@@ -176,7 +176,7 @@ DEFAULT_MAX_ROWS = 200000
 IOC_SET_LIMIT = 50000
 
 
-_EMBEDDED_VERSION = "2026.02.14-5"  # Stamped by update_version.ps1 at build time
+_EMBEDDED_VERSION = "2026.02.14-6"  # Stamped by update_version.ps1 at build time
 
 
 def _compute_app_version():
@@ -3197,7 +3197,7 @@ class PCAPSentryApp:
             activebackground=_llm_ind_bg,
             activeforeground=self.colors.get("accent", "#58a6ff"),
             cursor="hand2",
-            command=self._toggle_llm
+            command=self._test_llm_connection
         )
         self.llm_header_label.pack()
         self._update_llm_header_indicator()
