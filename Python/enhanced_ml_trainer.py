@@ -25,16 +25,14 @@ Uses all available data sources:
 - Network behavior patterns
 """
 
-import os
 import hashlib
 import hmac
-import json
-from typing import Dict, List, Tuple, Optional
+import os
 
 try:
+    import joblib
     from sklearn.feature_extraction import DictVectorizer
     from sklearn.linear_model import LogisticRegression
-    import joblib
     SKLEARN_AVAILABLE = True
 except ImportError:
     SKLEARN_AVAILABLE = False
@@ -76,7 +74,7 @@ class EnhancedMLTrainer:
         self.model = None
         self.backend = "cpu"
 
-    def train_from_knowledge_base(self, kb: Dict) -> Tuple[Optional[Dict], Optional[str]]:
+    def train_from_knowledge_base(self, kb: dict) -> tuple[dict | None, str | None]:
         """
         Train model from knowledge base with all available features
         """
@@ -127,7 +125,7 @@ class EnhancedMLTrainer:
 
             # Sort by importance
             top_features = sorted(
-                zip(feature_names, coefficients),
+                zip(feature_names, coefficients, strict=False),
                 key=lambda x: abs(x[1]),
                 reverse=True
             )
@@ -147,7 +145,7 @@ class EnhancedMLTrainer:
             }, None
 
         except Exception as e:
-            return None, f"Training failed: {str(e)}"
+            return None, f"Training failed: {e!s}"
 
     def save_model(self) -> bool:
         """Save trained model to disk with HMAC integrity signature."""
@@ -225,7 +223,7 @@ class EnhancedMLTrainer:
             print("[SECURITY] No HMAC file found for model — refusing to load. Please retrain.")
             return False
         try:
-            with open(hmac_file, "r", encoding="utf-8") as f:
+            with open(hmac_file, encoding="utf-8") as f:
                 expected = f.read().strip().lower()
             h = hmac.new(self._HMAC_KEY, digestmod=hashlib.sha256)
             with open(model_path, "rb") as f:
@@ -238,7 +236,7 @@ class EnhancedMLTrainer:
         except Exception:
             return False
 
-    def predict(self, features: Dict) -> Tuple[Optional[str], Optional[float]]:
+    def predict(self, features: dict) -> tuple[str | None, float | None]:
         """
         Make prediction on new features
         Returns: (label, malicious_probability)
@@ -263,7 +261,7 @@ class EnhancedMLTrainer:
             print(f"[ERROR] Prediction failed: {e}")
             return None, None
 
-    def get_model_info(self) -> Dict:
+    def get_model_info(self) -> dict:
         """Get information about the trained model"""
         if self.model is None:
             return {"status": "not_trained"}
@@ -277,7 +275,7 @@ class EnhancedMLTrainer:
         }
 
 
-def vectorize_features(features: Dict) -> Dict:
+def vectorize_features(features: dict) -> dict:
     """Convert feature dict to ML-ready format"""
     pkt_count = float(features.get("packet_count", 0))
     vector = {

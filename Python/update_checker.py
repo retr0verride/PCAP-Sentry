@@ -21,16 +21,70 @@ PCAP Sentry Update Checker
 Handles checking for new versions on GitHub and downloading updates.
 """
 
+import contextlib
 import hashlib
 import json
 import os
-import re
 import shutil
 import ssl
 import subprocess
 import sys
 import threading
 import urllib.request
+
+
+def _safe_urlopen(url, data=None, headers=None, timeout=30, context=None):
+    """
+    Secure wrapper for urllib.request.urlopen with URL scheme validation.
+
+    This function validates that URLs use only http:// or https:// schemes
+    before opening them, preventing potential security issues from dangerous
+    schemes like file://, ftp://, javascript:, or data:.
+
+    Args:
+        url: URL string or urllib.request.Request object to open
+        data: Optional data to send (for POST requests)
+        headers: Optional dict of HTTP headers
+        timeout: Request timeout in seconds (default: 30)
+        context: Optional SSL context
+
+    Returns:
+        Response object from urllib.request.urlopen
+
+    Raises:
+        ValueError: If URL scheme is not http:// or https://
+        urllib.error.URLError: For network errors
+        urllib.error.HTTPError: For HTTP errors
+    """
+    # Extract URL string from Request object or use as-is
+    url_str = url.full_url if hasattr(url, "full_url") else str(url)
+    url_lower = url_str.lower()
+
+    # Validate scheme - only http(s) allowed
+    if not (url_lower.startswith("http://") or url_lower.startswith("https://")):
+        scheme = url_str.split(":", 1)[0] if ":" in url_str else "unknown"
+        raise ValueError(
+            f"Blocked unsafe URL scheme: {scheme}://...\n"
+            "Only http:// and https:// URLs are allowed for security."
+        )
+
+    # Explicit file:// blocking for defense-in-depth
+    if "file:" in url_lower:
+        raise ValueError(
+            "file:// scheme is explicitly blocked for security.\n"
+            "Only http:// and https:// URLs are allowed."
+        )
+
+    # Build Request if url is a string
+    if isinstance(url, str):
+        req = urllib.request.Request(url, data=data, headers=headers or {})
+    else:
+        req = url
+
+    # Make the request with validated URL
+    if context:
+        return urllib.request.urlopen(req, timeout=timeout, context=context)  # nosec B310 - scheme validated above
+    return urllib.request.urlopen(req, timeout=timeout)  # nosec B310 - scheme validated above
 
 
 class UpdateChecker:
@@ -81,10 +135,9 @@ class UpdateChecker:
         for char in version_string:
             if char.isdigit():
                 current_part += char
-            else:
-                if current_part:
-                    parts.append(int(current_part))
-                    current_part = ""
+            elif current_part:
+                parts.append(int(current_part))
+                current_part = ""
 
         if current_part:
             parts.append(int(current_part))
@@ -129,8 +182,8 @@ class UpdateChecker:
                 self.RELEASES_URL,
                 headers={"Accept": "application/vnd.github+json", "User-Agent": "PCAP-Sentry-Updater"},
             )
-            
-            with urllib.request.urlopen(req, context=ctx, timeout=15) as response:
+
+            with _safe_urlopen(req, context=ctx, timeout=15) as response:
                 raw = response.read(self._MAX_API_RESPONSE_BYTES + 1)
                 if len(raw) > self._MAX_API_RESPONSE_BYTES:
                     self._last_error = "GitHub API response too large"
@@ -149,17 +202,17 @@ class UpdateChecker:
             assets = release.get("assets", [])
             installer_url = None
             standalone_url = None
-            
+
             for asset in assets:
                 name = asset.get("name", "")
                 url = asset.get("browser_download_url", "")
-                
+
                 if not name.lower().endswith(".exe"):
                     continue
-                    
+
                 if not self._is_trusted_download_url(url):
                     continue
-                    
+
                 if ("setup" in name.lower() or "install" in name.lower()) and "PCAP_Sentry" in name:
                     installer_url = url
                 elif "PCAP_Sentry" in name:
@@ -181,7 +234,7 @@ class UpdateChecker:
             return True
 
         except Exception as e:
-            self._last_error = f"Failed to fetch release: {str(e)}"
+            self._last_error = f"Failed to fetch release: {e!s}"
             print(f"Error fetching latest release: {e}")
             return False
 
@@ -211,7 +264,7 @@ class UpdateChecker:
                     if not self._is_trusted_download_url(url):
                         break
                     req = urllib.request.Request(url, headers={"User-Agent": "PCAP-Sentry-Updater"})
-                    with urllib.request.urlopen(req, context=ctx, timeout=15) as resp:
+                    with _safe_urlopen(req, context=ctx, timeout=15) as resp:
                         raw = resp.read(1 * 1024 * 1024)  # 1 MB limit
                         text = raw.decode("utf-8", errors="replace")
                     for line in text.strip().splitlines():
@@ -244,41 +297,41 @@ class UpdateChecker:
         try:
             # Ensure destination directory exists
             os.makedirs(os.path.dirname(destination), exist_ok=True)
-            
+
             ctx = ssl.create_default_context()
             req = urllib.request.Request(
                 self.download_url,
                 headers={"User-Agent": "PCAP-Sentry-Updater"},
             )
-            
-            with urllib.request.urlopen(req, context=ctx, timeout=120) as response:
+
+            with _safe_urlopen(req, context=ctx, timeout=120) as response:
                 total_size = int(response.headers.get("Content-Length", 0))
-                
+
                 # Validate size
                 if total_size > self._MAX_DOWNLOAD_BYTES:
                     self._last_error = f"Download too large: {total_size} bytes"
                     return False
-                
+
                 # Download to temporary file first
                 temp_dest = destination + ".tmp"
                 downloaded = 0
                 sha256 = hashlib.sha256()
-                
+
                 with open(temp_dest, "wb") as f:
                     while True:
                         chunk = response.read(65536)
                         if not chunk:
                             break
                         downloaded += len(chunk)
-                        
+
                         if downloaded > self._MAX_DOWNLOAD_BYTES:
                             os.remove(temp_dest)
                             self._last_error = "Download exceeded size limit"
                             return False
-                        
+
                         f.write(chunk)
                         sha256.update(chunk)
-                        
+
                         if progress_callback:
                             progress_callback(downloaded, total_size)
 
@@ -287,9 +340,9 @@ class UpdateChecker:
             expected = getattr(self, "_expected_sha256", {}) or {}
             filename = os.path.basename(destination)
             download_filename = self.download_url.rsplit("/", 1)[-1]
-            
+
             expected_hash = expected.get(download_filename) or expected.get(filename)
-            
+
             if expected_hash:
                 if actual_hash != expected_hash.lower():
                     os.remove(temp_dest)
@@ -308,11 +361,11 @@ class UpdateChecker:
             if os.path.exists(destination):
                 os.remove(destination)
             os.rename(temp_dest, destination)
-            
+
             return True
 
         except Exception as e:
-            self._last_error = f"Download failed: {str(e)}"
+            self._last_error = f"Download failed: {e!s}"
             print(f"Error downloading update: {e}")
             # Clean up temp file
             temp_dest = destination + ".tmp"
@@ -369,22 +422,22 @@ class UpdateChecker:
             # Validate path is under expected staging directory
             real_path = os.path.realpath(installer_path)
             real_update_dir = os.path.realpath(self.get_update_dir())
-            
+
             if not real_path.startswith(real_update_dir + os.sep):
                 self._last_error = "Installer path validation failed"
-                print(f"Security: Installer path outside update directory")
+                print("Security: Installer path outside update directory")
                 return False
-            
+
             if not os.path.exists(real_path):
                 self._last_error = "Installer file not found"
                 return False
-            
+
             # Re-verify SHA-256 before launch (TOCTOU protection)
             expected = getattr(self, "_expected_sha256", {}) or {}
             filename = os.path.basename(real_path)
             download_filename = self.download_url.rsplit("/", 1)[-1] if self.download_url else ""
             expected_hash = expected.get(download_filename) or expected.get(filename)
-            
+
             if expected_hash:
                 sha = hashlib.sha256()
                 with open(real_path, "rb") as f:
@@ -393,17 +446,17 @@ class UpdateChecker:
                         if not chunk:
                             break
                         sha.update(chunk)
-                
+
                 if sha.hexdigest().lower() != expected_hash.lower():
                     self._last_error = "SHA-256 verification failed before launch"
-                    print(f"Security: SHA-256 mismatch at launch time")
+                    print("Security: SHA-256 mismatch at launch time")
                     return False
-                print(f"✓ SHA-256 verified before launch")
-            
+                print("✓ SHA-256 verified before launch")
+
             # Launch installer (Windows will show UAC prompt if needed)
             print(f"Launching installer: {real_path}")
             os.startfile(real_path)
-            
+
             # Schedule cleanup after a delay
             def cleanup_later():
                 import time
@@ -414,16 +467,16 @@ class UpdateChecker:
                         print(f"Cleaned up installer: {real_path}")
                 except Exception as e:
                     print(f"Could not delete installer: {e}")
-            
+
             threading.Thread(target=cleanup_later, daemon=True).start()
             return True
-            
+
         except Exception as e:
-            self._last_error = f"Failed to launch installer: {str(e)}"
+            self._last_error = f"Failed to launch installer: {e!s}"
             print(f"Error launching installer: {e}")
             return False
 
-    def replace_executable(self, new_exe_path: str, current_exe_path: str = None) -> bool:
+    def replace_executable(self, new_exe_path: str, current_exe_path: str | None = None) -> bool:
         """
         Replace the current executable with the updated one.
         Uses a batch script to handle the replacement after app exit.
@@ -443,7 +496,7 @@ class UpdateChecker:
             if not getattr(sys, "frozen", False):
                 self._last_error = "Cannot update when running from source. Use the installer."
                 return False
-            
+
             # Check if current exe looks like a Python interpreter
             current_name = os.path.basename(current_exe_path).lower()
             if current_name.startswith("python"):
@@ -514,12 +567,12 @@ exit /b 0
                 creationflags=subprocess.CREATE_NO_WINDOW,
                 cwd=update_dir,
             )
-            
+
             print(f"Update script launched: {script_path}")
             return True
 
         except Exception as e:
-            self._last_error = f"Failed to prepare update: {str(e)}"
+            self._last_error = f"Failed to prepare update: {e!s}"
             print(f"Error replacing executable: {e}")
             return False
 
@@ -543,10 +596,8 @@ exit /b 0
             files.sort(key=os.path.getmtime, reverse=True)
 
             for old_file in files[keep_count:]:
-                try:
+                with contextlib.suppress(Exception):
                     os.remove(old_file)
-                except Exception:
-                    pass
 
         except Exception as e:
             print(f"Error cleaning up old updates: {e}")

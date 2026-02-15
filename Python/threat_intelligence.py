@@ -25,12 +25,11 @@ Integrates with free/public threat intelligence sources:
 - Public DNS blacklists
 """
 
+import ipaddress
 import json
 import re
-import time
-from typing import Dict, List, Optional
-import ipaddress
 import threading
+import time
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -55,7 +54,7 @@ _MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 class ThreatIntelligence:
     """Threat intelligence checker using free/public APIs"""
 
-    def __init__(self, otx_api_key: Optional[str] = None):
+    def __init__(self, otx_api_key: str | None = None):
         self.otx_base_url = "https://otx.alienvault.com/api/v1"
         self.otx_api_key = otx_api_key
         self.abuseipdb_base_url = "https://api.abuseipdb.com/api/v2"
@@ -65,7 +64,7 @@ class ThreatIntelligence:
         self.cache_ttl = 3600  # 1 hour
         self._max_cache_size = 500
         # Reusable HTTP session for connection pooling (keep-alive)
-        self._session: Optional[requests.Session] = None
+        self._session: requests.Session | None = None
         self._session_lock = threading.Lock()
 
     def _get_session(self) -> "requests.Session":
@@ -95,7 +94,7 @@ class ThreatIntelligence:
         """Check if threat intelligence is available"""
         return REQUESTS_AVAILABLE
 
-    def check_ip_reputation(self, ip: str) -> Dict:
+    def check_ip_reputation(self, ip: str) -> dict:
         """
         Check IP reputation using free public sources.
         Skips private/reserved IPs automatically.
@@ -173,7 +172,7 @@ class ThreatIntelligence:
             raise RuntimeError(f"Response too large: {len(raw)} bytes")
         return response.json()
 
-    def check_domain_reputation(self, domain: str) -> Dict:
+    def check_domain_reputation(self, domain: str) -> dict:
         """
         Check domain reputation using free public sources
         """
@@ -232,7 +231,7 @@ class ThreatIntelligence:
         # Skip private, loopback, link-local, multicast, reserved, etc.
         return addr.is_global
 
-    def _check_otx_ip(self, ip: str) -> Optional[Dict]:
+    def _check_otx_ip(self, ip: str) -> dict | None:
         """Check IP against AlienVault OTX (free, API key optional for enhanced data)"""
         try:
             safe_ip = urllib.parse.quote(ip, safe='')
@@ -240,22 +239,22 @@ class ThreatIntelligence:
             headers = {}
             if self.otx_api_key:
                 headers["X-OTX-API-KEY"] = self.otx_api_key
-            
+
             response = self._get_session().get(url, headers=headers, timeout=_REQUEST_TIMEOUT)
 
             if response.status_code == 200:
                 data = self._safe_json(response)
                 result = {}
-                
+
                 # Basic reputation data
                 if data.get("reputation"):
                     result["reputation"] = data["reputation"]
-                
+
                 # Pulse count and tags
                 if data.get("pulse_info"):
                     pulse_info = data["pulse_info"]
                     result["pulse_count"] = pulse_info.get("count", 0)
-                    
+
                     # With API key, get detailed pulse information
                     if self.otx_api_key and pulse_info.get("pulses"):
                         pulses = pulse_info["pulses"][:3]  # Top 3 pulses
@@ -265,20 +264,20 @@ class ThreatIntelligence:
                             "malware_families": p.get("malware_families", [])[:3],
                             "attack_ids": p.get("attack_ids", [])[:3]
                         } for p in pulses]
-                
+
                 # Additional metadata
                 if data.get("alexa"):
                     result["alexa_rank"] = data["alexa"]
                 if data.get("country_name"):
                     result["country"] = data["country_name"]
-                
+
                 return result if result else None
             return None
         except Exception as e:
             print(f"[DEBUG] OTX IP check failed: {e}")
             return None
 
-    def _check_otx_domain(self, domain: str) -> Optional[Dict]:
+    def _check_otx_domain(self, domain: str) -> dict | None:
         """Check domain against AlienVault OTX (API key optional for enhanced data)"""
         try:
             safe_domain = urllib.parse.quote(domain, safe='')
@@ -286,22 +285,22 @@ class ThreatIntelligence:
             headers = {}
             if self.otx_api_key:
                 headers["X-OTX-API-KEY"] = self.otx_api_key
-            
+
             response = self._get_session().get(url, headers=headers, timeout=_REQUEST_TIMEOUT)
 
             if response.status_code == 200:
                 data = self._safe_json(response)
                 result = {}
-                
+
                 # Basic reputation data
                 if data.get("reputation"):
                     result["reputation"] = data["reputation"]
-                
+
                 # Pulse count and tags
                 if data.get("pulse_info"):
                     pulse_info = data["pulse_info"]
                     result["pulse_count"] = pulse_info.get("count", 0)
-                    
+
                     # With API key, get detailed pulse information
                     if self.otx_api_key and pulse_info.get("pulses"):
                         pulses = pulse_info["pulses"][:3]  # Top 3 pulses
@@ -310,20 +309,20 @@ class ThreatIntelligence:
                             "tags": p.get("tags", [])[:5],
                             "malware_families": p.get("malware_families", [])[:3]
                         } for p in pulses]
-                
+
                 # Additional metadata
                 if data.get("alexa"):
                     result["alexa_rank"] = data["alexa"]
                 if data.get("whois"):
                     result["whois"] = data["whois"]
-                
+
                 return result if result else None
             return None
         except Exception as e:
             print(f"[DEBUG] OTX domain check failed: {e}")
             return None
 
-    def _check_abuseipdb_ip(self, ip: str) -> Optional[Dict]:
+    def _check_abuseipdb_ip(self, ip: str) -> dict | None:
         """
         Check IP against AbuseIPDB (free tier, limited requests).
         Note: Requires API key – returns None when no key is configured.
@@ -331,7 +330,7 @@ class ThreatIntelligence:
         # This endpoint requires an API key; skip for truly free access.
         return None
 
-    def _check_urlhaus(self, domain: str) -> Optional[Dict]:
+    def _check_urlhaus(self, domain: str) -> dict | None:
         """Check domain against URLhaus malware URL database"""
         try:
             url = f"{self.urlhaus_base_url}/host/"
@@ -346,14 +345,14 @@ class ThreatIntelligence:
                         "url_count": len(result["urls"]),
                         "urls": [{"url": u["url"], "threat": u.get("threat")} for u in result["urls"][:5]]
                     }
-                elif result.get("query_status") == "ok":
+                if result.get("query_status") == "ok":
                     return {"found": False}
             return None
         except Exception as e:
             print(f"[DEBUG] URLhaus check failed: {e}")
             return None
 
-    def _calculate_ip_risk(self, sources: Dict) -> float:
+    def _calculate_ip_risk(self, sources: dict) -> float:
         """Calculate overall IP risk score (0-100)"""
         risk_score = 0.0
 
@@ -373,7 +372,7 @@ class ThreatIntelligence:
         # Cap at 100
         return min(100.0, risk_score)
 
-    def _calculate_domain_risk(self, sources: Dict) -> float:
+    def _calculate_domain_risk(self, sources: dict) -> float:
         """Calculate overall domain risk score (0-100)"""
         risk_score = 0.0
 
@@ -389,7 +388,7 @@ class ThreatIntelligence:
 
         return min(100.0, risk_score)
 
-    def enrich_stats(self, stats: Dict, progress_cb=None) -> Dict:
+    def enrich_stats(self, stats: dict, progress_cb=None) -> dict:
         """
         Enrich analysis statistics with threat intelligence.
         progress_cb(fraction) is called with 0.0-1.0 to report progress.
@@ -434,8 +433,8 @@ class ThreatIntelligence:
                     progress_cb(completed / total_items)
 
         # ── Concurrent lookups ──
-        ip_risks: List[Dict] = []
-        domain_risks: List[Dict] = []
+        ip_risks: list[dict] = []
+        domain_risks: list[dict] = []
         results_lock = threading.Lock()
 
         def _check_ip(ip):
@@ -476,7 +475,7 @@ class ThreatIntelligence:
             for domain in domain_list:
                 futures.append(pool.submit(_check_domain, domain))
             # Wait for all to finish
-            for f in as_completed(futures):
+            for _f in as_completed(futures):
                 pass  # exceptions already handled inside workers
 
         if ip_risks:
@@ -496,7 +495,7 @@ class ThreatIntelligence:
         return enriched
 
 
-def check_online_reputation(ip: str = None, domain: str = None) -> Dict:
+def check_online_reputation(ip: str | None = None, domain: str | None = None) -> dict:
     """
     Convenience function to check reputation of IP or domain
     """

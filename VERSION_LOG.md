@@ -23,6 +23,9 @@
 
 
 
+
+## 2026.02.15-14 - 2026-02-15
+- Minor tweaks and improvements
 ## 2026.02.15-13 - 2026-02-15
 - Bug fix: Mouse wheel scrolling in text widgets. License: Relicensed under GNU GPLv3.
 ## 2026.02.15-12 - 2026-02-15
