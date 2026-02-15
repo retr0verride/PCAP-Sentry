@@ -26,6 +26,9 @@
 
 
 
+
+## 2026.02.15-17 - 2026-02-15
+- Security: Add encrypted keyring storage for OTX API keys. Update: Fix UAC elevation for Program Files updates.
 ## 2026.02.15-16 - 2026-02-15
 - Minor tweaks and improvements
 ## 2026.02.15-15 - 2026-02-15
