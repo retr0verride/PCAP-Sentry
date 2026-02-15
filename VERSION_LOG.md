@@ -5,6 +5,9 @@
 
 
 
+
+## 2026.02.14-10 - 2026-02-14
+- Switched to onedir mode for Python 3.14 compatibility - fixes DLL loading issues
 ## 2026.02.14-9 - 2026-02-14
 - Testing update system and Python 3.14 DLL bundling
 ## 2026.02.14-8 - 2026-02-14
