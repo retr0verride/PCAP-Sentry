@@ -8,6 +8,9 @@
 
 
 
+
+## 2026.02.14-13 - 2026-02-14
+- Minor tweaks and improvements
 ## 2026.02.14-12 - 2026-02-14
 **Stable Release - Python 3.14 Compatible**
 - Fixed LLM indicator button to run connection test (instead of toggle)
