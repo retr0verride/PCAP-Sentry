@@ -302,7 +302,8 @@ class UpdateChecker:
             if os.path.exists(temp_dest):
                 try:
                     os.remove(temp_dest)
-                except:
+                except OSError:
+                    # Ignore errors during cleanup
                     pass
             return False
 
