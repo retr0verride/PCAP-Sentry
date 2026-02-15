@@ -3,6 +3,7 @@ Stress Tests for PCAP Sentry
 Tests performance, memory usage, and edge cases
 """
 
+import os
 import sys
 import time
 import tracemalloc
@@ -98,7 +99,9 @@ def test_reservoir_sampling_performance():
     print(f"   Reservoir size: {len(reservoir)} (limit: {limit})")
 
     assert len(reservoir) == limit, f"Reservoir should be exactly {limit}"
-    assert throughput > 100_000, "Should process >100K items/sec"
+    # Lower threshold for CI environments which have variable performance
+    min_throughput = 50_000 if os.getenv('CI') else 100_000
+    assert throughput > min_throughput, f"Should process >{min_throughput:,} items/sec"
 
 
 def test_counter_performance():
@@ -132,7 +135,9 @@ def test_counter_performance():
     print(f"   Memory used: {format_size(mem_used)}")
     print(f"   Unique ports tracked: {len(port_counts)}")
 
-    assert throughput > 500_000, "Should process >500K updates/sec"
+    # Lower threshold for CI environments which have variable performance
+    min_throughput = 250_000 if os.getenv('CI') else 500_000
+    assert throughput > min_throughput, f"Should process >{min_throughput:,} updates/sec"
 
 
 def test_set_operations():
