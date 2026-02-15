@@ -4,6 +4,9 @@
 
 
 
+
+## 2026.02.14-9 - 2026-02-14
+- Testing update system and Python 3.14 DLL bundling
 ## 2026.02.14-8 - 2026-02-14
 - Minor tweaks and improvements
 ## 2026.02.14-7 - 2026-02-14
