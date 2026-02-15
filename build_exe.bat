@@ -123,14 +123,14 @@ echo ==== Publishing GitHub Release !RELEASE_TAG! ====>> "%LOG_PATH%"
 echo Release Notes: !BUILD_NOTES!>> "%LOG_PATH%"
 gh release view "!RELEASE_TAG!" >nul 2>&1
 if errorlevel 1 (
-	gh release create "!RELEASE_TAG!" "dist\PCAP_Sentry.exe" --title "PCAP Sentry v%VERSION%" --notes "What's New: !BUILD_NOTES!" >> "%LOG_PATH%" 2>&1
+	gh release create "!RELEASE_TAG!" "dist\PCAP_Sentry\PCAP_Sentry.exe" --title "PCAP Sentry v%VERSION%" --notes "What's New: !BUILD_NOTES!" >> "%LOG_PATH%" 2>&1
 	if errorlevel 1 (
 		echo Warning: Failed to create GitHub release. See %LOG_PATH% for details.
 	) else (
 		echo Created GitHub release !RELEASE_TAG! with PCAP_Sentry.exe
 	)
 ) else (
-	gh release upload "!RELEASE_TAG!" "dist\PCAP_Sentry.exe" --clobber >> "%LOG_PATH%" 2>&1
+	gh release upload "!RELEASE_TAG!" "dist\PCAP_Sentry\PCAP_Sentry.exe" --clobber >> "%LOG_PATH%" 2>&1
 	if errorlevel 1 (
 		echo Warning: Failed to upload EXE to GitHub release. See %LOG_PATH% for details.
 	) else (
