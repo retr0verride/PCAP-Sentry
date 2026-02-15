@@ -29,6 +29,9 @@
 
 
 
+
+## 2026.02.15-20 - 2026-02-15
+- Fix: Window hang on close. Added proper cleanup of pending callbacks and animations before window destruction.
 ## 2026.02.15-19 - 2026-02-15
 - Fix: UI stuttering during analysis (progress throttling). Performance: Optimized update frequency and reduced UI thread overhead.
 ## 2026.02.15-18 - 2026-02-15

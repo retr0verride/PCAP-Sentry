@@ -195,7 +195,7 @@ DEFAULT_MAX_ROWS = 200000
 IOC_SET_LIMIT = 50000
 
 
-_EMBEDDED_VERSION = "2026.02.15-19"  # Stamped by update_version.ps1 at build time
+_EMBEDDED_VERSION = "2026.02.15-20"  # Stamped by update_version.ps1 at build time
 
 
 def _compute_app_version():
@@ -2917,7 +2917,25 @@ class PCAPSentryApp:
     def _on_close(self):
         """Handle window close – cancel timers, backup KB, persist LLM status, then destroy."""
         self._shutting_down = True
+        
+        # Signal all background operations to stop
+        self._cancel_event.set()
+        
+        # Cancel all pending after() callbacks
         self._reset_progress()
+        if self._bg_draw_pending is not None:
+            try:
+                self.root.after_cancel(self._bg_draw_pending)
+                self._bg_draw_pending = None
+            except:
+                pass
+        
+        # Stop animations
+        self._logo_spinning = False
+        
+        # Give callbacks time to see shutdown flag and exit cleanly (prevent hang)
+        self.root.update_idletasks()
+        
         _backup_knowledge_base()
         # Persist LLM status and all settings
         self._save_settings_from_vars()
@@ -3110,7 +3128,7 @@ class PCAPSentryApp:
 
     def _animate_logo_spin(self):
         """Advance one frame of the vertical-axis spin animation."""
-        if not self._logo_spinning or not self._brand_label:
+        if self._shutting_down or not self._logo_spinning or not self._brand_label:
             return
         
         # Generate animation frames on first use to avoid startup delay
@@ -3120,9 +3138,13 @@ class PCAPSentryApp:
         if not self._spin_frames:
             return
         
-        self._spin_index = (self._spin_index + 1) % len(self._spin_frames)
-        self._brand_label.configure(image=self._spin_frames[self._spin_index])
-        self.root.after(50, self._animate_logo_spin)
+        try:
+            self._spin_index = (self._spin_index + 1) % len(self._spin_frames)
+            self._brand_label.configure(image=self._spin_frames[self._spin_index])
+            self.root.after(50, self._animate_logo_spin)
+        except tk.TclError:
+            # Widget destroyed during shutdown
+            return
     
     def _generate_spin_frames(self):
         """Generate logo spin animation frames on demand to avoid startup delay."""
@@ -6193,6 +6215,8 @@ class PCAPSentryApp:
         self._bg_draw_pending = None
 
     def _schedule_draw_background(self, event=None):
+        if self._shutting_down:
+            return
         if self._bg_draw_pending is not None:
             self.root.after_cancel(self._bg_draw_pending)
         # Increased delay to reduce redraw frequency during resizing
@@ -6200,7 +6224,7 @@ class PCAPSentryApp:
 
     def _draw_background(self, _event=None):
         self._bg_draw_pending = None
-        if self.bg_canvas is None:
+        if self._shutting_down or self.bg_canvas is None:
             return
         w = self.bg_canvas.winfo_width()
         h = self.bg_canvas.winfo_height()
