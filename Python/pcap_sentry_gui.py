@@ -6377,23 +6377,37 @@ class PCAPSentryApp:
     def _run_task(self, func, on_success, on_error=None, message="Working...", progress_label=None):
         self._set_busy(True, message)
         q = queue.Queue()
+        last_progress_time = [0.0]  # Mutable to allow closure modification
+        last_progress_value = [0.0]
 
         def progress_cb(percent, eta_seconds=None, processed=None, total=None, label=None):
             # Check for cancellation on every progress update
             if self._cancel_event.is_set():
                 raise AnalysisCancelledError("Analysis cancelled by user.")
-            q.put(
-                (
-                    "progress",
-                    {
-                        "percent": percent,
-                        "eta": eta_seconds,
-                        "processed": processed,
-                        "total": total,
-                        "label": label,
-                    },
+            
+            # Throttle progress updates to prevent UI flooding
+            import time as _time
+            current_time = _time.time()
+            
+            # Send update if: significant change (>2%), enough time passed (>150ms), or final (100%)
+            time_delta = current_time - last_progress_time[0]
+            progress_delta = abs(percent - last_progress_value[0])
+            
+            if percent >= 100 or progress_delta >= 2.0 or time_delta >= 0.15:
+                last_progress_time[0] = current_time
+                last_progress_value[0] = percent
+                q.put(
+                    (
+                        "progress",
+                        {
+                            "percent": percent,
+                            "eta": eta_seconds,
+                            "processed": processed,
+                            "total": total,
+                            "label": label,
+                        },
+                    )
                 )
-            )
 
         def worker():
             try:
@@ -6428,7 +6442,7 @@ class PCAPSentryApp:
             error_tb = None
             latest_progress = None
             try:
-                for _ in range(50):
+                for _ in range(20):  # Reduced from 50 to 20 to prevent UI blocking
                     msg = q.get_nowait()
                     status = msg[0]
                     if status == "progress":
@@ -6470,10 +6484,11 @@ class PCAPSentryApp:
                     self.root.after(600, lambda: self._finish_task(error, payload, error_tb, on_success, on_error))
             else:
                 # Poll faster while cancel is pending for snappier response
-                interval = 30 if self._cancel_event.is_set() else 100
+                # Increased from 100ms to 150ms to reduce UI thread overhead
+                interval = 30 if self._cancel_event.is_set() else 150
                 self.root.after(interval, check)
 
-        self.root.after(100, check)
+        self.root.after(150, check)
 
     def _finish_task(self, error, payload, error_tb, on_success, on_error):
         """Called after the 100% progress hold to clean up and deliver results."""
