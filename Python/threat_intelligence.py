@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # PCAP Sentry - Malware Analysis and Education Console for Network Packet Captures
-# Copyright (C) 2026 David Howansky
+# Copyright (C) 2026 industrial-dave
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by

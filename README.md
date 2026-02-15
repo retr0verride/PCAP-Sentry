@@ -167,4 +167,4 @@ Both scripts auto-increment the version and build artifacts; publish behavior is
 
 This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
 
-Copyright (C) 2026 David Howansky
+Copyright (C) 2026 industrial-dave

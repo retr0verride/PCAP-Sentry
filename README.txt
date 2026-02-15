@@ -36,6 +36,6 @@ License
 -------
 This project is licensed under the GNU General Public License v3.0.
 See LICENSE file for details.
-Copyright (C) 2026 David Howansky
+Copyright (C) 2026 industrial-dave
 
 GitHub: https://github.com/industrial-dave/PCAP-Sentry

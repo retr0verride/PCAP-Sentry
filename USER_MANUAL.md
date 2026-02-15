@@ -1093,7 +1093,7 @@ The analysis engine evaluates numerous heuristic signals including:
 
 - **GitHub:** [github.com/industrial-dave/PCAP-Sentry](https://github.com/industrial-dave/PCAP-Sentry)
 - **Issues:** Report bugs or request features via [GitHub Issues](https://github.com/industrial-dave/PCAP-Sentry/issues)
-- **License:** GNU General Public License v3.0 - see [LICENSE](LICENSE) file. Copyright (C) 2026 David Howansky
+- **License:** GNU General Public License v3.0 - see [LICENSE](LICENSE) file. Copyright (C) 2026 industrial-dave
 
 ---
 
