@@ -38,8 +38,9 @@ _MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 class ThreatIntelligence:
     """Threat intelligence checker using free/public APIs"""
 
-    def __init__(self):
+    def __init__(self, otx_api_key: Optional[str] = None):
         self.otx_base_url = "https://otx.alienvault.com/api/v1"
+        self.otx_api_key = otx_api_key
         self.abuseipdb_base_url = "https://api.abuseipdb.com/api/v2"
         self.urlhaus_base_url = "https://urlhaus-api.abuse.ch/v1"
         self._cache = {}  # Thread-safe cache to avoid repeated lookups
@@ -215,40 +216,91 @@ class ThreatIntelligence:
         return addr.is_global
 
     def _check_otx_ip(self, ip: str) -> Optional[Dict]:
-        """Check IP against AlienVault OTX (free, no API key required)"""
+        """Check IP against AlienVault OTX (free, API key optional for enhanced data)"""
         try:
             safe_ip = urllib.parse.quote(ip, safe='')
-            url = f"{self.otx_base_url}/indicators/IPv4/{safe_ip}/reputation"
-            response = self._get_session().get(url, timeout=_REQUEST_TIMEOUT)
+            url = f"{self.otx_base_url}/indicators/IPv4/{safe_ip}/general"
+            headers = {}
+            if self.otx_api_key:
+                headers["X-OTX-API-KEY"] = self.otx_api_key
+            
+            response = self._get_session().get(url, headers=headers, timeout=_REQUEST_TIMEOUT)
 
             if response.status_code == 200:
                 data = self._safe_json(response)
+                result = {}
+                
+                # Basic reputation data
                 if data.get("reputation"):
-                    return {
-                        "reputation": data["reputation"],
-                        "alexa_rank": data.get("alexa_rank"),
-                        "pulse_count": data.get("pulse_count")
-                    }
+                    result["reputation"] = data["reputation"]
+                
+                # Pulse count and tags
+                if data.get("pulse_info"):
+                    pulse_info = data["pulse_info"]
+                    result["pulse_count"] = pulse_info.get("count", 0)
+                    
+                    # With API key, get detailed pulse information
+                    if self.otx_api_key and pulse_info.get("pulses"):
+                        pulses = pulse_info["pulses"][:3]  # Top 3 pulses
+                        result["pulses"] = [{
+                            "name": p.get("name"),
+                            "tags": p.get("tags", [])[:5],  # Top 5 tags
+                            "malware_families": p.get("malware_families", [])[:3],
+                            "attack_ids": p.get("attack_ids", [])[:3]
+                        } for p in pulses]
+                
+                # Additional metadata
+                if data.get("alexa"):
+                    result["alexa_rank"] = data["alexa"]
+                if data.get("country_name"):
+                    result["country"] = data["country_name"]
+                
+                return result if result else None
             return None
         except Exception as e:
             print(f"[DEBUG] OTX IP check failed: {e}")
             return None
 
     def _check_otx_domain(self, domain: str) -> Optional[Dict]:
-        """Check domain against AlienVault OTX"""
+        """Check domain against AlienVault OTX (API key optional for enhanced data)"""
         try:
             safe_domain = urllib.parse.quote(domain, safe='')
-            url = f"{self.otx_base_url}/indicators/domain/{safe_domain}/reputation"
-            response = self._get_session().get(url, timeout=_REQUEST_TIMEOUT)
+            url = f"{self.otx_base_url}/indicators/domain/{safe_domain}/general"
+            headers = {}
+            if self.otx_api_key:
+                headers["X-OTX-API-KEY"] = self.otx_api_key
+            
+            response = self._get_session().get(url, headers=headers, timeout=_REQUEST_TIMEOUT)
 
             if response.status_code == 200:
                 data = self._safe_json(response)
+                result = {}
+                
+                # Basic reputation data
                 if data.get("reputation"):
-                    return {
-                        "reputation": data["reputation"],
-                        "pulse_count": data.get("pulse_count"),
-                        "whois": data.get("whois")
-                    }
+                    result["reputation"] = data["reputation"]
+                
+                # Pulse count and tags
+                if data.get("pulse_info"):
+                    pulse_info = data["pulse_info"]
+                    result["pulse_count"] = pulse_info.get("count", 0)
+                    
+                    # With API key, get detailed pulse information
+                    if self.otx_api_key and pulse_info.get("pulses"):
+                        pulses = pulse_info["pulses"][:3]  # Top 3 pulses
+                        result["pulses"] = [{
+                            "name": p.get("name"),
+                            "tags": p.get("tags", [])[:5],
+                            "malware_families": p.get("malware_families", [])[:3]
+                        } for p in pulses]
+                
+                # Additional metadata
+                if data.get("alexa"):
+                    result["alexa_rank"] = data["alexa"]
+                if data.get("whois"):
+                    result["whois"] = data["whois"]
+                
+                return result if result else None
             return None
         except Exception as e:
             print(f"[DEBUG] OTX domain check failed: {e}")

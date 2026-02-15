@@ -103,89 +103,69 @@ class UpdateChecker:
         """
         Fetch the latest release information from GitHub.
 
-        Queries all releases and picks the one with the highest
-        version number, which is more reliable than /releases/latest
-        (GitHub sorts that by created_at, not by semantic version).
-
         Returns:
             True if successful, False otherwise
         """
         try:
             ctx = ssl.create_default_context()
+            req = urllib.request.Request(
+                self.RELEASES_URL,
+                headers={"Accept": "application/vnd.github+json", "User-Agent": "PCAP-Sentry-Updater"},
+            )
+            
+            with urllib.request.urlopen(req, context=ctx, timeout=15) as response:
+                raw = response.read(self._MAX_API_RESPONSE_BYTES + 1)
+                if len(raw) > self._MAX_API_RESPONSE_BYTES:
+                    self._last_error = "GitHub API response too large"
+                    return False
+                release = json.loads(raw.decode("utf-8"))
 
-            # Try fetching all releases first (more reliable)
-            best = None
-            best_ver = (0,)
-            try:
-                req = urllib.request.Request(
-                    self.RELEASES_ALL_URL,
-                    headers={"Accept": "application/vnd.github+json"},
-                )
-                with urllib.request.urlopen(req, context=ctx, timeout=15) as response:
-                    raw = response.read(self._MAX_API_RESPONSE_BYTES + 1)
-                    if len(raw) > self._MAX_API_RESPONSE_BYTES:
-                        raise RuntimeError("GitHub API response too large")
-                    releases = json.loads(raw.decode("utf-8"))
-                for rel in releases:
-                    if rel.get("draft") or rel.get("prerelease"):
-                        continue
-                    tag = rel.get("tag_name", "").lstrip("v")
-                    parsed = self._parse_version(tag)
-                    if parsed > best_ver:
-                        best_ver = parsed
-                        best = rel
-            except Exception:
-                # Fall back to /releases/latest
-                with urllib.request.urlopen(self.RELEASES_URL, context=ctx, timeout=10) as response:
-                    raw = response.read(self._MAX_API_RESPONSE_BYTES + 1)
-                    if len(raw) > self._MAX_API_RESPONSE_BYTES:
-                        raise RuntimeError("GitHub API response too large")
-                    best = json.loads(raw.decode("utf-8"))
-
-            if best is None:
-                self._last_error = "No published releases found."
+            if not release or release.get("draft") or release.get("prerelease"):
+                self._last_error = "No stable release found"
                 return False
 
-            self.latest_release = best
-            self.latest_version = best.get("tag_name", "").lstrip("v")
-            self.release_notes = best.get("body", "")
+            self.latest_release = release
+            self.latest_version = release.get("tag_name", "").lstrip("v")
+            self.release_notes = release.get("body", "")
 
-            # Find the best downloadable asset.
-            # Prefer the installer (Setup EXE) so that ALL files
-            # (EXE, README, LICENSE, VC++ runtime, etc.) are replaced.
-            assets = best.get("assets", [])
+            # Find downloadable assets - prefer installer
+            assets = release.get("assets", [])
             installer_url = None
             standalone_url = None
-            self.download_is_installer = False
+            
             for asset in assets:
                 name = asset.get("name", "")
                 url = asset.get("browser_download_url", "")
+                
                 if not name.lower().endswith(".exe"):
                     continue
-                # Only accept download URLs from GitHub domains
+                    
                 if not self._is_trusted_download_url(url):
                     continue
-                if "setup" in name.lower() or "install" in name.lower():
-                    if "PCAP_Sentry" in name:
-                        installer_url = url
+                    
+                if ("setup" in name.lower() or "install" in name.lower()) and "PCAP_Sentry" in name:
+                    installer_url = url
                 elif "PCAP_Sentry" in name:
                     standalone_url = url
 
+            # Use installer if available, otherwise standalone
             if installer_url:
                 self.download_url = installer_url
                 self.download_is_installer = True
             elif standalone_url:
                 self.download_url = standalone_url
                 self.download_is_installer = False
+            else:
+                self._last_error = "No downloadable files found in release"
+                return False
 
-            # Fetch expected SHA-256 hash from the release's SHA256SUMS.txt asset
-            self._expected_sha256 = self._fetch_sha256_for_asset(best, ctx)
-
+            # Fetch SHA-256 checksums for verification
+            self._expected_sha256 = self._fetch_sha256_for_asset(release, ctx)
             return True
 
         except Exception as e:
+            self._last_error = f"Failed to fetch release: {str(e)}"
             print(f"Error fetching latest release: {e}")
-            self._last_error = str(e)
             return False
 
     @staticmethod
@@ -235,71 +215,95 @@ class UpdateChecker:
 
         Args:
             destination: Path where the update should be saved
-            progress_callback: Optional callback for progress updates
+            progress_callback: Optional callback(downloaded_bytes, total_bytes)
 
         Returns:
             True if successful, False otherwise
         """
         if not self.download_url:
+            self._last_error = "No download URL available"
             return False
 
         try:
+            # Ensure destination directory exists
+            os.makedirs(os.path.dirname(destination), exist_ok=True)
+            
             ctx = ssl.create_default_context()
             req = urllib.request.Request(
                 self.download_url,
                 headers={"User-Agent": "PCAP-Sentry-Updater"},
             )
+            
             with urllib.request.urlopen(req, context=ctx, timeout=120) as response:
                 total_size = int(response.headers.get("Content-Length", 0))
-                # Enforce download size limit
+                
+                # Validate size
                 if total_size > self._MAX_DOWNLOAD_BYTES:
-                    raise RuntimeError(f"Download too large ({total_size} bytes)")
+                    self._last_error = f"Download too large: {total_size} bytes"
+                    return False
+                
+                # Download to temporary file first
+                temp_dest = destination + ".tmp"
                 downloaded = 0
-                chunk_size = 65536
                 sha256 = hashlib.sha256()
-                with open(destination, "wb") as f:
+                
+                with open(temp_dest, "wb") as f:
                     while True:
-                        chunk = response.read(chunk_size)
+                        chunk = response.read(65536)
                         if not chunk:
                             break
                         downloaded += len(chunk)
+                        
                         if downloaded > self._MAX_DOWNLOAD_BYTES:
-                            raise RuntimeError("Download exceeded size limit")
+                            os.remove(temp_dest)
+                            self._last_error = "Download exceeded size limit"
+                            return False
+                        
                         f.write(chunk)
                         sha256.update(chunk)
+                        
                         if progress_callback:
                             progress_callback(downloaded, total_size)
-
-            if not (os.path.exists(destination) and os.path.getsize(destination) > 0):
-                return False
 
             # Verify SHA-256 hash if available
             actual_hash = sha256.hexdigest().lower()
             expected = getattr(self, "_expected_sha256", {}) or {}
             filename = os.path.basename(destination)
-            # Try matching by the download URL's filename first, then by destination filename
-            download_filename = self.download_url.rsplit("/", 1)[-1] if self.download_url else ""
+            download_filename = self.download_url.rsplit("/", 1)[-1]
+            
             expected_hash = expected.get(download_filename) or expected.get(filename)
+            
             if expected_hash:
                 if actual_hash != expected_hash.lower():
-                    os.remove(destination)
+                    os.remove(temp_dest)
                     self._last_error = (
-                        f"SHA-256 mismatch!\n"
+                        f"SHA-256 verification failed!\n"
                         f"Expected: {expected_hash}\n"
-                        f"Actual:   {actual_hash}\n"
-                        f"The download may have been tampered with."
+                        f"Got: {actual_hash}\n\n"
+                        f"The download may be corrupted or tampered with."
                     )
-                    print(f"Security: SHA-256 mismatch for {filename}")
                     return False
-                print(f"Security: SHA-256 verified for {filename}")
+                print(f"✓ SHA-256 verified for {filename}")
             else:
-                print(f"Security: No SHA-256 hash available for {filename} (skipping verification)")
+                print(f"⚠ No SHA-256 hash available for {filename}")
 
+            # Move to final destination
+            if os.path.exists(destination):
+                os.remove(destination)
+            os.rename(temp_dest, destination)
+            
             return True
 
         except Exception as e:
+            self._last_error = f"Download failed: {str(e)}"
             print(f"Error downloading update: {e}")
-            self._last_error = str(e)
+            # Clean up temp file
+            temp_dest = destination + ".tmp"
+            if os.path.exists(temp_dest):
+                try:
+                    os.remove(temp_dest)
+                except:
+                    pass
             return False
 
     @staticmethod
@@ -347,15 +351,22 @@ class UpdateChecker:
             # Validate path is under expected staging directory
             real_path = os.path.realpath(installer_path)
             real_update_dir = os.path.realpath(self.get_update_dir())
+            
             if not real_path.startswith(real_update_dir + os.sep):
-                print(f"Security: installer_path is not under update dir — refusing to launch.")
-                self._last_error = "Installer path validation failed."
+                self._last_error = "Installer path validation failed"
+                print(f"Security: Installer path outside update directory")
                 return False
-            # Re-verify SHA-256 immediately before execution (prevent TOCTOU)
+            
+            if not os.path.exists(real_path):
+                self._last_error = "Installer file not found"
+                return False
+            
+            # Re-verify SHA-256 before launch (TOCTOU protection)
             expected = getattr(self, "_expected_sha256", {}) or {}
             filename = os.path.basename(real_path)
             download_filename = self.download_url.rsplit("/", 1)[-1] if self.download_url else ""
             expected_hash = expected.get(download_filename) or expected.get(filename)
+            
             if expected_hash:
                 sha = hashlib.sha256()
                 with open(real_path, "rb") as f:
@@ -364,27 +375,40 @@ class UpdateChecker:
                         if not chunk:
                             break
                         sha.update(chunk)
+                
                 if sha.hexdigest().lower() != expected_hash.lower():
-                    print(f"Security: SHA-256 mismatch at launch time — refusing to execute.")
-                    self._last_error = "SHA-256 verification failed before launch."
+                    self._last_error = "SHA-256 verification failed before launch"
+                    print(f"Security: SHA-256 mismatch at launch time")
                     return False
-            # Use os.startfile (ShellExecuteW) instead of subprocess.Popen
-            # so that Windows can show the UAC elevation prompt when the
-            # Inno Setup installer requests admin privileges.
-            # subprocess.Popen uses CreateProcessW which cannot elevate and
-            # would fail with WinError 740.
+                print(f"✓ SHA-256 verified before launch")
+            
+            # Launch installer (Windows will show UAC prompt if needed)
+            print(f"Launching installer: {real_path}")
             os.startfile(real_path)
+            
+            # Schedule cleanup after a delay
+            def cleanup_later():
+                import time
+                time.sleep(3)
+                try:
+                    if os.path.exists(real_path):
+                        os.remove(real_path)
+                        print(f"Cleaned up installer: {real_path}")
+                except Exception as e:
+                    print(f"Could not delete installer: {e}")
+            
+            threading.Thread(target=cleanup_later, daemon=True).start()
             return True
+            
         except Exception as e:
+            self._last_error = f"Failed to launch installer: {str(e)}"
             print(f"Error launching installer: {e}")
-            self._last_error = str(e)
             return False
 
-    def replace_executable(
-        self, new_exe_path: str, current_exe_path: str = None
-    ) -> bool:
+    def replace_executable(self, new_exe_path: str, current_exe_path: str = None) -> bool:
         """
         Replace the current executable with the updated one.
+        Uses a batch script to handle the replacement after app exit.
 
         Args:
             new_exe_path: Path to the new executable
@@ -397,81 +421,76 @@ class UpdateChecker:
             current_exe_path = sys.executable
 
         try:
-            self._last_error = None
-
+            # Check if running from frozen executable
+            if not getattr(sys, "frozen", False):
+                self._last_error = "Cannot update when running from source. Use the installer."
+                return False
+            
+            # Check if current exe looks like a Python interpreter
             current_name = os.path.basename(current_exe_path).lower()
-            if (not getattr(sys, "frozen", False)) or current_name.startswith("python"):
-                self._last_error = (
-                    "Automatic replacement is unavailable when running from source/venv. "
-                    "Use the installer build for in-app updates."
-                )
+            if current_name.startswith("python"):
+                self._last_error = "Cannot update Python interpreter. Use the installer."
                 return False
 
             if not os.path.exists(new_exe_path):
-                self._last_error = f"Downloaded update not found: {new_exe_path}"
+                self._last_error = f"Update file not found: {new_exe_path}"
                 return False
 
-            # Back up the knowledge base so user data is preserved
+            # Back up knowledge base
             self._backup_knowledge_base_before_update()
 
+            # Create update script
+            update_dir = self.get_update_dir()
+            script_path = os.path.join(update_dir, "apply_update.bat")
             backup_path = current_exe_path + ".backup"
-            script_path = os.path.join(self.get_update_dir(), "apply_update.cmd")
 
-            # Sanitize paths to prevent command injection via special characters
-            def _sanitize_cmd_path(p: str) -> str:
-                """Remove characters that could break out of CMD variable quoting."""
-                # Only allow safe path characters: letters, digits, spaces, \, /, :, ., -, _
-                return re.sub(r'[^\w\s\\/:._-]', '', p)
+            # Simple batch script to replace executable
+            script = f'''@echo off
+echo Applying PCAP Sentry update...
+timeout /t 2 /nobreak >nul
 
-            safe_new = _sanitize_cmd_path(new_exe_path)
-            safe_cur = _sanitize_cmd_path(current_exe_path)
-            safe_bak = _sanitize_cmd_path(backup_path)
+REM Wait for app to close
+:wait_loop
+tasklist /FI "IMAGENAME eq PCAP_Sentry.exe" 2>NUL | find /I /N "PCAP_Sentry.exe">NUL
+if "%ERRORLEVEL%"=="0" (
+    timeout /t 1 /nobreak >nul
+    goto wait_loop
+)
 
-            script_lines = [
-                "@echo off",
-                "setlocal",
-                f'set "NEW_EXE={safe_new}"',
-                f'set "CUR_EXE={safe_cur}"',
-                f'set "BACKUP_EXE={safe_bak}"',
-                "set RETRIES=30",
-                "",
-                ":retry",
-                "copy /Y \"%CUR_EXE%\" \"%BACKUP_EXE%\" >nul 2>&1",
-                "move /Y \"%NEW_EXE%\" \"%CUR_EXE%\" >nul 2>&1",
-                "if errorlevel 1 (",
-                "  set /a RETRIES-=1",
-                "  if %RETRIES% LEQ 0 goto fail",
-                "  timeout /t 1 /nobreak >nul",
-                "  goto retry",
-                ")",
-                "start \"\" \"%CUR_EXE%\"",
-                "del \"%~f0\"",
-                "exit /b 0",
-                "",
-                ":fail",
-                "exit /b 1",
-            ]
+REM Backup current executable
+copy /Y "{current_exe_path}" "{backup_path}" >nul 2>&1
 
-            with open(script_path, "w", encoding="utf-8", newline="\r\n") as f:
-                f.write("\r\n".join(script_lines) + "\r\n")
+REM Replace with new version
+move /Y "{new_exe_path}" "{current_exe_path}"
+if errorlevel 1 (
+    echo Update failed!
+    pause
+    exit /b 1
+)
 
-            # Use ShellExecuteW with "runas" to elevate the replacement
-            # script.  The script needs write access to the install
-            # directory (often Program Files) which requires admin rights.
-            import ctypes
-            result = ctypes.windll.shell32.ShellExecuteW(
-                None, "runas", "cmd.exe",
-                f'/c "{script_path}"', None, 0,  # SW_HIDE
+REM Launch updated executable
+start "" "{current_exe_path}"
+
+REM Clean up
+del "%~f0"
+exit /b 0
+'''
+
+            with open(script_path, "w", encoding="utf-8") as f:
+                f.write(script)
+
+            # Launch update script
+            subprocess.Popen(
+                ["cmd.exe", "/c", script_path],
+                creationflags=subprocess.CREATE_NO_WINDOW,
+                cwd=update_dir,
             )
-            if result <= 32:
-                raise RuntimeError(
-                    f"ShellExecuteW failed (code {result}). "
-                    "Could not elevate the update script."
-                )
+            
+            print(f"Update script launched: {script_path}")
             return True
 
         except Exception as e:
-            self._last_error = str(e)
+            self._last_error = f"Failed to prepare update: {str(e)}"
             print(f"Error replacing executable: {e}")
             return False
 

@@ -100,7 +100,7 @@ binaries = _unique(binaries)
 hiddenimports = _unique(hiddenimports)
 
 
-for icon_name in ("pcap_sentry.ico", "pcap_sentry_256.png", "pcap_sentry_48.png", "custom.ico"):
+for icon_name in ("pcap_sentry.ico", "pcap_sentry_512.png", "pcap_sentry_256.png", "pcap_sentry_48.png", "custom.ico"):
     icon_path = os.path.join("assets", icon_name)
     if os.path.exists(icon_path):
         datas.append((icon_path, "assets"))
@@ -116,6 +116,22 @@ for py_dll in py_dll_candidates:
     if os.path.exists(py_dll):
         binaries.append((py_dll, "."))
         break
+
+# Bundle VC++ runtime DLLs so the app runs even if the redist is missing.
+vc_runtime_dlls = [
+    "vcruntime140.dll",
+    "vcruntime140_1.dll",
+    "msvcp140.dll",
+    "msvcp140_1.dll",
+    "msvcp140_2.dll",
+    "concrt140.dll",
+    "vccorlib140.dll",
+]
+system32_dir = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "System32")
+for dll_name in vc_runtime_dlls:
+    dll_path = os.path.join(system32_dir, dll_name)
+    if os.path.exists(dll_path):
+        binaries.append((dll_path, "."))
 
 # Include Npcap DLLs if available for packet capture support.
 wpcap_path = r"C:\Windows\System32\Npcap\wpcap.dll"
@@ -174,6 +190,6 @@ exe = EXE(
     entitlements_file=None,
     version='version_info.txt',
     icon=[
-        'assets\\custom.ico' if os.path.exists('assets\\custom.ico') else 'assets\\pcap_sentry.ico'
+        'assets\\pcap_sentry.ico' if os.path.exists('assets\\pcap_sentry.ico') else 'assets\\custom.ico'
     ],
 )

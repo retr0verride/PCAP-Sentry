@@ -489,6 +489,7 @@ def _default_settings():
         "llm_auto_detect": True,
         "theme": "system",
         "offline_mode": False,
+        "otx_api_key": "",
         "app_data_notice_shown": False,
     }
 
@@ -2702,6 +2703,7 @@ class PCAPSentryApp:
         self.llm_model_var = tk.StringVar(value=self.settings.get("llm_model", "llama3"))
         self.llm_endpoint_var = tk.StringVar(value=self.settings.get("llm_endpoint", "http://localhost:11434"))
         self.llm_api_key_var = tk.StringVar(value=self.settings.get("llm_api_key", ""))
+        self.otx_api_key_var = tk.StringVar(value=self.settings.get("otx_api_key", ""))
         self.llm_test_status_var = tk.StringVar(value="Not tested")
         self.llm_test_status_label = None
         self.llm_header_indicator = None
@@ -2794,7 +2796,7 @@ class PCAPSentryApp:
         self.threat_intel_cache_time = 0  # Timestamp for cache validity
 
         self._build_background()
-
+        self._build_menu_bar()
         self._build_header()
         self._build_tabs()
         self._build_status()
@@ -3007,6 +3009,101 @@ class PCAPSentryApp:
         self._brand_label.configure(image=self._spin_frames[self._spin_index])
         self.root.after(50, self._animate_logo_spin)
 
+    def _build_menu_bar(self):
+        """Create the application menu bar with File, Edit, and Help menus."""
+        # Configure menu colors to match theme
+        menu_bg = self.colors.get("panel", "#161b22")
+        menu_fg = self.colors.get("text", "#e6edf3")
+        menu_active_bg = self.colors.get("accent", "#58a6ff")
+        menu_active_fg = self.colors.get("bg", "#0d1117")
+        
+        menubar = tk.Menu(
+            self.root,
+            bg=menu_bg,
+            fg=menu_fg,
+            activebackground=menu_active_bg,
+            activeforeground=menu_active_fg,
+            borderwidth=0,
+            relief=tk.FLAT
+        )
+        self.root.config(menu=menubar)
+        
+        # File Menu
+        file_menu = tk.Menu(
+            menubar,
+            tearoff=0,
+            bg=menu_bg,
+            fg=menu_fg,
+            activebackground=menu_active_bg,
+            activeforeground=menu_active_fg,
+            borderwidth=1,
+            relief=tk.FLAT
+        )
+        menubar.add_cascade(label="File", menu=file_menu)
+        
+        file_menu.add_command(label="Open PCAP...", command=lambda: self._browse_file(self.target_path_var), accelerator="Ctrl+O")
+        file_menu.add_separator()
+        file_menu.add_command(label="Import IoC Feed...", command=self._browse_ioc)
+        file_menu.add_separator()
+        file_menu.add_command(label="Preferences...", command=self._open_preferences, accelerator="Ctrl+,")
+        file_menu.add_command(label="LLM Settings...", command=self._open_llm_settings)
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=self._on_close, accelerator="Alt+F4")
+        
+        # Edit Menu
+        edit_menu = tk.Menu(
+            menubar,
+            tearoff=0,
+            bg=menu_bg,
+            fg=menu_fg,
+            activebackground=menu_active_bg,
+            activeforeground=menu_active_fg,
+            borderwidth=1,
+            relief=tk.FLAT
+        )
+        menubar.add_cascade(label="Edit", menu=edit_menu)
+        
+        edit_menu.add_command(label="Undo", command=self._edit_undo, accelerator="Ctrl+Z")
+        edit_menu.add_command(label="Redo", command=self._edit_redo, accelerator="Ctrl+Y")
+        edit_menu.add_separator()
+        edit_menu.add_command(label="Cut", command=self._edit_cut, accelerator="Ctrl+X")
+        edit_menu.add_command(label="Copy", command=self._edit_copy, accelerator="Ctrl+C")
+        edit_menu.add_command(label="Paste", command=self._edit_paste, accelerator="Ctrl+V")
+        edit_menu.add_separator()
+        edit_menu.add_command(label="Select All", command=self._edit_select_all, accelerator="Ctrl+A")
+        edit_menu.add_separator()
+        edit_menu.add_command(label="Clear All Fields", command=self._clear_input_fields, accelerator="Ctrl+L")
+        
+        # Help Menu
+        help_menu = tk.Menu(
+            menubar,
+            tearoff=0,
+            bg=menu_bg,
+            fg=menu_fg,
+            activebackground=menu_active_bg,
+            activeforeground=menu_active_fg,
+            borderwidth=1,
+            relief=tk.FLAT
+        )
+        menubar.add_cascade(label="Help", menu=help_menu)
+        
+        if _update_checker_available:
+            help_menu.add_command(label="Check for Updates...", command=self._check_for_updates_ui)
+            help_menu.add_separator()
+        
+        help_menu.add_command(label="User Manual", command=self._open_user_manual)
+        help_menu.add_command(label="View Logs...", command=self._open_logs_folder)
+        help_menu.add_separator()
+        help_menu.add_command(label="About PCAP Sentry", command=self._show_about)
+        
+        # Bind keyboard shortcuts
+        self.root.bind('<Control-z>', lambda e: self._edit_undo())
+        self.root.bind('<Control-y>', lambda e: self._edit_redo())
+        self.root.bind('<Control-o>', lambda e: self._browse_file(self.target_path_var))
+        self.root.bind('<Control-l>', lambda e: self._clear_input_fields())
+        self.root.bind('<Control-comma>', lambda e: self._open_preferences())
+
+
     def _build_header(self):
         header = ttk.Frame(self.root)
         header.pack(fill=tk.X, padx=20, pady=(18, 10))
@@ -3078,54 +3175,6 @@ class PCAPSentryApp:
             style="Hint.TLabel",
         ).pack(anchor=tk.W)
 
-        # User Manual link — top-right corner, pill-style button
-        _manual_url = "https://github.com/industrial-dave/PCAP-Sentry/blob/main/USER_MANUAL.md"
-        manual_frame = tk.Frame(
-            top_row,
-            bg=self.colors.get("panel", "#161b22"),
-            highlightbackground=self.colors.get("border", "#21262d"),
-            highlightthickness=1,
-            padx=12, pady=5,
-        )
-        manual_frame.pack(side=tk.RIGHT, padx=(0, 4))
-        manual_label = tk.Label(
-            manual_frame,
-            text="User Manual",
-            font=("Segoe UI", 10),
-            fg=self.colors.get("accent", "#58a6ff"),
-            bg=self.colors.get("panel", "#161b22"),
-            cursor="hand2",
-        )
-        manual_label.pack()
-
-        def _manual_enter(e):
-            manual_frame.configure(
-                bg=self.colors.get("accent_subtle", "#122d4f"),
-                highlightbackground=self.colors.get("accent", "#58a6ff"),
-            )
-            manual_label.configure(
-                bg=self.colors.get("accent_subtle", "#122d4f"),
-                fg=self.colors.get("accent_hover", "#79c0ff"),
-            )
-
-        def _manual_leave(e):
-            manual_frame.configure(
-                bg=self.colors.get("panel", "#161b22"),
-                highlightbackground=self.colors.get("border", "#21262d"),
-            )
-            manual_label.configure(
-                bg=self.colors.get("panel", "#161b22"),
-                fg=self.colors.get("accent", "#58a6ff"),
-            )
-
-        def _manual_click(e):
-            __import__("webbrowser").open(_manual_url)
-
-        for w in (manual_frame, manual_label):
-            w.bind("<Enter>", _manual_enter)
-            w.bind("<Leave>", _manual_leave)
-            w.bind("<Button-1>", _manual_click)
-
         # LLM status indicator pill
         _llm_ind_bg = self.colors.get("panel", "#161b22")
         _llm_ind_border = self.colors.get("border", "#21262d")
@@ -3148,7 +3197,7 @@ class PCAPSentryApp:
             activebackground=_llm_ind_bg,
             activeforeground=self.colors.get("accent", "#58a6ff"),
             cursor="hand2",
-            command=self._test_llm_connection
+            command=self._toggle_llm
         )
         self.llm_header_label.pack()
         self._update_llm_header_indicator()
@@ -3169,14 +3218,6 @@ class PCAPSentryApp:
         self._help_icon(toolbar, "When enabled, the parser extracts HTTP request details (method, host, path) "
             "from unencrypted web traffic. This gives you more information in the Packets tab "
             "but may slow parsing slightly on very large captures.")
-        
-        # Add update checker button if available
-        if _update_checker_available:
-            ttk.Button(toolbar, text="Check for Updates", style="Secondary.TButton",
-                       command=self._check_for_updates_ui).pack(side=tk.RIGHT, padx=6)
-        
-        ttk.Button(toolbar, text="\u2699  Preferences", style="Secondary.TButton",
-                   command=self._open_preferences).pack(side=tk.RIGHT, padx=6)
 
         # Accent separator
         accent = ttk.Separator(self.root, orient=tk.HORIZONTAL)
@@ -3228,24 +3269,43 @@ class PCAPSentryApp:
     def _open_preferences(self):
         window = tk.Toplevel(self.root)
         window.title("Preferences")
-        window.resizable(False, False)
+        window.resizable(True, True)
+        window.geometry("750x650")
+        window.minsize(700, 600)
         window.configure(bg=self.colors["bg"])
         self._set_dark_titlebar(window)
 
-        frame = ttk.Frame(window, padding=20)
+        # Scrollable container
+        canvas = tk.Canvas(window, bg=self.colors["bg"], highlightthickness=0)
+        scrollbar = ttk.Scrollbar(window, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+
+        scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # Enable mouse wheel scrolling
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+        frame = ttk.Frame(scrollable_frame, padding=16)
         frame.pack(fill=tk.BOTH, expand=True)
 
-        ttk.Label(frame, text="Preferences", style="Heading.TLabel").grid(row=0, column=0, sticky="w", columnspan=3, pady=(0, 12))
+        ttk.Label(frame, text="Preferences", style="Heading.TLabel").grid(row=0, column=0, sticky="w", columnspan=3, pady=(0, 8))
 
-        ttk.Label(frame, text="Theme:").grid(row=1, column=0, sticky="w", pady=6)
+        ttk.Label(frame, text="Theme:").grid(row=1, column=0, sticky="w", pady=4)
         theme_combo = ttk.Combobox(frame, textvariable=self.theme_var, values=["system", "dark", "light"], width=10)
         theme_combo.state(["readonly"])
-        theme_combo.grid(row=1, column=1, sticky="w", pady=6)
+        theme_combo.grid(row=1, column=1, sticky="w", pady=4)
         ttk.Label(frame, text="(applies after restart)", style="Hint.TLabel").grid(
-            row=1, column=2, sticky="w", pady=6
+            row=1, column=2, sticky="w", pady=4
         )
 
-        ttk.Label(frame, text="Max packets for visuals:").grid(row=2, column=0, sticky="w", pady=6)
+        ttk.Label(frame, text="Max packets for visuals:").grid(row=2, column=0, sticky="w", pady=4)
         max_rows_spin = ttk.Spinbox(
             frame,
             from_=10000,
@@ -3254,13 +3314,13 @@ class PCAPSentryApp:
             textvariable=self.max_rows_var,
             width=10,
         )
-        max_rows_spin.grid(row=2, column=1, sticky="w", pady=6)
+        max_rows_spin.grid(row=2, column=1, sticky="w", pady=4)
         self._help_icon_grid(frame, "Controls how many packets are loaded for charts and the packet table. "
             "Higher values give a more complete picture but use more RAM. "
             "This does NOT affect the analysis verdict.", row=2, column=2, sticky="w")
 
         ttk.Checkbutton(frame, text="Parse HTTP payloads", variable=self.parse_http_var, style="Quiet.TCheckbutton").grid(
-            row=3, column=0, sticky="w", pady=6, columnspan=2
+            row=3, column=0, sticky="w", pady=4, columnspan=2
         )
         self._help_icon_grid(frame, "Extracts HTTP request details (method, host, URL path) from unencrypted "
             "web traffic. Useful for seeing exactly what URLs were visited. "
@@ -3271,7 +3331,7 @@ class PCAPSentryApp:
             text="High memory mode (load PCAP into RAM)",
             variable=self.use_high_memory_var,
             style="Quiet.TCheckbutton"
-        ).grid(row=4, column=0, sticky="w", pady=6, columnspan=2)
+        ).grid(row=4, column=0, sticky="w", pady=4, columnspan=2)
         self._help_icon_grid(frame, "Loads the entire PCAP file into RAM before parsing. "
             "This is faster for smaller files (under ~500 MB) but uses more memory. "
             "For very large captures, leave this off to use streaming mode instead.", row=4, column=2, sticky="w")
@@ -3281,7 +3341,7 @@ class PCAPSentryApp:
             text="Turbo parse (fast raw parsing for large files)",
             variable=self.turbo_parse_var,
             style="Quiet.TCheckbutton"
-        ).grid(row=5, column=0, sticky="w", pady=6, columnspan=2)
+        ).grid(row=5, column=0, sticky="w", pady=4, columnspan=2)
         self._help_icon_grid(frame, "Parses IP/TCP/UDP headers directly from raw bytes instead of full "
             "Scapy dissection. Typically 5-15\u00d7 faster for large captures (>50 MB). "
             "Only uses Scapy for DNS and TLS ClientHello packets that need deep inspection. "
@@ -3292,10 +3352,38 @@ class PCAPSentryApp:
             text="Enable local ML model",
             variable=self.use_local_model_var,
             style="Quiet.TCheckbutton"
-        ).grid(row=6, column=0, sticky="w", pady=6, columnspan=2)
+        ).grid(row=6, column=0, sticky="w", pady=4, columnspan=2)
         self._help_icon_grid(frame, "Uses a locally trained machine learning model (scikit-learn) for an additional "
             "verdict alongside the heuristic/knowledge-base scoring. Requires scikit-learn to be "
             "installed and at least some labeled training data in the knowledge base.", row=6, column=2, sticky="w")
+
+        # OTX API Key
+        ttk.Label(frame, text="AlienVault OTX API Key:").grid(row=7, column=0, sticky="w", pady=4)
+        
+        # Entry and button on same row
+        otx_key_row = ttk.Frame(frame)
+        otx_key_row.grid(row=7, column=1, sticky="w", pady=4)
+        otx_key_entry = ttk.Entry(otx_key_row, textvariable=self.otx_api_key_var, width=40, show="\u2022")
+        otx_key_entry.pack(side=tk.LEFT, padx=(0, 4))
+        self._add_clear_x(otx_key_entry, self.otx_api_key_var)
+        verify_btn = ttk.Button(
+            otx_key_row, text="Verify", style="Secondary.TButton",
+            command=self._verify_otx_key
+        )
+        verify_btn.pack(side=tk.LEFT, padx=(0, 4))
+        
+        # Status label on row below
+        self._otx_verify_label = tk.Label(
+            frame, text=" ", font=("Segoe UI", 9), anchor="w", width=30,
+            bg=self.colors.get("bg", "#0d1117"),
+            fg=self.colors.get("muted", "#8b949e")
+        )
+        self._otx_verify_label.grid(row=8, column=1, sticky="w", pady=(0, 4))
+        
+        self._help_icon_grid(frame, "Optional API key for AlienVault OTX threat intelligence. "
+            "Provides higher rate limits and more detailed threat data. "
+            "Get your free key at otx.alienvault.com. Leave blank to use public endpoints.",
+            row=7, column=2, sticky="w")
 
         offline_check = ttk.Checkbutton(
             frame,
@@ -3303,287 +3391,45 @@ class PCAPSentryApp:
             variable=self.offline_mode_var,
             style="Quiet.TCheckbutton"
         )
-        offline_check.grid(row=8, column=0, sticky="w", pady=6, columnspan=2)
+        offline_check.grid(row=9, column=0, sticky="w", pady=4, columnspan=2)
         self._help_icon_grid(frame, "Disables online threat intelligence lookups (AlienVault OTX, AbuseIPDB, etc.) "
-            "and hides cloud LLM providers from the dropdown. "
+            "and cloud LLM providers. "
             "Analysis will be faster and work without an internet connection, but you lose the "
             "ability to check IPs/domains against live public threat feeds "
-            "and cannot use cloud-based LLM providers.", row=8, column=2, sticky="w")
+            "and cannot use cloud-based LLM providers. Configure LLM settings via File → LLM Settings. "
+            "Use the LLM button in the header to quickly toggle LLM on/off.",
+            row=9, column=2, sticky="w")
 
         ttk.Checkbutton(
             frame,
             text="Multithreaded analysis (faster, uses more CPU)",
             variable=self.use_multithreading_var,
             style="Quiet.TCheckbutton"
-        ).grid(row=9, column=0, sticky="w", pady=6, columnspan=2)
+        ).grid(row=10, column=0, sticky="w", pady=4, columnspan=2)
         self._help_icon_grid(frame, "Runs analysis tasks in parallel using multiple threads. "
             "This can significantly speed up analysis on multi-core systems. "
-            "Disable if you experience stability issues or want to reduce CPU usage.", row=9, column=2, sticky="w")
-
-        # Manage LLM servers row (placed before LLM server dropdown)
-        ttk.Label(frame, text="LLM servers:").grid(row=10, column=0, sticky="w", pady=6)
-        install_frame = ttk.Frame(frame)
-        install_frame.grid(row=10, column=1, sticky="w", pady=6)
-        ttk.Button(install_frame, text="Manage LLM Servers\u2026", style="Secondary.TButton",
-                   command=self._open_install_llm_dialog).pack(side=tk.LEFT)
-        self._help_icon_grid(frame, "Opens a dialog to install or uninstall a local LLM server (Ollama, LM Studio, GPT4All, or Jan).",
-            row=10, column=2, sticky="w")
-
-        # --- Unified LLM server dropdown ---
-        # Cloud providers that need an API key
-        _CLOUD_PROVIDERS = {
-            "OpenAI", "Google Gemini",
-            "Mistral AI", "Groq", "Together AI", "OpenRouter",
-            "Perplexity", "DeepSeek",
-        }
-        _CLOUD_ICON = " \u2601"  # ☁
-        def _cloud(name):
-            return name + _CLOUD_ICON if name in _CLOUD_PROVIDERS else name
-        def _strip_cloud(name):
-            return name.replace(_CLOUD_ICON, "") if name.endswith(_CLOUD_ICON) else name
-
-        _LLM_SERVERS = {
-            "Disabled":         ("disabled",           ""),
-            # --- Local servers ---
-            "Ollama":           ("ollama",              "http://localhost:11434"),
-            "LM Studio":       ("openai_compatible",   "http://localhost:1234"),
-            "LocalAI":         ("openai_compatible",   "http://localhost:8080"),
-            "vLLM":            ("openai_compatible",   "http://localhost:8000"),
-            "text-gen-webui":  ("openai_compatible",   "http://localhost:5000"),
-            "GPT4All":         ("openai_compatible",   "http://localhost:4891"),
-            "Jan":             ("openai_compatible",    "http://localhost:1337"),
-            "KoboldCpp":       ("openai_compatible",   "http://localhost:5001"),
-            "Custom":          ("openai_compatible",   ""),
-            # --- Cloud providers (API key required) ---
-            "OpenAI":           ("openai_compatible",   "https://api.openai.com"),
-            "Google Gemini":    ("openai_compatible",   "https://generativelanguage.googleapis.com/v1beta/openai"),
-            "Mistral AI":       ("openai_compatible",   "https://api.mistral.ai"),
-            "Groq":             ("openai_compatible",   "https://api.groq.com/openai"),
-            "Together AI":      ("openai_compatible",   "https://api.together.xyz"),
-            "OpenRouter":       ("openai_compatible",   "https://openrouter.ai/api"),
-            "Perplexity":       ("openai_compatible",   "https://api.perplexity.ai"),
-            "DeepSeek":         ("openai_compatible",   "https://api.deepseek.com"),
-        }
-
-        # Reverse-map saved settings to display name
-        def _resolve_display_name():
-            prov = self.llm_provider_var.get().strip().lower()
-            ep = self.llm_endpoint_var.get().strip().rstrip("/")
-            if prov == "disabled":
-                return "Disabled"
-            if prov == "ollama":
-                return "Ollama"
-            # Match by endpoint
-            for name, (p, default_ep) in _LLM_SERVERS.items():
-                if p == "openai_compatible" and default_ep and ep == default_ep.rstrip("/"):
-                    return _cloud(name)
-            return "Custom"
-
-        _llm_server_var = tk.StringVar(value=_resolve_display_name())
-
-        def _get_server_values():
-            """Return LLM server names, filtering out cloud providers when offline."""
-            if self.offline_mode_var.get():
-                return [n for n in _LLM_SERVERS if n not in _CLOUD_PROVIDERS]
-            return [_cloud(n) for n in _LLM_SERVERS]
-
-        ttk.Label(frame, text="LLM server:").grid(row=11, column=0, sticky="w", pady=6)
-        provider_frame = ttk.Frame(frame)
-        provider_frame.grid(row=11, column=1, sticky="w", pady=6)
-        llm_provider_combo = ttk.Combobox(
-            provider_frame,
-            textvariable=_llm_server_var,
-            values=_get_server_values(),
-            width=20,
-        )
-        llm_provider_combo.state(["readonly"])
-        llm_provider_combo.pack(side=tk.LEFT)
-        detect_btn = ttk.Button(
-            provider_frame, text="Detect", style="Secondary.TButton",
-            command=lambda: self._detect_llm_server(_llm_server_var, _LLM_SERVERS, llm_model_combo),
-        )
-        detect_btn.pack(side=tk.LEFT, padx=(6, 0))
-        self._detect_hint_label = tk.Label(
-            provider_frame, text="", anchor="w",
-            fg=self.colors.get("muted", "#8b949e"),
-            bg=self.colors.get("bg", "#0d1117"),
-            font=("Segoe UI", 9),
-        )
-        self._detect_hint_label.pack(side=tk.LEFT, padx=(8, 0))
-        self._help_icon_grid(frame, "Select the LLM server to use. Local servers run offline on your machine. "
-            "Cloud providers (marked with \u2601) require an API key and an internet connection. "
-            "For Anthropic Claude, use OpenRouter which supports it via an OpenAI-compatible API. "
-            "Click Detect to scan for running local servers. "
-            "Select 'Disabled' to turn off LLM features.", row=11, column=2, sticky="w")
-
-        # --- API key row (shown for cloud providers) ---
-        # --- API key row (row=12, shown for cloud providers) ---
-        api_key_label = ttk.Label(frame, text="API key:")
-        api_key_frame = ttk.Frame(frame)
-        api_key_entry = ttk.Entry(api_key_frame, textvariable=self.llm_api_key_var, width=34, show="\u2022")
-        api_key_entry.pack(side=tk.LEFT)
-        api_key_show_var = tk.BooleanVar(value=False)
-        def _toggle_key_visibility():
-            api_key_entry.configure(show="" if api_key_show_var.get() else "\u2022")
-        api_key_show_btn = ttk.Checkbutton(
-            api_key_frame, text="Show", variable=api_key_show_var,
-            command=_toggle_key_visibility, style="Quiet.TCheckbutton")
-        api_key_show_btn.pack(side=tk.LEFT, padx=(6, 0))
-        api_key_hint = tk.Label(
-            api_key_frame, text="", anchor="w",
-            fg=self.colors.get("muted", "#8b949e"),
-            bg=self.colors.get("bg", "#0d1117"),
-            font=("Segoe UI", 8),
-        )
-        api_key_hint.pack(side=tk.LEFT, padx=(8, 0))
-
-        # API key signup links per provider
-        _API_KEY_URLS = {
-            "OpenAI": "https://platform.openai.com/api-keys",
-            "Google Gemini": "https://aistudio.google.com/apikey",
-            "Mistral AI": "https://console.mistral.ai/api-keys",
-            "Groq": "https://console.groq.com/keys",
-            "Together AI": "https://api.together.xyz/settings/api-keys",
-            "OpenRouter": "https://openrouter.ai/settings/keys",
-            "Perplexity": "https://www.perplexity.ai/settings/api",
-            "DeepSeek": "https://platform.deepseek.com/api_keys",
-        }
-
-        def _update_api_key_hint(name):
-            url = _API_KEY_URLS.get(name, "")
-            if url:
-                api_key_hint.configure(text=f"Get key: {url}", cursor="hand2")
-                api_key_hint.bind("<Button-1>", lambda e: __import__('webbrowser').open(url))
-            else:
-                api_key_hint.configure(text="", cursor="")
-                api_key_hint.unbind("<Button-1>")
-
-        def _show_api_key_row(visible):
-            if visible:
-                api_key_label.grid(row=12, column=0, sticky="w", pady=6)
-                api_key_frame.grid(row=12, column=1, sticky="w", pady=6)
-            else:
-                api_key_label.grid_remove()
-                api_key_frame.grid_remove()
-
-        def _on_server_selected(*_):
-            raw = _llm_server_var.get()
-            name = _strip_cloud(raw)
-            prov, ep = _LLM_SERVERS.get(name, ("disabled", ""))
-            self.llm_provider_var.set(prov)
-            if ep:
-                self.llm_endpoint_var.set(ep)
-            is_cloud = name in _CLOUD_PROVIDERS
-            _show_api_key_row(is_cloud)
-            _update_api_key_hint(name)
-            _set_llm_fields_state()
-            self._refresh_llm_models(llm_model_combo)
-        llm_provider_combo.bind("<<ComboboxSelected>>", _on_server_selected)
-
-        # When offline mode is toggled, update the dropdown to hide/show cloud providers
-        def _on_offline_toggled(*_):
-            llm_provider_combo["values"] = _get_server_values()
-            current = _strip_cloud(_llm_server_var.get())
-            if self.offline_mode_var.get() and current in _CLOUD_PROVIDERS:
-                # Cloud provider selected but going offline – switch to Disabled
-                _llm_server_var.set("Disabled")
-                _on_server_selected()
-            elif self.offline_mode_var.get():
-                _show_api_key_row(False)
-
-        offline_check.configure(command=_on_offline_toggled)
-
-        # Initial visibility
-        _show_api_key_row(_resolve_display_name() in _CLOUD_PROVIDERS and not self.offline_mode_var.get())
-        _update_api_key_hint(_resolve_display_name())
-
-        ttk.Label(frame, text="LLM model:").grid(row=13, column=0, sticky="w", pady=6)
-        model_frame = ttk.Frame(frame)
-        model_frame.grid(row=13, column=1, sticky="w", pady=6)
-        llm_model_combo = ttk.Combobox(model_frame, textvariable=self.llm_model_var, width=27)
-        llm_model_combo.pack(side=tk.LEFT)
-        refresh_btn = ttk.Button(
-            model_frame, text="\u21BB", width=3, style="Secondary.TButton",
-            command=lambda: self._refresh_llm_models(llm_model_combo),
-        )
-        refresh_btn.pack(side=tk.LEFT, padx=(4, 0))
-        uninstall_model_btn = ttk.Button(
-            model_frame,
-            text="Uninstall",
-            style="Danger.TButton",
-            command=lambda: self._uninstall_selected_ollama_model(llm_model_combo),
-        )
-        uninstall_model_btn.pack(side=tk.LEFT, padx=(4, 0))
-        self._help_icon_grid(frame, "Model name for the selected provider. Click \u21BB to detect available models.", row=13, column=2, sticky="w")
-        self._refresh_llm_models(llm_model_combo)
-
-        ttk.Label(frame, text="LLM endpoint:").grid(row=14, column=0, sticky="w", pady=6)
-        endpoint_frame = ttk.Frame(frame)
-        endpoint_frame.grid(row=14, column=1, sticky="w", pady=6)
-        llm_endpoint_entry = ttk.Entry(endpoint_frame, textvariable=self.llm_endpoint_var, width=34)
-        llm_endpoint_entry.pack(side=tk.LEFT)
-        self._help_icon_grid(frame, "API base URL for the LLM server. Auto-filled when you pick a server above. "
-            "Edit this for custom ports or remote servers.",
-            row=14, column=2, sticky="w")
-
-        ttk.Label(frame, text="Test LLM:").grid(row=15, column=0, sticky="w", pady=6)
-        test_frame = ttk.Frame(frame)
-        test_frame.grid(row=15, column=1, sticky="w", pady=6)
-        ttk.Button(test_frame, text="Test Connection", style="Secondary.TButton",
-                   command=self._test_llm_connection).pack(side=tk.LEFT)
-        self.llm_test_status_label = tk.Label(
-            test_frame,
-            textvariable=self.llm_test_status_var,
-            fg=self.colors.get("muted", "#8b949e"),
-            bg=self.colors.get("bg", "#0d1117"),
-            font=("Segoe UI", 10, "bold"),
-            padx=8,
-        )
-        self.llm_test_status_label.pack(side=tk.LEFT)
-        self._help_icon_grid(frame, "Sends a small test request to verify the current LLM settings.", row=15, column=2, sticky="w")
-
-        def _set_llm_fields_state(*_):
-            provider = self.llm_provider_var.get().strip().lower()
-            state = "normal" if provider != "disabled" else "disabled"
-            llm_model_combo.configure(state=state)
-            llm_endpoint_entry.configure(state=state)
-            refresh_btn.configure(state=state)
-            detect_btn.configure(state=state)
-            is_ollama = provider == "ollama"
-            ollama_state = "normal" if is_ollama else "disabled"
-            can_uninstall = (
-                state == "normal"
-                and is_ollama
-                and bool(self.llm_model_var.get().strip())
-            )
-            uninstall_model_btn.configure(state=("normal" if can_uninstall else "disabled"))
-            if state == "disabled":
-                self._set_llm_test_status("Disabled", self.colors.get("muted", "#8b949e"))
-            else:
-                if not self.llm_test_status_var.get():
-                    self._set_llm_test_status("Not tested", self.colors.get("muted", "#8b949e"))
-                self._refresh_llm_models(llm_model_combo)
-
-        llm_model_combo.bind("<<ComboboxSelected>>", _set_llm_fields_state)
-        llm_model_combo.bind("<KeyRelease>", _set_llm_fields_state)
-        _set_llm_fields_state()
+            "Disable if you experience stability issues or want to reduce CPU usage.", row=10, column=2, sticky="w")
 
         # Backup directory row with improved spacing
 
-        ttk.Label(frame, text="Backup directory:").grid(row=17, column=0, sticky="w", pady=6)
+        ttk.Label(frame, text="Backup directory:").grid(row=11, column=0, sticky="w", pady=4)
         backup_entry = ttk.Entry(frame, textvariable=self.backup_dir_var, width=60)
-        backup_entry.grid(row=17, column=1, sticky="ew", pady=6)
+        backup_entry.grid(row=11, column=1, sticky="ew", pady=4, columnspan=5)
         self._add_clear_x(backup_entry, self.backup_dir_var)
         frame.grid_columnconfigure(1, weight=1)
+        
+        # Button row under backup directory
         button_frame = ttk.Frame(frame)
-        button_frame.grid(row=17, column=2, columnspan=4, sticky="e", pady=6)
+        button_frame.grid(row=12, column=1, columnspan=5, sticky="w", pady=(4, 4))
         ttk.Button(button_frame, text="Browse", style="Secondary.TButton",
-                   command=self._browse_backup_dir).pack(side=tk.LEFT, padx=2)
-        ttk.Button(button_frame, text="Save", command=lambda: self._save_preferences(window)).pack(side=tk.LEFT, padx=2)
+                   command=self._browse_backup_dir).pack(side=tk.LEFT, padx=(0, 4))
+        ttk.Button(button_frame, text="Save", command=lambda: self._save_preferences(window)).pack(side=tk.LEFT, padx=(0, 4))
         ttk.Button(button_frame, text="Cancel", style="Secondary.TButton",
-                   command=window.destroy).pack(side=tk.LEFT, padx=2)
+                   command=window.destroy).pack(side=tk.LEFT)
+        
+        # Reset to defaults button
         ttk.Button(frame, text="Reset to Defaults", style="Danger.TButton",
-               command=self._reset_preferences).grid(row=18, column=0, columnspan=6, sticky="e", pady=(12, 0))
+               command=self._reset_preferences).grid(row=13, column=1, columnspan=5, sticky="w", pady=(4, 0))
 
         window.grab_set()
 
@@ -3607,6 +3453,7 @@ class PCAPSentryApp:
             "llm_model": self.llm_model_var.get().strip() or "llama3",
             "llm_endpoint": self.llm_endpoint_var.get().strip() or "http://localhost:11434",
             "llm_api_key": self.llm_api_key_var.get().strip(),
+            "otx_api_key": self.otx_api_key_var.get().strip(),
             "llm_auto_detect": False,
             "theme": self.theme_var.get().strip().lower() or "system",
             "app_data_notice_shown": bool(self.settings.get("app_data_notice_shown")),
@@ -3637,8 +3484,92 @@ class PCAPSentryApp:
         self.llm_model_var.set(defaults.get("llm_model", "llama3"))
         self.llm_endpoint_var.set(defaults.get("llm_endpoint", "http://localhost:11434"))
         self.llm_api_key_var.set(defaults.get("llm_api_key", ""))
+        self.otx_api_key_var.set(defaults.get("otx_api_key", ""))
         self.theme_var.set(defaults["theme"])
         self._save_settings_from_vars()
+
+    def _open_user_manual(self):
+        """Open the user manual in the default web browser."""
+        import webbrowser
+        manual_url = "https://github.com/industrial-dave/PCAP-Sentry/blob/main/USER_MANUAL.md"
+        webbrowser.open(manual_url)
+
+    def _open_logs_folder(self):
+        """Open the logs folder in Windows Explorer."""
+        app_data_dir = _get_app_data_dir()
+        if os.path.exists(app_data_dir):
+            os.startfile(app_data_dir)
+        else:
+            messagebox.showinfo("Logs", f"Logs folder not found:\n{app_data_dir}")
+
+    def _show_about(self):
+        """Show the About dialog."""
+        about_window = tk.Toplevel(self.root)
+        about_window.title("About PCAP Sentry")
+        about_window.resizable(False, False)
+        about_window.geometry("500x400")
+        about_window.configure(bg=self.colors["bg"])
+        self._set_dark_titlebar(about_window)
+
+        frame = ttk.Frame(about_window, padding=30)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        # Title
+        ttk.Label(
+            frame,
+            text="PCAP Sentry",
+            font=("Segoe UI", 18, "bold"),
+        ).pack(pady=(0, 5))
+
+        ttk.Label(
+            frame,
+            text=f"Version {APP_VERSION}",
+            style="Hint.TLabel",
+        ).pack(pady=(0, 20))
+
+        # Description
+        desc_text = (
+            "Malware Analysis Console for Network Packet Captures\n\n"
+            "PCAP Sentry analyzes PCAP/PCAPNG files for signs of malicious activity, "
+            "providing heuristic signals, behavioral anomaly detection, and threat intelligence "
+            "integration to help triage suspicious network traffic."
+        )
+        desc_label = ttk.Label(frame, text=desc_text, wraplength=440, justify=tk.CENTER)
+        desc_label.pack(pady=(0, 20))
+
+        # Links frame
+        links_frame = ttk.Frame(frame)
+        links_frame.pack(pady=10)
+
+        def open_link(url):
+            import webbrowser
+            webbrowser.open(url)
+
+        github_btn = ttk.Button(
+            links_frame,
+            text="GitHub Repository",
+            command=lambda: open_link("https://github.com/industrial-dave/PCAP-Sentry"),
+        )
+        github_btn.pack(pady=5)
+
+        manual_btn = ttk.Button(
+            links_frame,
+            text="User Manual",
+            command=lambda: open_link("https://github.com/industrial-dave/PCAP-Sentry/blob/main/USER_MANUAL.md"),
+        )
+        manual_btn.pack(pady=5)
+
+        # License
+        ttk.Label(
+            frame,
+            text="See LICENSE.txt for license terms",
+            style="Hint.TLabel",
+        ).pack(pady=(20, 0))
+
+        # Close button
+        ttk.Button(frame, text="Close", command=about_window.destroy).pack(pady=(20, 0))
+
+        about_window.grab_set()
 
     def _check_for_updates_ui(self):
         """Handle "Check for Updates" button click."""
@@ -3914,6 +3845,66 @@ class PCAPSentryApp:
         if path:
             self.backup_dir_var.set(path)
 
+    def _edit_undo(self):
+        """Undo last action in focused widget."""
+        try:
+            widget = self.root.focus_get()
+            if widget and hasattr(widget, 'edit_undo'):
+                widget.edit_undo()
+        except Exception:
+            pass
+
+    def _edit_redo(self):
+        """Redo last undone action in focused widget."""
+        try:
+            widget = self.root.focus_get()
+            if widget and hasattr(widget, 'edit_redo'):
+                widget.edit_redo()
+        except Exception:
+            pass
+
+    def _edit_cut(self):
+        """Cut selected text from focused widget."""
+        try:
+            widget = self.root.focus_get()
+            if widget and hasattr(widget, 'selection_get'):
+                widget.event_generate("<<Cut>>")
+        except Exception:
+            pass
+
+    def _edit_copy(self):
+        """Copy selected text from focused widget."""
+        try:
+            widget = self.root.focus_get()
+            if widget and hasattr(widget, 'selection_get'):
+                widget.event_generate("<<Copy>>")
+        except Exception:
+            pass
+
+    def _edit_paste(self):
+        """Paste text into focused widget."""
+        try:
+            widget = self.root.focus_get()
+            if widget and hasattr(widget, 'insert'):
+                widget.event_generate("<<Paste>>")
+        except Exception:
+            pass
+
+    def _edit_select_all(self):
+        """Select all text in focused widget."""
+        try:
+            widget = self.root.focus_get()
+            if widget and hasattr(widget, 'select_range'):
+                # For Entry widgets
+                widget.select_range(0, tk.END)
+            elif widget and hasattr(widget, 'tag_add'):
+                # For Text widgets
+                widget.tag_add(tk.SEL, "1.0", tk.END)
+                widget.mark_set(tk.INSERT, "1.0")
+                widget.see(tk.INSERT)
+        except Exception:
+            pass
+
     def _clear_input_fields(self):
         if self.safe_path_var is not None:
             self.safe_path_var.set("")
@@ -3961,7 +3952,7 @@ class PCAPSentryApp:
     def _sync_chat_controls(self):
         enabled = self._llm_is_enabled()
         if not enabled:
-            self.chat_disabled_var.set("Chat is disabled. Enable an LLM provider in Preferences.")
+            self.chat_disabled_var.set("Chat is disabled. Configure an LLM provider in File → LLM Settings.")
         else:
             self.chat_disabled_var.set("")
 
@@ -4174,7 +4165,7 @@ class PCAPSentryApp:
 
     def _send_chat_message(self):
         if not self._llm_is_enabled():
-            messagebox.showwarning("Chat", "Chat is disabled. Enable an LLM provider in Preferences first.")
+            messagebox.showwarning("Chat", "Chat is disabled. Configure an LLM provider in File → LLM Settings first.")
             return
         message = self.chat_entry_var.get().strip()
         if not message:
@@ -4309,7 +4300,7 @@ class PCAPSentryApp:
         container = scrollable_frame
 
         file_frame = ttk.LabelFrame(container, text="  Target PCAP  ", padding=12)
-        file_frame.pack(fill=tk.X, padx=10, pady=6)
+        file_frame.pack(fill=tk.X, padx=16, pady=(8, 0))
         self.target_drop_area = file_frame
         self._help_icon(file_frame, "Select the PCAP file you want to analyze. A PCAP (Packet Capture) file "
             "records network traffic — every message sent between computers on a network. "
@@ -4318,20 +4309,20 @@ class PCAPSentryApp:
 
         self.target_path_var = tk.StringVar()
         self.target_entry = ttk.Entry(file_frame, textvariable=self.target_path_var, width=90)
-        self.target_entry.pack(side=tk.LEFT, padx=6)
+        self.target_entry.pack(side=tk.LEFT, padx=(0, 8))
         self._add_clear_x(self.target_entry, self.target_path_var)
         target_browse = ttk.Button(file_frame, text="Browse", style="Secondary.TButton",
                                    command=lambda: self._browse_file(self.target_path_var))
-        target_browse.pack(side=tk.LEFT, padx=6)
+        target_browse.pack(side=tk.LEFT, padx=(0, 8))
         self.analyze_button = ttk.Button(file_frame, text="\U0001f50d  Analyze", command=self._analyze)
-        self.analyze_button.pack(side=tk.LEFT, padx=6)
+        self.analyze_button.pack(side=tk.LEFT)
 
         ttk.Label(container, text="\u2913  You can also drag and drop a .pcap file anywhere on this tab",
-                  style="Hint.TLabel").pack(anchor=tk.W, padx=16, pady=(0, 2))
+                  style="Hint.TLabel").pack(anchor=tk.W, padx=20, pady=(4, 8))
 
         # Label buttons frame - for marking captures
         label_frame = ttk.LabelFrame(container, text="  Label Current Capture  ", padding=12)
-        label_frame.pack(fill=tk.X, pady=8)
+        label_frame.pack(fill=tk.X, padx=16, pady=(8, 0))
         self._help_icon(label_frame, "After analyzing a PCAP, you can label it as 'Safe' or 'Malicious' to "
             "add it to the knowledge base. This is how the app learns from YOUR judgment. "
             "Over time, this improves detection accuracy for traffic similar to what you've labeled.\n\n"
@@ -4343,7 +4334,7 @@ class PCAPSentryApp:
             command=lambda: self._label_current("safe"),
             state=tk.DISABLED,
         )
-        self.label_safe_button.pack(side=tk.LEFT, padx=6)
+        self.label_safe_button.pack(side=tk.LEFT, padx=(0, 8))
         self.label_mal_button = ttk.Button(
             label_frame,
             text="Mark as Malicious",
@@ -4351,7 +4342,7 @@ class PCAPSentryApp:
             command=lambda: self._label_current("malicious"),
             state=tk.DISABLED,
         )
-        self.label_mal_button.pack(side=tk.LEFT, padx=6)
+        self.label_mal_button.pack(side=tk.LEFT, padx=(0, 8))
 
         self.undo_kb_button = ttk.Button(
             label_frame,
@@ -4360,7 +4351,7 @@ class PCAPSentryApp:
             command=self._undo_last_kb_entry,
             state=tk.DISABLED,
         )
-        self.undo_kb_button.pack(side=tk.LEFT, padx=6)
+        self.undo_kb_button.pack(side=tk.LEFT)
 
         # LLM suggestion banner (hidden until analysis completes with LLM enabled)
         self.llm_suggestion_frame = tk.Frame(container, bg=self.colors.get("panel", "#161b22"),
@@ -4369,7 +4360,7 @@ class PCAPSentryApp:
         # Not packed yet – shown after analysis if LLM provides a suggestion
 
         self.results_notebook = ttk.Notebook(container)
-        self.results_notebook.pack(fill=tk.BOTH, expand=True, pady=8)
+        self.results_notebook.pack(fill=tk.BOTH, expand=True, padx=16, pady=(12, 8))
 
         self.results_tab = ttk.Frame(self.results_notebook)
         self.why_tab = ttk.Frame(self.results_notebook)
@@ -4719,12 +4710,12 @@ class PCAPSentryApp:
 
     def _build_extracted_tab(self):
         """Build the Extracted Info tab for credentials, hosts, and MAC addresses."""
-        container = ttk.Frame(self.extracted_tab, padding=10)
+        container = ttk.Frame(self.extracted_tab, padding=12)
         container.pack(fill=tk.BOTH, expand=True)
 
         # -- Key Findings summary panel --
-        summary_frame = ttk.LabelFrame(container, text="  \U0001f6a8  Key Findings  ", padding=10)
-        summary_frame.pack(fill=tk.X, pady=(0, 8))
+        summary_frame = ttk.LabelFrame(container, text="  \U0001f6a8  Key Findings  ", padding=12)
+        summary_frame.pack(fill=tk.X, pady=(0, 12))
 
         summary_text_frame = ttk.Frame(summary_frame)
         summary_text_frame.pack(fill=tk.BOTH, expand=True)
@@ -4746,8 +4737,8 @@ class PCAPSentryApp:
         summary_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         # -- Credentials table --
-        cred_frame = ttk.LabelFrame(container, text="  All Extracted Items  ", padding=8)
-        cred_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 6))
+        cred_frame = ttk.LabelFrame(container, text="  All Extracted Items  ", padding=12)
+        cred_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 0))
         self._help_icon(cred_frame,
             "All credentials and auth tokens found in UNENCRYPTED traffic.\n\n"
             "Row colors:\n"
@@ -4789,7 +4780,7 @@ class PCAPSentryApp:
         cred_table_frame.rowconfigure(0, weight=1)
 
         cred_controls = ttk.Frame(cred_frame)
-        cred_controls.pack(fill=tk.X, pady=(4, 0))
+        cred_controls.pack(fill=tk.X, pady=(8, 0))
         self.cred_count_var = tk.StringVar(value="No credentials extracted yet.")
         ttk.Label(cred_controls, textvariable=self.cred_count_var, style="Hint.TLabel").pack(side=tk.LEFT)
         ttk.Button(cred_controls, text="Copy All", style="Secondary.TButton",
@@ -6617,6 +6608,32 @@ class PCAPSentryApp:
         self.llm_header_label.configure(text=text, fg=fg, bg=bg)
         self.llm_header_indicator.configure(bg=bg, highlightbackground=border)
 
+    def _toggle_llm(self):
+        """Toggle LLM on/off using the header button."""
+        current_provider = self.llm_provider_var.get().strip().lower()
+        
+        if current_provider in ("", "disabled"):
+            # Turn LLM on - restore last used provider or default to "disabled"
+            last_provider = getattr(self, '_last_llm_provider', None)
+            if last_provider and last_provider not in ("", "disabled"):
+                self.llm_provider_var.set(last_provider)
+            else:
+                # No previous provider, open settings dialog
+                messagebox.showinfo(
+                    "LLM Settings",
+                    "LLM is currently disabled. Please configure an LLM provider in File → LLM Settings.",
+                    parent=self.root
+                )
+                return
+        else:
+            # Turn LLM off - save current provider and set to disabled
+            self._last_llm_provider = current_provider
+            self.llm_provider_var.set("disabled")
+        
+        # Save settings and update indicator
+        self._save_settings_from_vars()
+        self._update_llm_header_indicator()
+
     _PROBE_MAX_BYTES = 5 * 1024 * 1024  # 5 MB safety cap for probe responses
 
     def _probe_ollama(self, endpoint):
@@ -6814,63 +6831,342 @@ class PCAPSentryApp:
 
         threading.Thread(target=_run, daemon=True).start()
 
-    def _uninstall_selected_ollama_model(self, combo=None):
+    def _verify_otx_key(self):
+        """Verify the OTX API key by making a test request."""
+        label = getattr(self, "_otx_verify_label", None)
+        if not label:
+            return
+        
+        key = self.otx_api_key_var.get().strip()
+        if not key:
+            label.configure(
+                text="No key provided",
+                fg=self.colors.get("warning", "#d29922")
+            )
+            return
+        
+        label.configure(
+            text="Verifying...",
+            fg=self.colors.get("accent", "#58a6ff")
+        )
+        
+        def _test():
+            try:
+                # Check if requests is available
+                try:
+                    import requests
+                except ImportError:
+                    return False, "requests library not available"
+                
+                url = "https://otx.alienvault.com/api/v1/user/me"
+                headers = {"X-OTX-API-KEY": key}
+                response = requests.get(url, headers=headers, timeout=5)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    username = data.get("username", "User")
+                    return True, username
+                elif response.status_code == 403:
+                    return False, "Invalid API key"
+                else:
+                    return False, f"HTTP {response.status_code}"
+            except requests.exceptions.Timeout:
+                return False, "Connection timeout"
+            except requests.exceptions.ConnectionError:
+                return False, "Connection failed"
+            except Exception as e:
+                error_msg = str(e).split('\n')[0][:40]  # First line, max 40 chars
+                return False, error_msg
+        
+        def _apply(result):
+            success, message = result
+            if success:
+                label.configure(
+                    text=f"✓ Valid ({message})",
+                    fg=self.colors.get("success", "#3fb950")
+                )
+            else:
+                label.configure(
+                    text=f"✗ {message}",
+                    fg=self.colors.get("danger", "#f85149")
+                )
+        
+        def _run():
+            result = _test()
+            self.root.after(0, lambda: _apply(result))
+        
+        threading.Thread(target=_run, daemon=True).start()
+
+    def _open_model_manager(self):
+        """Open a window to add/remove Ollama models."""
         provider = self.llm_provider_var.get().strip().lower()
         if provider != "ollama":
-            messagebox.showwarning("Ollama", "Model uninstall is only available when LLM provider is set to Ollama.")
+            messagebox.showwarning("Model Manager", "Model management is only available when LLM provider is set to Ollama.")
             return
 
-        model_name = self.llm_model_var.get().strip()
-        if not model_name:
-            messagebox.showwarning("Ollama", "Select or enter an Ollama model name first.")
-            return
+        window = tk.Toplevel(self.root)
+        window.title("Manage Ollama Models")
+        window.resizable(False, False)
+        window.configure(bg=self.colors["bg"])
+        self._set_dark_titlebar(window)
 
-        # Validate model name: only allow safe characters (alphanumeric, :, -, _, ., /)
-        if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.:\-/]*', model_name):
-            messagebox.showwarning("Ollama", "Invalid model name. Only letters, digits, '.', ':', '-', '_', '/' are allowed.")
-            return
+        frame = ttk.Frame(window, padding=20)
+        frame.pack(fill=tk.BOTH, expand=True)
 
-        confirm = messagebox.askyesno(
-            "Ollama",
-            f"Uninstall Ollama model '{model_name}'?",
+        ttk.Label(frame, text="Manage Ollama Models", style="Heading.TLabel").pack(anchor="w", pady=(0, 4))
+        ttk.Label(
+            frame,
+            text="Add or remove locally installed Ollama models.",
+            style="Hint.TLabel", wraplength=500,
+        ).pack(anchor="w", pady=(0, 12))
+
+        # ── Installed Models Section ──
+        installed_frame = ttk.LabelFrame(frame, text=" Installed Models ", padding=12)
+        installed_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 12))
+
+        # Listbox with scrollbar
+        list_frame = ttk.Frame(installed_frame)
+        list_frame.pack(fill=tk.BOTH, expand=True)
+
+        scrollbar = ttk.Scrollbar(list_frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        model_listbox = tk.Listbox(
+            list_frame,
+            bg=self.colors.get("card_bg", "#161b22"),
+            fg=self.colors.get("fg", "#c9d1d9"),
+            font=("Consolas", 10),
+            selectmode=tk.SINGLE,
+            height=10,
+            width=50,
+            yscrollcommand=scrollbar.set,
+            highlightthickness=0,
+            borderwidth=1,
+            relief=tk.SOLID,
         )
-        if not confirm:
-            return
+        model_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.config(command=model_listbox.yview)
 
-        def task():
-            try:
-                subprocess.Popen(
-                    ["ollama", "serve"],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        status_label = ttk.Label(installed_frame, text="Loading...", style="Hint.TLabel")
+        status_label.pack(pady=(8, 0))
+
+        def refresh_models():
+            """Load installed models into the listbox."""
+            model_listbox.delete(0, tk.END)
+            status_label.config(text="Loading...")
+
+            def worker():
+                try:
+                    # Ensure ollama serve is running
+                    try:
+                        subprocess.Popen(
+                            ["ollama", "serve"],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                        )
+                        time.sleep(0.5)
+                    except Exception:
+                        pass
+
+                    models = self._list_ollama_models("http://localhost:11434")
+                    return models if models else []
+                except Exception as e:
+                    return str(e)
+
+            def apply(result):
+                if isinstance(result, str):
+                    status_label.config(text=f"Error: {result[:60]}")
+                    return
+                if not result:
+                    status_label.config(text="No models installed")
+                else:
+                    status_label.config(text=f"{len(result)} model(s) installed")
+                    for model in sorted(result):
+                        model_listbox.insert(tk.END, model)
+
+            def run():
+                result = worker()
+                window.after(0, lambda: apply(result))
+
+            threading.Thread(target=run, daemon=True).start()
+
+        # Remove button
+        remove_btn_frame = ttk.Frame(installed_frame)
+        remove_btn_frame.pack(pady=(8, 0))
+
+        def remove_selected():
+            selection = model_listbox.curselection()
+            if not selection:
+                messagebox.showwarning("Remove Model", "Select a model to remove.")
+                return
+            model_name = model_listbox.get(selection[0])
+            
+            confirm = messagebox.askyesno(
+                "Remove Model",
+                f"Remove model '{model_name}'?\n\nThis will free up disk space but the model will need to be re-downloaded if you want to use it again.",
+            )
+            if not confirm:
+                return
+
+            def task():
+                try:
+                    subprocess.Popen(
+                        ["ollama", "serve"],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                    )
+                except Exception:
+                    pass
+                result = subprocess.run(
+                    ["ollama", "rm", model_name],
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                 )
-            except Exception:
-                pass
-            result = subprocess.run(
-                ["ollama", "rm", model_name],
-                capture_output=True,
-                text=True,
-                timeout=120,
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                if result.returncode != 0:
+                    detail = (result.stderr or result.stdout or "Unknown error").strip()
+                    raise RuntimeError(detail)
+                return True
+
+            def done(_):
+                refresh_models()
+                messagebox.showinfo("Remove Model", f"Removed model '{model_name}'.")
+
+            def failed(err):
+                messagebox.showerror(
+                    "Remove Model",
+                    "Failed to remove model. Ensure Ollama is installed and running.\n\n"
+                    f"Details: {err}",
+                )
+
+            self._run_task(task, done, on_error=failed, message="Removing model...")
+
+        ttk.Button(remove_btn_frame, text="Remove Selected", style="Danger.TButton", command=remove_selected).pack(side=tk.LEFT)
+        ttk.Button(remove_btn_frame, text="Refresh", style="Secondary.TButton", command=refresh_models).pack(side=tk.LEFT, padx=(8, 0))
+
+        # ── Add Model Section ──
+        add_frame = ttk.LabelFrame(frame, text=" Add Model ", padding=12)
+        add_frame.pack(fill=tk.BOTH, pady=(0, 12))
+
+        ttk.Label(
+            add_frame,
+            text="Select a suggested model or enter a custom name:",
+            style="Hint.TLabel",
+        ).pack(anchor="w", pady=(0, 8))
+
+        # Suggested models dropdown
+        model_var = tk.StringVar()
+        model_combo = ttk.Combobox(add_frame, textvariable=model_var, width=45, state="readonly")
+        model_combo["values"] = [f"{name} — {desc}" for name, desc in self._OLLAMA_SUGGESTED_MODELS]
+        model_combo.current(0)
+        model_combo.pack(fill=tk.X, pady=(0, 8))
+
+        # Custom entry
+        custom_frame = ttk.Frame(add_frame)
+        custom_frame.pack(fill=tk.X, pady=(0, 8))
+        ttk.Label(custom_frame, text="Or custom:").pack(side=tk.LEFT)
+        custom_entry = ttk.Entry(custom_frame, width=35)
+        custom_entry.pack(side=tk.LEFT, padx=(8, 0))
+
+        def add_model():
+            custom_text = custom_entry.get().strip()
+            if custom_text:
+                model_to_add = custom_text
+            else:
+                selected = model_combo.get()
+                # Extract model name (before " — ")
+                model_to_add = selected.split(" — ")[0] if " — " in selected else selected
+
+            if not model_to_add:
+                messagebox.showwarning("Add Model", "Enter or select a model name.")
+                return
+
+            # Validate model name
+            if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.:\-/]*', model_to_add):
+                messagebox.showwarning("Add Model", "Invalid model name. Only letters, digits, '.', ':', '-', '_', '/' are allowed.")
+                return
+
+            confirm = messagebox.askyesno(
+                "Add Model",
+                f"Download and install model '{model_to_add}'?\n\nThis may take several minutes and use significant bandwidth.",
             )
-            if result.returncode != 0:
-                detail = (result.stderr or result.stdout or "Unknown error").strip()
-                raise RuntimeError(detail)
-            return True
+            if not confirm:
+                return
 
-        def done(_):
-            self._refresh_llm_models(combo)
-            self.status_var.set(f"Removed Ollama model: {model_name}")
-            messagebox.showinfo("Ollama", f"Removed model '{model_name}'.")
+            def task(progress_cb):
+                # Ensure ollama serve is running
+                try:
+                    subprocess.Popen(
+                        ["ollama", "serve"],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                    )
+                except Exception:
+                    pass
+                time.sleep(1)
 
-        def failed(err):
-            messagebox.showerror(
-                "Ollama",
-                "Failed to remove model. Ensure Ollama is installed and running.\n\n"
-                f"Details: {err}",
-            )
+                progress_cb(0, label=f"Pulling {model_to_add}...")
 
-        self._run_task(task, done, on_error=failed, message="Removing Ollama model...")
+                # Use the Ollama REST API to pull with streaming progress
+                endpoint = self._normalize_ollama_endpoint("http://localhost:11434")
+                url = endpoint.rstrip("/") + "/api/pull"
+                body = json.dumps({"name": model_to_add, "stream": True}).encode("utf-8")
+                req = urllib.request.Request(
+                    url,
+                    data=body,
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                try:
+                    resp = urllib.request.urlopen(req, timeout=1800)
+                except Exception as exc:
+                    raise RuntimeError(
+                        f"Could not connect to Ollama.\nEnsure 'ollama serve' is running.\n\nDetails: {exc}"
+                    )
+
+                last_status = None
+                for line in resp:
+                    if not line:
+                        continue
+                    try:
+                        msg = json.loads(line.decode("utf-8"))
+                    except Exception:
+                        continue
+
+                    status = msg.get("status", "")
+                    if status:
+                        last_status = status
+                        progress_cb(None, label=status or f"Pulling {model_to_add}...")
+
+                if "error" in msg:
+                    raise RuntimeError(msg["error"])
+
+                return True
+
+            def done(_):
+                refresh_models()
+                messagebox.showinfo("Add Model", f"Successfully installed model '{model_to_add}'.")
+                custom_entry.delete(0, tk.END)
+
+            def failed(err):
+                messagebox.showerror(
+                    "Add Model",
+                    f"Failed to download model.\n\nDetails: {err}",
+                )
+
+            self._run_task(task, done, on_error=failed, message=f"Downloading {model_to_add}...")
+
+        ttk.Button(add_frame, text="Download & Install", command=add_model).pack(anchor="w")
+
+        # ── Close Button ──
+        ttk.Button(frame, text="Close", style="Secondary.TButton", command=window.destroy).pack(pady=(0, 0))
+
+        # Load models on open
+        refresh_models()
+
+        window.transient(self.root)
+        window.grab_set()
 
     # -- Ollama model download after install --------------------------------
 
@@ -7789,9 +8085,287 @@ class PCAPSentryApp:
 
         threading.Thread(target=run, daemon=True).start()
 
+    def _open_llm_settings(self):
+        """Open LLM configuration dialog."""
+        window = tk.Toplevel(self.root)
+        window.title("LLM Settings")
+        window.resizable(True, True)
+        window.geometry("800x650")
+        window.minsize(750, 600)
+        window.configure(bg=self.colors["bg"])
+        self._set_dark_titlebar(window)
+
+        # Scrollable container
+        canvas = tk.Canvas(window, bg=self.colors["bg"], highlightthickness=0)
+        scrollbar = ttk.Scrollbar(window, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+
+        scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # Enable mouse wheel scrolling
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+        frame = ttk.Frame(scrollable_frame, padding=24)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(frame, text="LLM Settings", style="Heading.TLabel").grid(row=0, column=0, sticky="w", columnspan=3, pady=(0, 12))
+
+        # Manage LLM servers button
+        ttk.Label(frame, text="LLM servers:").grid(row=1, column=0, sticky="w", pady=6)
+        install_frame = ttk.Frame(frame)
+        install_frame.grid(row=1, column=1, sticky="w", pady=6)
+        ttk.Button(install_frame, text="Manage LLM Servers\u2026", style="Secondary.TButton",
+                   command=self._open_install_llm_dialog).pack(side=tk.LEFT)
+        self._help_icon_grid(frame, "Opens a dialog to install or uninstall a local LLM server (Ollama, LM Studio, GPT4All, or Jan).",
+            row=1, column=2, sticky="w")
+
+        # --- Unified LLM server dropdown ---
+        # Cloud providers that need an API key
+        _CLOUD_PROVIDERS = {
+            "OpenAI", "Google Gemini",
+            "Mistral AI", "Groq", "Together AI", "OpenRouter",
+            "Perplexity", "DeepSeek",
+        }
+        _CLOUD_ICON = " \u2601"  # ☁
+        def _cloud(name):
+            return name + _CLOUD_ICON if name in _CLOUD_PROVIDERS else name
+        def _strip_cloud(name):
+            return name.replace(_CLOUD_ICON, "") if name.endswith(_CLOUD_ICON) else name
+
+        _LLM_SERVERS = {
+            "Disabled":         ("disabled",           ""),
+            # --- Local servers ---
+            "Ollama":           ("ollama",              "http://localhost:11434"),
+            "LM Studio":       ("openai_compatible",   "http://localhost:1234"),
+            "LocalAI":         ("openai_compatible",   "http://localhost:8080"),
+            "vLLM":            ("openai_compatible",   "http://localhost:8000"),
+            "text-gen-webui":  ("openai_compatible",   "http://localhost:5000"),
+            "GPT4All":         ("openai_compatible",   "http://localhost:4891"),
+            "Jan":             ("openai_compatible",    "http://localhost:1337"),
+            "KoboldCpp":       ("openai_compatible",   "http://localhost:5001"),
+            "Custom":          ("openai_compatible",   ""),
+            # --- Cloud providers (API key required) ---
+            "OpenAI":           ("openai_compatible",   "https://api.openai.com"),
+            "Google Gemini":    ("openai_compatible",   "https://generativelanguage.googleapis.com/v1beta/openai"),
+            "Mistral AI":       ("openai_compatible",   "https://api.mistral.ai"),
+            "Groq":             ("openai_compatible",   "https://api.groq.com/openai"),
+            "Together AI":      ("openai_compatible",   "https://api.together.xyz"),
+            "OpenRouter":       ("openai_compatible",   "https://openrouter.ai/api"),
+            "Perplexity":       ("openai_compatible",   "https://api.perplexity.ai"),
+            "DeepSeek":         ("openai_compatible",   "https://api.deepseek.com"),
+        }
+
+        # Reverse-map saved settings to display name
+        def _resolve_display_name():
+            prov = self.llm_provider_var.get().strip().lower()
+            ep = self.llm_endpoint_var.get().strip().rstrip("/")
+            if prov == "disabled":
+                return "Disabled"
+            if prov == "ollama":
+                return "Ollama"
+            # Match by endpoint
+            for name, (p, default_ep) in _LLM_SERVERS.items():
+                if p == "openai_compatible" and default_ep and ep == default_ep.rstrip("/"):
+                    return _cloud(name)
+            return "Custom"
+
+        _llm_server_var = tk.StringVar(value=_resolve_display_name())
+
+        def _get_server_values():
+            """Return LLM server names, filtering out cloud providers when offline."""
+            if self.offline_mode_var.get():
+                return [n for n in _LLM_SERVERS if n not in _CLOUD_PROVIDERS]
+            return [_cloud(n) for n in _LLM_SERVERS]
+
+        ttk.Label(frame, text="LLM server:").grid(row=2, column=0, sticky="w", pady=6)
+        provider_frame = ttk.Frame(frame)
+        provider_frame.grid(row=2, column=1, sticky="w", pady=6)
+        llm_provider_combo = ttk.Combobox(
+            provider_frame,
+            textvariable=_llm_server_var,
+            values=_get_server_values(),
+            width=20,
+        )
+        llm_provider_combo.state(["readonly"])
+        llm_provider_combo.pack(side=tk.LEFT)
+        detect_btn = ttk.Button(
+            provider_frame, text="Detect", style="Secondary.TButton",
+            command=lambda: self._detect_llm_server(_llm_server_var, _LLM_SERVERS, llm_model_combo),
+        )
+        detect_btn.pack(side=tk.LEFT, padx=(6, 0))
+        self._detect_hint_label = tk.Label(
+            provider_frame, text="", anchor="w",
+            fg=self.colors.get("muted", "#8b949e"),
+            bg=self.colors.get("bg", "#0d1117"),
+            font=("Segoe UI", 9),
+        )
+        self._detect_hint_label.pack(side=tk.LEFT, padx=(8, 0))
+        self._help_icon_grid(frame, "Select the LLM server to use. Local servers run offline on your machine. "
+            "Cloud providers (marked with \u2601) require an API key and an internet connection. "
+            "For Anthropic Claude, use OpenRouter which supports it via an OpenAI-compatible API. "
+            "Click Detect to scan for running local servers. "
+            "Select 'Disabled' to turn off LLM features.", row=2, column=2, sticky="w")
+
+        # --- API key row (shown for cloud providers) ---
+        api_key_label = ttk.Label(frame, text="API key:")
+        api_key_frame = ttk.Frame(frame)
+        api_key_entry = ttk.Entry(api_key_frame, textvariable=self.llm_api_key_var, width=34, show="\u2022")
+        api_key_entry.pack(side=tk.LEFT)
+        api_key_show_var = tk.BooleanVar(value=False)
+        def _toggle_key_visibility():
+            api_key_entry.configure(show="" if api_key_show_var.get() else "\u2022")
+        api_key_show_btn = ttk.Checkbutton(
+            api_key_frame, text="Show", variable=api_key_show_var,
+            command=_toggle_key_visibility, style="Quiet.TCheckbutton")
+        api_key_show_btn.pack(side=tk.LEFT, padx=(6, 0))
+        api_key_hint = tk.Label(
+            api_key_frame, text="", anchor="w",
+            fg=self.colors.get("muted", "#8b949e"),
+            bg=self.colors.get("bg", "#0d1117"),
+            font=("Segoe UI", 8),
+        )
+        api_key_hint.pack(side=tk.LEFT, padx=(8, 0))
+
+        # API key signup links per provider
+        _API_KEY_URLS = {
+            "OpenAI": "https://platform.openai.com/api-keys",
+            "Google Gemini": "https://aistudio.google.com/apikey",
+            "Mistral AI": "https://console.mistral.ai/api-keys",
+            "Groq": "https://console.groq.com/keys",
+            "Together AI": "https://api.together.xyz/settings/api-keys",
+            "OpenRouter": "https://openrouter.ai/settings/keys",
+            "Perplexity": "https://www.perplexy.ai/settings/api",
+            "DeepSeek": "https://platform.deepseek.com/api_keys",
+        }
+
+        def _update_api_key_hint(name):
+            url = _API_KEY_URLS.get(name, "")
+            if url:
+                api_key_hint.configure(text=f"Get key: {url}", cursor="hand2")
+                api_key_hint.bind("<Button-1>", lambda e: __import__('webbrowser').open(url))
+            else:
+                api_key_hint.configure(text="", cursor="")
+                api_key_hint.unbind("<Button-1>")
+
+        def _show_api_key_row(visible):
+            if visible:
+                api_key_label.grid(row=3, column=0, sticky="w", pady=6)
+                api_key_frame.grid(row=3, column=1, sticky="w", pady=6)
+            else:
+                api_key_label.grid_remove()
+                api_key_frame.grid_remove()
+
+        def _on_server_selected(*_):
+            raw = _llm_server_var.get()
+            name = _strip_cloud(raw)
+            prov, ep = _LLM_SERVERS.get(name, ("disabled", ""))
+            self.llm_provider_var.set(prov)
+            if ep:
+                self.llm_endpoint_var.set(ep)
+            is_cloud = name in _CLOUD_PROVIDERS
+            _show_api_key_row(is_cloud)
+            _update_api_key_hint(name)
+            _set_llm_fields_state()
+            self._refresh_llm_models(llm_model_combo)
+            self._detect_hint_label.configure(text="")
+        llm_provider_combo.bind("<<ComboboxSelected>>", _on_server_selected)
+
+        # Initial visibility
+        _show_api_key_row(_resolve_display_name() in _CLOUD_PROVIDERS and not self.offline_mode_var.get())
+        _update_api_key_hint(_resolve_display_name())
+
+        ttk.Label(frame, text="LLM model:").grid(row=4, column=0, sticky="w", pady=6)
+        model_frame = ttk.Frame(frame)
+        model_frame.grid(row=4, column=1, sticky="w", pady=6)
+        llm_model_combo = ttk.Combobox(model_frame, textvariable=self.llm_model_var, width=27)
+        llm_model_combo.pack(side=tk.LEFT)
+        refresh_btn = ttk.Button(
+            model_frame, text="\u21BB", width=3, style="Secondary.TButton",
+            command=lambda: self._refresh_llm_models(llm_model_combo),
+        )
+        refresh_btn.pack(side=tk.LEFT, padx=(6, 0))
+        manage_models_btn = ttk.Button(
+            model_frame,
+            text="Manage Models",
+            style="Secondary.TButton",
+            command=self._open_model_manager,
+        )
+        manage_models_btn.pack(side=tk.LEFT, padx=(6, 0))
+        self._help_icon_grid(frame, "Model name for the selected provider. Click \u21BB to detect available models.", row=4, column=2, sticky="w")
+        self._refresh_llm_models(llm_model_combo)
+
+        ttk.Label(frame, text="LLM endpoint:").grid(row=5, column=0, sticky="w", pady=6)
+        endpoint_frame = ttk.Frame(frame)
+        endpoint_frame.grid(row=5, column=1, sticky="w", pady=6)
+        llm_endpoint_entry = ttk.Entry(endpoint_frame, textvariable=self.llm_endpoint_var, width=34)
+        llm_endpoint_entry.pack(side=tk.LEFT)
+        self._help_icon_grid(frame, "API base URL for the LLM server. Auto-filled when you pick a server above. "
+            "Edit this for custom ports or remote servers.",
+            row=5, column=2, sticky="w")
+
+        ttk.Label(frame, text="Test LLM:").grid(row=6, column=0, sticky="w", pady=6)
+        test_frame = ttk.Frame(frame)
+        test_frame.grid(row=6, column=1, sticky="w", pady=6)
+        ttk.Button(test_frame, text="Test Connection", style="Secondary.TButton",
+                   command=self._test_llm_connection).pack(side=tk.LEFT)
+        llm_test_status_label = tk.Label(
+            test_frame,
+            textvariable=self.llm_test_status_var,
+            fg=self.colors.get("muted", "#8b949e"),
+            bg=self.colors.get("bg", "#0d1117"),
+            font=("Segoe UI", 10, "bold"),
+            padx=8,
+        )
+        llm_test_status_label.pack(side=tk.LEFT)
+        self._help_icon_grid(frame, "Sends a small test request to verify the current LLM settings.", row=6, column=2, sticky="w")
+
+        def _set_llm_fields_state(*_):
+            provider = self.llm_provider_var.get().strip().lower()
+            state = "normal" if provider != "disabled" else "disabled"
+            llm_model_combo.configure(state=state)
+            llm_endpoint_entry.configure(state=state)
+            refresh_btn.configure(state=state)
+            detect_btn.configure(state=state)
+            is_ollama = provider == "ollama"
+            manage_models_btn.configure(state=("normal" if (state == "normal" and is_ollama) else "disabled"))
+            if state == "disabled":
+                self._set_llm_test_status("Disabled", self.colors.get("muted", "#8b949e"))
+            else:
+                if not self.llm_test_status_var.get():
+                    self._set_llm_test_status("Not tested", self.colors.get("muted", "#8b949e"))
+                self._refresh_llm_models(llm_model_combo)
+
+        llm_model_combo.bind("<<ComboboxSelected>>", _set_llm_fields_state)
+        llm_model_combo.bind("<KeyRelease>", _set_llm_fields_state)
+        _set_llm_fields_state()
+
+        # Button row
+        frame.grid_columnconfigure(1, weight=1)
+        button_frame = ttk.Frame(frame)
+        button_frame.grid(row=7, column=0, columnspan=3, sticky="e", pady=(24, 0))
+        ttk.Button(button_frame, text="Save", command=lambda: self._save_llm_settings(window)).pack(side=tk.LEFT, padx=2)
+        ttk.Button(button_frame, text="Close", style="Secondary.TButton",
+                   command=window.destroy).pack(side=tk.LEFT, padx=2)
+
+        window.grab_set()
+
+    def _save_llm_settings(self, window):
+        """Save LLM settings and close dialog."""
+        self._save_settings_from_vars()
+        self._update_llm_header_indicator()
+        messagebox.showinfo("LLM Settings", "LLM settings saved successfully.", parent=window)
+        window.destroy()
+
     def _test_llm_connection(self):
         if not self._llm_is_enabled():
-            messagebox.showwarning("LLM Test", "LLM provider is disabled. Enable it in Preferences first.")
+            messagebox.showwarning("LLM Test", "LLM provider is disabled. Configure an LLM provider in File → LLM Settings first.")
             self._set_llm_test_status("Disabled", self.colors.get("muted", "#8b949e"))
             return
 
@@ -9242,7 +9816,8 @@ class PCAPSentryApp:
                     return {}
                 try:
                     from threat_intelligence import ThreatIntelligence
-                    ti = ThreatIntelligence()
+                    otx_key = self.settings.get("otx_api_key", "").strip() or None
+                    ti = ThreatIntelligence(otx_api_key=otx_key)
                     if ti.is_available():
                         print("[DEBUG] Enriching stats with threat intelligence...")
                         # Report incremental progress during TI enrichment (32-44%)

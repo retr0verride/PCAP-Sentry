@@ -79,6 +79,12 @@ echo.>> "%LOG_PATH%"
 echo ==== Build started %DATE% %TIME% ====>> "%LOG_PATH%"
 echo Args: %*>> "%LOG_PATH%"
 
+REM Ensure VC++ runtime is bundled when missing
+if not exist "assets\vcredist_x64.exe" (
+	echo ==== Downloading VC++ Runtime ====>> "%LOG_PATH%"
+	powershell -NoProfile -ExecutionPolicy Bypass -File "download_vcredist.ps1" >> "%LOG_PATH%" 2>&1
+)
+
 REM Update version before build (unless -NoBump is set)
 if defined NO_BUMP (
 	echo ==== Skipping Version Update -NoBump ====>> "%LOG_PATH%"

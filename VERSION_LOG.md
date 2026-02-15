@@ -1,22 +1,38 @@
 # Version Log
 
+## 2026.02.14-8 - 2026-02-14
+- Move LLM configuration to dedicated LLM Settings dialog
+- LLM button in header now toggles LLM on/off for quick access
+- Add "LLM Settings..." option to File menu for configuration
+- Remove LLM configuration section from Preferences dialog
+- Simplify Preferences dialog by focusing on general application settings
+- Add standard Edit menu functions: Undo, Redo, Cut, Copy, Paste, Select All
+- Edit menu now includes keyboard shortcuts for all operations (Ctrl+Z, Ctrl+Y, Ctrl+X, Ctrl+C, Ctrl+V, Ctrl+A)
+- Move Preferences from Edit menu to File menu for better organization
 
+## 2026.02.14-7 - 2026-02-14
+- Add File, Edit, and Help menu bar
+- Apply theme colors to menu bar (dark/light mode support)
+- Move Check for Updates and Preferences to menus
+- Remove User Manual button from header (now in Help menu)
+- Add keyboard shortcuts (Ctrl+O, Ctrl+L, Ctrl+,)
+- Add User Manual, View Logs, and About menu items
+- Clean up toolbar and header by removing redundant buttons
 
+## 2026.02.14-6 - 2026-02-14
+- Simplify update system for improved reliability
+- Streamline download and install flow
+- Add progress indicators with MB display
+- Improve error messages and user feedback
+- Add automated update system test (test_update_system.py)
+- Maintain all security features (SHA-256, domain validation, path security)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+## 2026.02.14-5 - 2026-02-14
+- Add comprehensive test suite (17 tests, 100% pass rate)
+- Create stability tests for core functionality and security validation
+- Create stress tests for performance and memory benchmarks
+- Generate code review report (95% security score)
+- Document testing infrastructure and results
 
 ## 2026.02.14-4 - 2026-02-14
 - Updater test build

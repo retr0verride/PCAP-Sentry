@@ -16,6 +16,9 @@ logo_previews/
 models/*.gguf
 models/.cache/
 
+# Redistributables (download via script instead)
+assets/vcredist_x64.exe
+
 # Runtime / debug
 error.txt
 
