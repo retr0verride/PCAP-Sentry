@@ -10,7 +10,7 @@
 ![Platform](https://img.shields.io/badge/Platform-Windows-58a6ff?style=for-the-badge&logo=windows&logoColor=white&labelColor=0d1117)
 ![License](https://img.shields.io/badge/License-See_LICENSE.txt-58a6ff?style=for-the-badge&labelColor=0d1117)
 
-*Malware Analysis Console for Network Packet Captures*
+*Malware Analysis and Education Console for Network Packet Captures*
 
 </div>
 
@@ -42,7 +42,7 @@
 
 <h2><img src="https://img.shields.io/badge/1-Introduction-58a6ff?style=flat-square&labelColor=0d1117" height="28" /></h2>
 
-PCAP Sentry is a malware analysis console for network packet capture (PCAP) files. It parses network captures, summarizes traffic statistics, and provides heuristic signals to help triage suspicious network activity.
+PCAP Sentry is a malware analysis and education console for network packet capture (PCAP) files. It parses network captures, summarizes traffic statistics, and provides heuristic signals to help triage suspicious network activity.
 
 ### What PCAP Sentry Does
 
@@ -454,6 +454,40 @@ You can import external threat intelligence indicators:
 3. The indicators are merged into your knowledge base for use during analysis.
 
 This lets you incorporate third-party threat feeds (STIX/TAXII exports, open-source blocklists, etc.) into PCAP Sentry's analysis engine.
+
+### Popular IoC Feed Sources
+
+Here are free threat intelligence feeds you can download and import:
+
+**IP Address Blocklists**
+
+- **Abuse.ch Feodo Tracker** — https://feodotracker.abuse.ch/downloads/ipblocklist.txt
+- **SANS ISC Block List** — https://isc.sans.edu/api/threatlist/
+- **Talos Intelligence** — https://talosintelligence.com/documents/ip-blacklist
+- **FireHOL Level1** — https://iplists.firehol.org/?ipset=firehol_level1
+
+**Domain Blocklists**
+
+- **URLhaus (Abuse.ch)** — https://urlhaus.abuse.ch/downloads/text/
+- **PhishTank** — https://phishtank.org/developer_info.php
+- **OpenPhish** — https://openphish.com/feed.txt
+- **MalwareBytes** — https://urlhaus.abuse.ch/downloads/text_online/
+
+**Hash (Malware) Lists**
+
+- **MalwareBazaar (Abuse.ch)** — https://bazaar.abuse.ch/export/txt/sha256/recent/
+- **VirusShare** — https://virusshare.com/
+- **MISP Feeds** — https://www.misp-project.org/feeds/
+
+**Combined/STIX Feeds**
+
+- **Anomali ThreatStream** — https://www.anomali.com/resources/limo (free tier)
+- **AlienVault OTX** — https://otx.alienvault.com/ (export pulses)
+
+**Supported Formats**
+
+- Plain text files (one indicator per line)
+- JSON files with `ips`, `domains`, or `hashes` arrays
 
 ---
 

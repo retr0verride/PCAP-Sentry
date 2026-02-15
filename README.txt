@@ -1,5 +1,5 @@
-PCAP Sentry - Malware Analysis Console for Network Packet Captures
-===================================================================
+PCAP Sentry - Malware Analysis and Education Console for Network Packet Captures
+=================================================================================
 
 PCAP Sentry parses network captures (.pcap / .pcapng), summarizes
 traffic statistics, and provides heuristic signals to help triage

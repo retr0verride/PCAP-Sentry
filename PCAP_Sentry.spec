@@ -83,8 +83,11 @@ tmp_ret = _collect_package('joblib')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = _collect_package('tkinterdnd2')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+_require_package('requests')
+tmp_ret = _collect_package('requests')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
-hiddenimports += ['scapy', 'scapy.all', 'sklearn', 'joblib']
+hiddenimports += ['scapy', 'scapy.all', 'sklearn', 'joblib', 'requests', 'urllib3', 'certifi', 'charset_normalizer']
 
 # Ensure companion Python modules are bundled (try/except imports can fool PyInstaller)
 hiddenimports += ['update_checker', 'threat_intelligence', 'enhanced_ml_trainer']

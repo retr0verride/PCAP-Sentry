@@ -4,7 +4,7 @@
 
 # PCAP Sentry
 
-### Malware Analysis Console for Network Packet Captures
+### Malware Analysis and Education Console for Network Packet Captures
 
 ![Version](https://img.shields.io/badge/Version-Date_Based_(YYYY.MM.DD)-58a6ff?style=for-the-badge&labelColor=0d1117)
 ![Platform](https://img.shields.io/badge/Platform-Windows-58a6ff?style=for-the-badge&logo=windows&logoColor=white&labelColor=0d1117)
