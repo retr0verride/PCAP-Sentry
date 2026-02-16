@@ -39,7 +39,7 @@ As stated in [CONTRIBUTING.md](CONTRIBUTING.md#testing-policy):
 
 #### Path Traversal Protection
 - **Test:** `test_path_security()` in [tests/test_stability.py](tests/test_stability.py#L111)
-- **Validates:** Zip Slip protection, path normalization, safe directory operations
+- **Validates:** Path normalization, safe directory operations, absolute path validation
 - **Code Coverage:** Tests `_get_app_data_dir()` and path normalization logic
 
 #### Input Validation

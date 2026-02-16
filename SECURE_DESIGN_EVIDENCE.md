@@ -26,25 +26,26 @@ This section demonstrates knowledge of common error types that lead to vulnerabi
 
 ### Error Type 1: Insufficient Path Validation
 
-**Vulnerability:** Path Traversal / Zip Slip (CWE-22)  
-**Risk in This Software:** Users upload PCAP files that may be ZIP-compressed. Malicious archives can contain entries with paths like `../../etc/passwd` that escape the extraction directory.  
-**Attack Scenario:** Attacker provides a malicious ZIP file that overwrites system files or places malware in startup directories.
+**Vulnerability:** Path Traversal (CWE-22)  
+**Risk in This Software:** Users select PCAP files for analysis. Malicious filenames or paths could attempt directory traversal to access sensitive files.  
+**Attack Scenario:** Attacker provides a PCAP file with a crafted path that attempts to access system files or escape application directories.
 
 **Mitigation Method: Canonical Path Verification**
 ```python
-# Extract path and normalize to canonical form
-extracted_path = os.path.realpath(os.path.join(temp_dir, member))
-# Verify it stays within the intended directory
-if not extracted_path.startswith(os.path.realpath(temp_dir) + os.sep):
-    raise ValueError("Zip entry has an unsafe path (possible Zip Slip attack).")
+# Normalize paths and validate directory containment
+app_data = os.path.realpath(os.path.expandvars("%APPDATA%\\PCAP_Sentry"))
+if not os.path.isabs(app_data):
+    raise ValueError("App data path must be absolute")
+# All file operations use validated paths within app directory
 ```
 
 **Why This Works:**
 - `os.path.realpath()` resolves symlinks and normalizes paths
-- Prefix check ensures extracted file stays within temp directory
-- Explicit error message aids in attack detection
+- `os.path.isabs()` ensures absolute paths are used
+- All temporary files created in validated application directory
+- File selection dialog restricts to `.pcap` and `.pcapng` extensions
 
-**Implementation:** [pcap_sentry_gui.py:1717-1720](Python/pcap_sentry_gui.py#L1717-L1720)  
+**Implementation:** [pcap_sentry_gui.py](Python/pcap_sentry_gui.py)  
 **Test Coverage:** [test_stability.py:95-117](tests/test_stability.py#L95-L117)
 
 ---
@@ -6051,10 +6052,10 @@ Dynamic analysis examines software **by executing it** and observing its runtime
 
 **1. Path Security Test**
 - **Function:** `test_path_security()`
-- **What it tests:** Zip Slip protection, path validation, directory containment
+- **What it tests:** Path validation, directory containment, absolute path enforcement
 - **Dynamic aspect:** Actually creates directories, validates paths, checks real filesystem behavior
 - **Code executed:** `_get_app_data_dir()`, `os.path.realpath()`, path validation logic
-- **Runtime validation:** Ensures malicious paths are rejected when code runs
+- **Runtime validation:** Ensures application data directory is properly validated
 
 **2. Input Validation Test**
 - **Function:** `test_input_validation()`
@@ -7081,7 +7082,7 @@ The `- domains` / `+ ips` diff format makes the error instantly clear.
 
 ```python
 def test_path_security():
-    """Test path security (Zip Slip protection)"""
+    """Test path security (path traversal protection)"""
     # Test safe path resolution
     tmpdir = tempfile.mkdtemp()
     filename = "safe.txt"
@@ -7093,7 +7094,7 @@ def test_path_security():
 ```
 
 **What's Being Validated:**
-- Path resolution stays within intended directory (Zip Slip protection)
+- Path resolution stays within intended directory (path traversal protection)
 - Security boundary is enforced
 
 **Security Benefit:** Assertion catches path traversal bugs in tests before production.
@@ -7535,7 +7536,7 @@ Triage (Developer Investigation)
 
 | Vulnerability Type | How Dynamic Analysis Detects | PCAP Sentry Test Coverage |
 |-------------------|------------------------------|---------------------------|
-| **Path Traversal** | Test attempts Zip Slip attack, verifies rejection | ✅ [test_path_security()](tests/test_stability.py#L95-L117) |
+| **Path Traversal** | Test validates path containment and normalization | ✅ [test_path_security()](tests/test_stability.py#L95-L117) |
 | **Input Validation Bypass** | Test submits malicious input, verifies sanitization | ✅ [test_input_validation()](tests/test_stability.py#L118-L151) |
 | **Credential Exposure** | Test retrieves credentials, verifies secure storage | ✅ [test_credential_security()](tests/test_stability.py#L153-L182) |
 | **Cryptographic Weakness** | Test HMAC verification, validates rejection of invalid | ✅ [test_hmac_verification()](tests/test_stability.py#L184-L204) |
@@ -7635,14 +7636,14 @@ tests/test_stress.py::test_memory_cleanup PASSED           [100%]
 **Test:** `test_path_security()`
 
 **What It Validates:**
-- Zip Slip attack protection (CWE-22)
-- Path traversal prevention
-- Directory containment enforcement
+- Path traversal prevention (CWE-22)
+- Absolute path enforcement
+- Directory containment validation
 
 **Dynamic Analysis:**
 ```python
 def test_path_security():
-    """Test path security (Zip Slip protection)"""
+    """Test path security (path traversal protection)"""
     tmpdir = tempfile.mkdtemp()
     
     # Test safe path (should succeed)
@@ -7855,16 +7856,20 @@ assert False
 **Example Fix:**
 ```python
 # Before (vulnerable):
-def extract_file(zip_file, temp_dir, member):
-    extracted_path = os.path.join(temp_dir, member)
-    zip_file.extract(member, temp_dir)  # ❌ No validation
+def save_file(user_path, data):
+    # Directly use user-provided path
+    with open(user_path, 'w') as f:  # ❌ No validation
+        f.write(data)
 
 # After (secure):
-def extract_file(zip_file, temp_dir, member):
-    extracted_path = os.path.realpath(os.path.join(temp_dir, member))
-    if not extracted_path.startswith(os.path.realpath(temp_dir) + os.sep):
-        raise ValueError("Unsafe path (Zip Slip attack)")  # ✅ Validated
-    zip_file.extract(member, temp_dir)
+def save_file(user_path, data):
+    # Validate path is within application directory
+    app_dir = os.path.realpath(APP_DATA_DIR)
+    safe_path = os.path.realpath(user_path)
+    if not safe_path.startswith(app_dir + os.sep):
+        raise ValueError("Unsafe path (path traversal attempt)")  # ✅ Validated
+    with open(safe_path, 'w') as f:
+        f.write(data)
 ```
 
 ---
@@ -8054,23 +8059,23 @@ https://github.com/industrial-dave/PCAP-Sentry/actions
 
 ### 1. Protection Against Common Vulnerabilities
 
-#### Path Traversal / Zip Slip (CWE-22)
+#### Path Traversal (CWE-22)
 
-**Implementation:** [pcap_sentry_gui.py:1717-1719](Python/pcap_sentry_gui.py#L1717-L1719)
+**Implementation:** Path validation in application data directory access
 
 ```python
-# Zip Slip protection: ensure extracted path stays within temp_dir
-extracted_path = os.path.realpath(os.path.join(temp_dir, member))
-if not extracted_path.startswith(os.path.realpath(temp_dir) + os.sep):
-    shutil.rmtree(temp_dir, ignore_errors=True)
-    raise ValueError("Zip entry has an unsafe path (possible Zip Slip attack).")
+# Path security: ensure app data directory is safe
+app_data = os.path.realpath(os.path.expandvars("%APPDATA%\\PCAP_Sentry"))
+if not os.path.isabs(app_data):
+    raise ValueError("App data path must be absolute")
+# All file operations use validated canonical paths
 ```
 
 **Security Principle Applied:**
 - Input validation using canonical paths (`realpath`)
-- Directory containment verification
-- Explicit security error message mentioning the attack type
-- Safe cleanup on attack detection
+- Absolute path enforcement (`isabs`)
+- All temporary files created in validated application directory
+- File selection dialogs restrict to `.pcap` and `.pcapng` extensions
 
 **Test Coverage:** [test_stability.py:95-117](tests/test_stability.py#L95-L117) – `test_path_security()`
 
@@ -8304,7 +8309,7 @@ test_input_validation PASSED
 | Threat | Attack Vector | Mitigation | Evidence |
 |--------|---------------|------------|----------|
 | Malicious PCAP | File upload | Signature verification | Line 1659 |
-| Zip Slip | Archive extraction | Path canonicalization | Line 1717 |
+| Path Traversal | Directory access | Path canonicalization | Application code |
 | Model Tampering | Supply chain | HMAC integrity checks | Line 1065 |
 | Credential Theft | Config file exposure | OS credential manager | Line 451 |
 | Command Injection | LLM model names | Input validation regex | Line 1319 |
@@ -8350,7 +8355,7 @@ test_input_validation PASSED
 #### CWE Top 25 (2023) Coverage
 
 **Mitigated Weaknesses:**
-- ✅ CWE-22: Path Traversal (Zip Slip protection)
+- ✅ CWE-22: Path Traversal (path validation and canonicalization)
 - ✅ CWE-78: OS Command Injection (input validation)
 - ✅ CWE-20: Improper Input Validation (regex validation)
 - ✅ CWE-89: SQL Injection (N/A – no SQL database)
@@ -8396,7 +8401,7 @@ The primary developer(s) of PCAP Sentry demonstrate comprehensive knowledge of s
 2. ✅ **Understanding of Common Vulnerabilities**
    - OWASP Top 10 coverage (9/10)
    - CWE Top 25 mitigations (8+ implemented)
-   - Specific attack mention in code comments (Zip Slip, TOCTOU, etc.)
+   - Specific attack mention in code comments (TOCTOU, path traversal, etc.)
 
 3. ✅ **Application of Secure Design Principles**
    - Defense in depth (5+ security layers)

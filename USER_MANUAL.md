@@ -228,7 +228,6 @@ The header bar displays:
 |--------|-------------|
 | `.pcap` | Standard packet capture format |
 | `.pcapng` | Next-generation packet capture format |
-| `.zip` | ZIP archives containing .pcap/.pcapng files (auto-extracts) |
 
 ---
 
@@ -270,10 +269,6 @@ After analysis completes, you can:
 - **Undo Last** — Revert the most recent KB addition if you labelled by mistake
 - **Open Charts** — Launch the visual charts window with 7 chart types
 - **Copy Wireshark Filters** — Copy auto-generated Wireshark display filters to the clipboard (found in the **Why** sub-tab)
-
-### Analyzing ZIP Archives
-
-PCAP Sentry can directly open `.zip` files. It will automatically extract and analyze the first `.pcap` or `.pcapng` file found inside the archive.
 
 ---
 

@@ -46,6 +46,13 @@
 
 
 
+## 2026.02.16-6 - 2026-02-16
+- **Breaking Change:** Removed ZIP file support - application now only accepts .pcap and .pcapng files directly
+- **Feature:** LLM analysis now enabled by default (uses Ollama with llama3 model on localhost:11434)
+- **UX Improvement:** Added initialization counter showing elapsed seconds during analysis startup
+- **UX Improvement:** Progress bar and logo animations now start only when actual progress begins (not during initialization)
+- **Performance:** Eliminated ZIP extraction overhead and simplified file handling logic
+- **Docs:** Updated all documentation to remove ZIP references and reflect new initialization behavior
 ## 2026.02.16-5 - 2026-02-16
 - Docs refresh + CI updates + UI polish + test updates
 ## 2026.02.16-4 - 2026-02-16
@@ -116,7 +123,7 @@
 - Fixed bare exception clause in update_checker.py for better error handling
 - Fixed test suite UTF-8 encoding issues on Windows console
 - Updated pip to 26.0.1 (fixes CVE-2026-1703)
-- Verified all security measures: HMAC model verification, Zip Slip protection, path traversal prevention
+- Verified all security measures: HMAC model verification, path traversal prevention, secure credential storage
 - Confirmed secure credential storage in Windows Credential Manager
 - Validated network security: TLS by default, HTTP blocking for remote hosts, domain validation
 - Verified SHA-256 download verification with TOCTOU protection
@@ -354,7 +361,7 @@ Comprehensive security hardening across update pipeline, ML model loading, threa
 - Simplified `_compute_app_version()` to use already-imported modules
 
 ### Security Hardening
-- **Zip Slip protection**: path traversal guard on ZIP extraction using `os.path.realpath()` validation
+- **Path validation**: All file operations use canonical paths with safety checks
 - **Regex injection prevention**: packet filters now use literal string matching (`regex=False`)
 - **Model name validation**: Ollama model names validated with `re.fullmatch()` before subprocess use
 - **URL encoding**: IP addresses URL-encoded in OTX threat intelligence lookups

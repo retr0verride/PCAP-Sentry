@@ -4,6 +4,8 @@
 **Scope:** Python source code (4 files, ~12,300 lines)  
 **Status:** ✅ **COMPLETED - All security issues resolved**
 
+> **Note:** This review was conducted on February 15, 2026. As of February 16, 2026 (v2026.02.16-6), ZIP file support was removed. References to ZIP extraction and Zip Slip protection reflect the codebase at audit time.
+
 ---
 
 ## ✅ Resolution Summary (Updated 2026-02-15)
@@ -347,7 +349,7 @@ if url_lower.startswith("http://"):
 
 **Current:** ✅ Excellent (4 dedicated security tests)
 
-1. `test_path_security()` - Path traversal/Zip Slip
+1. `test_path_security()` - Path traversal protection
 2. `test_input_validation()` - Command injection prevention
 3. `test_credential_security()` - Keyring storage
 4. `test_hmac_verification()` - ML model integrity

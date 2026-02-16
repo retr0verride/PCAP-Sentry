@@ -38,7 +38,6 @@ import time
 import traceback
 import urllib.error
 import urllib.request
-import zipfile
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -680,7 +679,7 @@ def _default_settings():
         "use_multithreading": True,
         "turbo_parse": True,
         "backup_dir": os.path.dirname(KNOWLEDGE_BASE_FILE),
-        "llm_provider": "disabled",
+        "llm_provider": "ollama",
         "llm_model": "llama3",
         "llm_endpoint": "http://localhost:11434",
         "llm_auto_detect": True,
@@ -2020,36 +2019,8 @@ def _maybe_reservoir_append(items, item, limit, seen_count):
         items[j - 1] = item
 
 
-def _extract_first_pcap_from_zip(zip_path):
-    with zipfile.ZipFile(zip_path) as zf:
-        candidates = [
-            name
-            for name in zf.namelist()
-            if name.lower().endswith((".pcap", ".pcapng")) and not name.endswith("/")
-        ]
-        if not candidates:
-            raise ValueError("Zip file does not contain a .pcap/.pcapng file.")
-        member = candidates[0]
-        temp_dir = tempfile.mkdtemp()
-        # Zip Slip protection: ensure extracted path stays within temp_dir
-        extracted_path = os.path.realpath(os.path.join(temp_dir, member))
-        if not extracted_path.startswith(os.path.realpath(temp_dir) + os.sep):
-            shutil.rmtree(temp_dir, ignore_errors=True)
-            raise ValueError("Zip entry has an unsafe path (possible Zip Slip attack).")
-        zf.extract(member, path=temp_dir)
-        file_size = zf.getinfo(member).file_size
-        return extracted_path, temp_dir, file_size
-
-
-def _resolve_pcap_source(file_path):
-    if zipfile.is_zipfile(file_path):
-        extracted_path, temp_dir, file_size = _extract_first_pcap_from_zip(file_path)
-
-        def cleanup():
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-        return extracted_path, cleanup, file_size
-
+def _resolve_pcap_source(file_path, progress_cb=None):
+    """Get the PCAP file path and size."""
     def cleanup():
         return None
 
@@ -2067,7 +2038,7 @@ def parse_pcap_path(file_path, max_rows=DEFAULT_MAX_ROWS, parse_http=True, progr
     rows = []
     size_samples = []
     should_sample_rows = max_rows > 0
-    resolved_path, cleanup, file_size = _resolve_pcap_source(file_path)
+    resolved_path, cleanup, file_size = _resolve_pcap_source(file_path, progress_cb)
     start_time = _utcnow()
     last_progress_time = start_time
     # Scale progress check interval based on file size
@@ -2304,7 +2275,7 @@ def _fast_parse_pcap_path(file_path, max_rows=DEFAULT_MAX_ROWS, parse_http=True,
     rows = []
     size_samples = []
     should_sample_rows = max_rows > 0
-    resolved_path, cleanup, file_size = _resolve_pcap_source(file_path)
+    resolved_path, cleanup, file_size = _resolve_pcap_source(file_path, progress_cb)
     start_time = _utcnow()
     last_progress_time = start_time
 
@@ -3059,6 +3030,9 @@ class PCAPSentryApp:
         self._progress_animating = False
         self._progress_anim_id = None
         self._progress_indeterminate = False
+        self._initializing = False
+        self._init_start_time = 0
+        self._init_counter_id = None
         self._shutting_down = False
         self._cancel_event = threading.Event()
         self.sample_note_var = tk.StringVar(value="")
@@ -3410,6 +3384,22 @@ class PCAPSentryApp:
         except tk.TclError:
             # Widget destroyed during shutdown
             return
+
+    def _update_init_counter(self):
+        """Update the initialization counter showing elapsed seconds."""
+        if not self._initializing or self._shutting_down:
+            return
+        
+        elapsed = int(time.time() - self._init_start_time)
+        self.status_var.set(f"Initializing... {elapsed}s")
+        self._init_counter_id = self.root.after(1000, self._update_init_counter)
+
+    def _stop_init_counter(self):
+        """Stop the initialization counter."""
+        if self._init_counter_id is not None:
+            self.root.after_cancel(self._init_counter_id)
+            self._init_counter_id = None
+        self._initializing = False
     
     def _generate_spin_frames(self):
         """Generate logo spin animation frames on demand to avoid startup delay."""
@@ -4788,7 +4778,7 @@ class PCAPSentryApp:
         self._help_icon(file_frame, "Select the PCAP file you want to analyze. A PCAP (Packet Capture) file "
             "records network traffic — every message sent between computers on a network. "
             "You can capture your own with Wireshark, or download samples to practice with.\n\n"
-            "Supported formats: .pcap, .pcapng, and .zip archives containing PCAP files.")
+            "Supported formats: .pcap and .pcapng files.")
 
         self.target_path_var = tk.StringVar()
         self.target_entry = ttk.Entry(file_frame, textvariable=self.target_path_var, width=90)
@@ -5936,7 +5926,7 @@ class PCAPSentryApp:
         messagebox.showinfo("Wireshark Filters", "Filters copied to clipboard.")
 
     def _browse_file(self, var):
-        path = filedialog.askopenfilename(filetypes=[("PCAP files", "*.pcap *.pcapng"), ("ZIP archives", "*.zip"), ("All files", "*.*")])
+        path = filedialog.askopenfilename(filetypes=[("PCAP files", "*.pcap *.pcapng"), ("All files", "*.*")])
         if path:
             var.set(path)
 
@@ -5958,14 +5948,17 @@ class PCAPSentryApp:
                 self._cancel_event.clear()
                 self.status_var.set(message)
                 self._reset_progress()
-                # Start indeterminate pulsing until real progress arrives
+                # Don't start progress animation yet - wait for first real update
                 self.progress.configure(mode="indeterminate")
-                self.progress.start(12)  # Smooth pulse interval
                 self._progress_indeterminate = True
                 self.progress_percent_var.set("")
                 self.root.configure(cursor="watch")
                 self.root.title(f"{self.root_title} - Working...")
-                self._start_logo_spin()
+                # Start initialization counter instead of animations
+                self._initializing = True
+                self._init_start_time = time.time()
+                self._update_init_counter()
+                # Don't start logo spin yet - will start when progress arrives
                 # Batch widget state changes for better performance
                 self.widget_states = {w: str(w["state"]) for w in self.busy_widgets}
                 for widget in self.busy_widgets:
@@ -5981,6 +5974,7 @@ class PCAPSentryApp:
         else:
             self.busy_count = max(0, self.busy_count - 1)
             if self.busy_count == 0:
+                self._stop_init_counter()
                 self._stop_logo_spin()
                 self._reset_progress()
                 self.root.configure(cursor="")
@@ -6020,8 +6014,14 @@ class PCAPSentryApp:
                     self.root.title(f"{self.root_title} - {short_label}")
             return
 
-        # Transition from indeterminate pulsing to determinate on first real update
+        # Transition from initialization to active progress on first real update
         if self._progress_indeterminate:
+            # Stop initialization counter if running
+            if self._initializing:
+                self._stop_init_counter()
+            # Start animations now that analysis has begun
+            self.progress.start(12)  # Start progress bar animation
+            self._start_logo_spin()  # Start logo spinning
             self.progress.stop()
             self.progress.configure(mode="determinate", maximum=100)
             self._progress_indeterminate = False
@@ -9030,7 +9030,7 @@ class PCAPSentryApp:
     def _train(self, label):
         path = self.safe_path_var.get() if label == "safe" else self.mal_path_var.get()
         if not path:
-            messagebox.showwarning("Missing file", "Please select a PCAP or ZIP file.")
+            messagebox.showwarning("Missing file", "Please select a PCAP file.")
             return
 
         def task(progress_cb=None):
@@ -10219,7 +10219,7 @@ class PCAPSentryApp:
     def _analyze(self):
         path = self.target_path_var.get()
         if not path:
-            messagebox.showwarning("Missing file", "Please select a PCAP or ZIP file.")
+            messagebox.showwarning("Missing file", "Please select a PCAP file.")
             return
 
         # Hide any previous LLM suggestion banner
