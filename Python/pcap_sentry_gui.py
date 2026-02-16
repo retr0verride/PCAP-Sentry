@@ -10093,11 +10093,19 @@ class PCAPSentryApp:
                 return {"credentials": [], "hosts": {}}
 
         def _core_analysis(df, stats, extracted, sample_info, t_start, progress_cb=None):
-            """Shared analysis logic used by both sequential and multithreaded paths."""
+            """Shared analysis logic used by both sequential and multi threaded paths."""
 
             def _report(pct, label="Analyzing..."):
                 if progress_cb:
-                    progress_cb(pct, label=label)
+                    # Scale analysis progress: 32-95% becomes 30-100%
+                    # Formula: 30 + ((pct - 32) / (95 - 32)) * 70 = 30 + ((pct - 32) / 63) * 70
+                    if pct <= 32:
+                        scaled_pct = 30.0
+                    elif pct >= 95:
+                        scaled_pct = 100.0
+                    else:
+                        scaled_pct = 30.0 + ((pct - 32) / 63.0) * 70.0
+                    progress_cb(scaled_pct, label=label)
 
             def _do_threat_intel():
                 if offline_mode or not _check_threat_intel():
@@ -10322,14 +10330,21 @@ class PCAPSentryApp:
 
         def task(progress_cb=None):
             t_start = time.time()
-
+            
+            # Wrap progress callback to scale parsing (0-99%) to first 30% of total progress
+            def parse_progress_cb(pct, eta=None, processed=None, total=None):
+                if progress_cb and pct is not None:
+                    # Scale parsing progress: 0-99% becomes 0-30%
+                    scaled_pct = (pct / 100.0) * 30.0
+                    progress_cb(scaled_pct, eta, processed, total, label="Parsing PCAP")
+            
             if use_multithreading:
                 # ── Phase 1: Parse + extract in parallel ──
                 with ThreadPoolExecutor(max_workers=2) as pool:
                     parse_future = pool.submit(
                         _parser, path,
                         max_rows=max_rows, parse_http=parse_http,
-                        progress_cb=progress_cb, use_high_memory=use_high_memory,
+                        progress_cb=parse_progress_cb, use_high_memory=use_high_memory,
                         cancel_event=cancel_event,
                     )
                     extract_future = pool.submit(
@@ -10340,7 +10355,7 @@ class PCAPSentryApp:
             else:
                 parse_result = _parser(
                     path, max_rows=max_rows, parse_http=parse_http,
-                    progress_cb=progress_cb, use_high_memory=use_high_memory,
+                    progress_cb=parse_progress_cb, use_high_memory=use_high_memory,
                     cancel_event=cancel_event,
                 )
                 extracted = _safe_extract(path, use_high_memory)
