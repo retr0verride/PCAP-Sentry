@@ -350,7 +350,7 @@ def _is_valid_model_name(name: str) -> bool:
     return bool(name and _MODEL_NAME_RE.fullmatch(name))
 
 
-_EMBEDDED_VERSION = "2026.02.16-18"  # Stamped by update_version.ps1 at build time
+_EMBEDDED_VERSION = "2026.02.16-20"  # Stamped by update_version.ps1 at build time
 
 
 def _compute_app_version():
@@ -4442,6 +4442,7 @@ class PCAPSentryApp:
                         self.root.after(0, _update_dl)
 
                 if checker.download_update(dest_path, progress_callback=progress_callback):
+                    _write_error_log(f"Update download successful: {dest_path}")
 
                     def on_success():
                         progress_window.destroy()
@@ -4459,9 +4460,14 @@ class PCAPSentryApp:
                             if checker.launch_installer(dest_path):
                                 self.root.after(100, self._on_close)
                             else:
-                                messagebox.showinfo(
-                                    "Download Complete",
-                                    f"Update saved to:\n{dest_path}\n\nPlease run it manually to install.",
+                                error_reason = getattr(checker, "_last_error", "Unknown error")
+                                _write_error_log(f"Installer launch failed: {error_reason}")
+                                messagebox.showerror(
+                                    "Installer Launch Failed",
+                                    f"Failed to launch the installer.\n\n"
+                                    f"Error: {error_reason}\n\n"
+                                    f"Installer saved to:\n{dest_path}\n\n"
+                                    f"Please run the installer manually.",
                                 )
                         else:
                             # Standalone EXE – replace the currently running
@@ -4476,26 +4482,30 @@ class PCAPSentryApp:
                                 # Force quit immediately after user closes the messagebox
                                 self.root.after(100, self._on_close)
                             else:
-                                reason = getattr(checker, "_last_error", None)
-                                reason_text = f"\nReason: {reason}\n" if reason else "\n"
-                                messagebox.showinfo(
-                                    "Download Complete",
-                                    f"Could not apply the update automatically.{reason_text}\n"
+                                reason = getattr(checker, "_last_error", "Unknown error")
+                                _write_error_log(f"Executable replacement failed: {reason}")
+                                messagebox.showerror(
+                                    "Update Failed",
+                                    f"Could not apply the update automatically.\n\n"
+                                    f"Error: {reason}\n\n"
                                     f"Update saved to:\n{dest_path}\n\n"
                                     f"Please install it manually.",
                                 )
 
                     self.root.after(0, on_success)
                 else:
+                    download_error = getattr(checker, "_last_error", "Unknown error")
+                    _write_error_log(f"Update download failed: {download_error}")
                     self.root.after(
                         0,
                         lambda: (
                             progress_window.destroy(),
-                            messagebox.showerror("Download Failed", "Failed to download the update."),
+                            messagebox.showerror("Download Failed", f"Failed to download the update.\n\nError: {download_error}"),
                         ),
                     )
 
             except Exception as e:
+                _write_error_log("Update download exception", e, sys.exc_info()[2])
                 self.root.after(
                     0,
                     lambda exc=e: (
