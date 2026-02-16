@@ -45,6 +45,9 @@
 
 
 
+
+## 2026.02.16-5 - 2026-02-16
+- Docs refresh + CI updates + UI polish + test updates
 ## 2026.02.16-4 - 2026-02-16
 - Performance fix: Removed blocking update_idletasks() calls from busy state changes. Eliminates stuttering during analysis startup by letting the event loop update naturally instead of forcing synchronous GUI updates.
 ## 2026.02.16-3 - 2026-02-16
