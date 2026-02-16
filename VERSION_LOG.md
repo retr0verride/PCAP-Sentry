@@ -47,6 +47,9 @@
 
 
 
+
+## 2026.02.16-7 - 2026-02-16
+- Minor tweaks and improvements
 ## 2026.02.16-6 - 2026-02-16
 - **Breaking Change:** Removed ZIP file support - application now only accepts .pcap and .pcapng files directly
 - **Feature:** LLM analysis now enabled by default (uses Ollama with llama3 model on localhost:11434)

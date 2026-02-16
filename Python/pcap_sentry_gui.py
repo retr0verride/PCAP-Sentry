@@ -350,7 +350,7 @@ def _is_valid_model_name(name: str) -> bool:
     return bool(name and _MODEL_NAME_RE.fullmatch(name))
 
 
-_EMBEDDED_VERSION = "2026.02.16-6"  # Stamped by update_version.ps1 at build time
+_EMBEDDED_VERSION = "2026.02.16-7"  # Stamped by update_version.ps1 at build time
 
 
 def _compute_app_version():
@@ -9390,32 +9390,45 @@ class PCAPSentryApp:
         self._run_task(task, done, on_error=failed)
 
     def _apply_label_to_kb(self, label, stats, features, summary, title, message):
-        add_to_knowledge_base(label, stats, features, summary)
-        kb = load_knowledge_base()
-        self._last_kb_label = label
-        self._last_kb_entry = kb[label][-1] if kb[label] else None
-        self._sync_undo_buttons()
-        self._refresh_kb()
-        messagebox.showinfo(title, message)
+        # Move ALL KB operations to background thread to prevent UI freeze
+        def kb_task():
+            # Step 1: Add to knowledge base (I/O operation)
+            add_to_knowledge_base(label, stats, features, summary)
+            # Step 2: Reload KB to get the updated version (I/O operation)
+            kb = load_knowledge_base()
+            return kb
 
-        # Train model in background to avoid UI freeze
-        if self.use_local_model_var.get():
+        def kb_done(kb):
+            # Update UI on main thread after KB operations complete
+            self._last_kb_label = label
+            self._last_kb_entry = kb[label][-1] if kb[label] else None
+            self._sync_undo_buttons()
+            self._refresh_kb()
+            messagebox.showinfo(title, message)
 
-            def train_task():
-                return _train_local_model(kb)
+            # Train model in background to avoid UI freeze
+            if self.use_local_model_var.get():
 
-            def train_done(result):
-                model_bundle, err = result
-                if model_bundle is None:
-                    messagebox.showinfo("Local Model", err or "Local model training skipped.")
-                else:
-                    _save_local_model(model_bundle)
-                    self.status_var.set("Local model updated.")
+                def train_task():
+                    return _train_local_model(kb)
 
-            def train_failed(exc):
-                messagebox.showwarning("Local Model", f"Model training failed: {exc}")
+                def train_done(result):
+                    model_bundle, err = result
+                    if model_bundle is None:
+                        messagebox.showinfo("Local Model", err or "Local model training skipped.")
+                    else:
+                        _save_local_model(model_bundle)
+                        self.status_var.set("Local model updated.")
 
-            self._run_task(train_task, train_done, on_error=train_failed, message="Training local model...")
+                def train_failed(exc):
+                    messagebox.showwarning("Local Model", f"Model training failed: {exc}")
+
+                self._run_task(train_task, train_done, on_error=train_failed, message="Training local model...")
+
+        def kb_failed(exc):
+            messagebox.showerror("Error", f"Failed to save to knowledge base: {exc}")
+
+        self._run_task(kb_task, kb_done, on_error=kb_failed, message="Saving to knowledge base...")
 
     def _train(self, label):
         path = self.safe_path_var.get() if label == "safe" else self.mal_path_var.get()
