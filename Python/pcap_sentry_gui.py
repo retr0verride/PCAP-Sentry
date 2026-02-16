@@ -350,7 +350,7 @@ def _is_valid_model_name(name: str) -> bool:
     return bool(name and _MODEL_NAME_RE.fullmatch(name))
 
 
-_EMBEDDED_VERSION = "2026.02.16-7"  # Stamped by update_version.ps1 at build time
+_EMBEDDED_VERSION = "2026.02.16-8"  # Stamped by update_version.ps1 at build time
 
 
 def _compute_app_version():
@@ -4194,17 +4194,39 @@ class PCAPSentryApp:
         """Display update check result (always runs on the main thread)."""
         if not result.get("success"):
             error_msg = result.get("error", "Unknown error")
-            if "404" in str(error_msg):
+            
+            # Handle specific error cases with helpful messages
+            if "404" in str(error_msg) or "HTTP 404" in str(error_msg):
                 messagebox.showinfo(
                     "Check for Updates",
                     "No releases have been published yet.\n\n"
                     "This is normal for development builds. Once a release\n"
                     "is published on GitHub, update checking will work.",
                 )
+            elif "Network error" in str(error_msg) or "URLError" in str(error_msg):
+                messagebox.showerror(
+                    "Check for Updates",
+                    f"Network connection failed:\n{error_msg}\n\n"
+                    "Please check your internet connection and try again.",
+                )
+            elif "Blocked unsafe URL scheme" in str(error_msg):
+                messagebox.showerror(
+                    "Check for Updates",
+                    f"Security error:\n{error_msg}\n\n"
+                    "The update URL failed security validation.",
+                )
+            elif "HTTP" in str(error_msg):
+                messagebox.showerror(
+                    "Check for Updates",
+                    f"GitHub API error:\n{error_msg}\n\n"
+                    "GitHub may be temporarily unavailable. Try again later.",
+                )
             else:
                 messagebox.showerror(
                     "Check for Updates",
-                    f"Failed to check for updates:\n{error_msg}",
+                    f"Failed to check for updates:\n{error_msg}\n\n"
+                    "If this persists, check your network connection\n"
+                    "or visit the GitHub releases page manually.",
                 )
             return
 

@@ -242,9 +242,23 @@ class UpdateChecker:
             self._expected_sha256 = self._fetch_sha256_for_asset(release, ctx)
             return True
 
+        except urllib.error.HTTPError as e:
+            self._last_error = f"HTTP {e.code}: {e.reason}"
+            print(f"HTTP error fetching latest release: {e.code} - {e.reason}")
+            return False
+        except urllib.error.URLError as e:
+            self._last_error = f"Network error: {e.reason}"
+            print(f"Network error fetching latest release: {e.reason}")
+            return False
+        except json.JSONDecodeError as e:
+            self._last_error = f"Invalid JSON response from GitHub API"
+            print(f"JSON decode error: {e}")
+            return False
         except Exception as e:
-            self._last_error = f"Failed to fetch release: {e!s}"
-            print(f"Error fetching latest release: {e}")
+            self._last_error = f"Unexpected error: {type(e).__name__}: {e!s}"
+            print(f"Error fetching latest release: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
     @staticmethod
