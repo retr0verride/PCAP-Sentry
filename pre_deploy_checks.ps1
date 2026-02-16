@@ -277,7 +277,109 @@ try {
     Write-CheckFail "Build verification failed: $_"
 }
 
-# 5. OPENSSF BEST PRACTICES COMPLIANCE
+# 5. DOCUMENTATION UPDATE & VALIDATION
+if (-not $Fast) {
+    Write-CheckHeader "Documentation Update & Validation"
+    
+    # Get current version
+    $versionMatch = Select-String -Path "version_info.txt" -Pattern "filevers=\((\d+),\s*(\d+),\s*(\d+),\s*(\d+)\)"
+    $currentVersion = "Unknown"
+    if ($versionMatch) {
+        $v = $versionMatch.Matches[0].Groups
+        $currentVersion = "$($v[1].Value).$($v[2].Value).$($v[3].Value)-$($v[4].Value)"
+    }
+    
+    Write-Host "`nCurrent version: $currentVersion" -ForegroundColor Cyan
+    
+    # Generate changelog from git commits
+    Write-Host "`nRecent changes (since last tag):" -ForegroundColor Yellow
+    try {
+        $lastTag = git describe --tags --abbrev=0 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            $commits = git log "$lastTag..HEAD" --oneline --no-merges 2>$null
+            if ($commits) {
+                $commits | Select-Object -First 10 | ForEach-Object {
+                    Write-Host "  $_" -ForegroundColor Gray
+                }
+                if (($commits | Measure-Object).Count -gt 10) {
+                    Write-Host "  ... and $((($commits | Measure-Object).Count) - 10) more" -ForegroundColor Gray
+                }
+            } else {
+                Write-Host "  No new commits since last tag" -ForegroundColor Gray
+            }
+        } else {
+            $allCommits = git log --oneline --no-merges -10 2>$null
+            if ($allCommits) {
+                Write-Host "  (No tags found, showing last 10 commits)" -ForegroundColor DarkGray
+                $allCommits | ForEach-Object {
+                    Write-Host "  $_" -ForegroundColor Gray
+                }
+            }
+        }
+    } catch {
+        Write-Host "  Unable to retrieve git history" -ForegroundColor DarkGray
+    }
+    
+    # Check which docs might need updating
+    Write-Host "`nDocumentation files to review:" -ForegroundColor Yellow
+    $docsToCheck = @(
+        @{File="README.md"; Purpose="Project description, features, installation"},
+        @{File="VERSION_LOG.md"; Purpose="Release notes for v$currentVersion"},
+        @{File="USER_MANUAL.md"; Purpose="User-facing documentation"},
+        @{File="SECURITY.md"; Purpose="Security policies (if changed)"},
+        @{File="CONTRIBUTING.md"; Purpose="Contribution guidelines (if changed)"}
+    )
+    
+    foreach ($doc in $docsToCheck) {
+        if (Test-Path $doc.File) {
+            $lastMod = (Get-Item $doc.File).LastWriteTime
+            $daysOld = [math]::Round(((Get-Date) - $lastMod).TotalDays, 1)
+            $color = if ($daysOld -gt 30) { "Yellow" } elseif ($daysOld -gt 7) { "Gray" } else { "Green" }
+            Write-Host "  - $($doc.File) " -NoNewline
+            Write-Host "($daysOld days old)" -ForegroundColor $color -NoNewline
+            Write-Host " - $($doc.Purpose)" -ForegroundColor DarkGray
+        }
+    }
+    
+    # Interactive prompt
+    Write-Host "`n" -NoNewline
+    $response = Read-Host "Have you updated all necessary documentation? (Y/N/Edit)"
+    
+    if ($response -match '^e') {
+        Write-Host "`nOpening documentation files for editing..." -ForegroundColor Cyan
+        Write-Host "  After editing, save and close all files, then press Enter to continue" -ForegroundColor Yellow
+        
+        # Open key docs in default editor
+        if (Test-Path "VERSION_LOG.md") { Start-Process "VERSION_LOG.md" }
+        if (Test-Path "README.md") { Start-Process "README.md" }
+        
+        Read-Host "`nPress Enter when you've finished editing"
+        Write-CheckPass "Documentation editing completed"
+    } elseif ($response -match '^y') {
+        Write-CheckPass "Documentation confirmed as up-to-date"
+    } else {
+        Write-CheckFail "Documentation not updated - Please update before deploying"
+        Write-Host "`n  Tips:" -ForegroundColor Yellow
+        Write-Host "    - Update VERSION_LOG.md with release notes" -ForegroundColor Gray
+        Write-Host "    - Update README.md if features changed" -ForegroundColor Gray
+        Write-Host "    - Update USER_MANUAL.md if UI/usage changed" -ForegroundColor Gray
+        Write-Host "`n  Then run: .\pre_deploy_checks.ps1 again" -ForegroundColor Cyan
+    }
+    
+    # Check VERSION_LOG.md has entry for current version
+    if (Test-Path "VERSION_LOG.md") {
+        $versionLog = Get-Content "VERSION_LOG.md" -Raw
+        if ($versionLog -match "## Version $currentVersion" -or $versionLog -match "## v$currentVersion") {
+            Write-CheckPass "VERSION_LOG.md has entry for current version"
+        } else {
+            Write-CheckWarn "VERSION_LOG.md may be missing entry for v$currentVersion"
+        }
+    }
+} else {
+    Write-Host "`n[Fast mode] Skipping documentation validation" -ForegroundColor Gray
+}
+
+# 6. OPENSSF BEST PRACTICES COMPLIANCE
 Write-CheckHeader "OpenSSF Best Practices"
 try {
     $requiredFiles = @(
@@ -318,7 +420,7 @@ try {
     Write-CheckWarn "OpenSSF compliance check incomplete: $_"
 }
 
-# 6. GIT STATUS CHECK
+# 7. GIT STATUS CHECK
 Write-CheckHeader "Git Status"
 try {
     $gitStatus = git status --porcelain 2>$null
