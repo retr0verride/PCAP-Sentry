@@ -43,6 +43,9 @@
 
 
 
+
+## 2026.02.16-3 - 2026-02-16
+- UX improvement: Re-added spinning logo animation during analysis. Changed initial message to 'Initializing...' before progress starts, providing clearer feedback during startup phase.
 ## 2026.02.16-2 - 2026-02-16
 - UX change: Removed pulsing progress bar animation and spinning logo. Progress bar now stays in determinate mode starting at 0, providing cleaner visual feedback during analysis.
 ## 2026.02.16-1 - 2026-02-16

@@ -195,7 +195,7 @@ DEFAULT_MAX_ROWS = 200000
 IOC_SET_LIMIT = 50000
 
 
-_EMBEDDED_VERSION = "2026.02.16-2"  # Stamped by update_version.ps1 at build time
+_EMBEDDED_VERSION = "2026.02.16-3"  # Stamped by update_version.ps1 at build time
 
 
 def _compute_app_version():
@@ -5675,6 +5675,7 @@ class PCAPSentryApp:
                 self._reset_progress()  # Reset progress bar to 0%
                 self.root.configure(cursor="watch")
                 self.root.title(f"{self.root_title} - Working...")
+                self._start_logo_spin()
                 # Batch widget state changes for better performance
                 self.widget_states = {w: str(w["state"]) for w in self.busy_widgets}
                 for widget in self.busy_widgets:
@@ -5692,6 +5693,7 @@ class PCAPSentryApp:
         else:
             self.busy_count = max(0, self.busy_count - 1)
             if self.busy_count == 0:
+                self._stop_logo_spin()
                 self.root.configure(cursor="")
                 self.root_title = self._get_window_title()
                 self.root.title(self.root_title)
@@ -10407,7 +10409,7 @@ class PCAPSentryApp:
             # Fire LLM label suggestion in background (non-blocking)
             self._request_llm_suggestion_async(stats)
 
-        self._run_task(task, done, message="Analyzing PCAP...", progress_label="Analyzing PCAP")
+        self._run_task(task, done, message="Initializing...", progress_label="Analyzing PCAP")
 
     def _open_charts(self):
         if self.current_df is None:
