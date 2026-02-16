@@ -350,7 +350,7 @@ def _is_valid_model_name(name: str) -> bool:
     return bool(name and _MODEL_NAME_RE.fullmatch(name))
 
 
-_EMBEDDED_VERSION = "2026.02.16-15"  # Stamped by update_version.ps1 at build time
+_EMBEDDED_VERSION = "2026.02.16-16"  # Stamped by update_version.ps1 at build time
 
 
 def _compute_app_version():
@@ -6892,11 +6892,20 @@ class PCAPSentryApp:
                 widget.drop_target_register(DND_FILES)
 
                 def on_drop(event):
-                    path = self._extract_drop_path(event.data)
-                    if path:
-                        setter(path)
-                        return "copy"
-                    return "none"
+                    try:
+                        path = self._extract_drop_path(event.data)
+                        if path:
+                            setter(path)
+                            return "copy"
+                        else:
+                            # Debug: log why drop was rejected
+                            print(f"Drop rejected - event.data: {event.data!r}")
+                            return "none"
+                    except Exception as e:
+                        print(f"Drop error: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        return "none"
 
                 widget.dnd_bind("<<Drop>>", on_drop)
             except (tk.TclError, AttributeError) as e:
@@ -6941,9 +6950,14 @@ class PCAPSentryApp:
                     path = path[1:]
                 text = path or text
             # Canonicalize to prevent traversal and validate extension
-            text = os.path.realpath(text)
+            try:
+                text = os.path.realpath(text)
+            except Exception as e:
+                print(f"realpath failed for '{text}': {e}")
+                return ""
             lower = text.lower()
             if not any(lower.endswith(ext) for ext in self._ALLOWED_DROP_EXTENSIONS):
+                print(f"Extension check failed for '{text}' - not in allowed list")
                 return ""
             return text
 
@@ -6953,7 +6967,8 @@ class PCAPSentryApp:
                 candidate = normalize(part)
                 if candidate:
                     return candidate
-        except Exception:
+        except Exception as e:
+            print(f"splitlist failed: {e}")
             pass
         return normalize(data)
 
