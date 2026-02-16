@@ -195,7 +195,7 @@ DEFAULT_MAX_ROWS = 200000
 IOC_SET_LIMIT = 50000
 
 
-_EMBEDDED_VERSION = "2026.02.15-29"  # Stamped by update_version.ps1 at build time
+_EMBEDDED_VERSION = "2026.02.15-30"  # Stamped by update_version.ps1 at build time
 
 
 def _compute_app_version():
@@ -8709,14 +8709,26 @@ class PCAPSentryApp:
         self._last_kb_label = label
         self._last_kb_entry = kb[label][-1] if kb[label] else None
         self._sync_undo_buttons()
-        if self.use_local_model_var.get():
-            model_bundle, err = _train_local_model(kb)
-            if model_bundle is None:
-                messagebox.showinfo("Local Model", err or "Local model training skipped.")
-            else:
-                _save_local_model(model_bundle)
         self._refresh_kb()
         messagebox.showinfo(title, message)
+        
+        # Train model in background to avoid UI freeze
+        if self.use_local_model_var.get():
+            def train_task():
+                return _train_local_model(kb)
+            
+            def train_done(result):
+                model_bundle, err = result
+                if model_bundle is None:
+                    messagebox.showinfo("Local Model", err or "Local model training skipped.")
+                else:
+                    _save_local_model(model_bundle)
+                    self.status_var.set("Local model updated.")
+            
+            def train_failed(exc):
+                messagebox.showwarning("Local Model", f"Model training failed: {exc}")
+            
+            self._run_task(train_task, train_done, on_error=train_failed, message="Training local model...")
 
     def _train(self, label):
         path = self.safe_path_var.get() if label == "safe" else self.mal_path_var.get()

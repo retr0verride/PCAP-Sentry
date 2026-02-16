@@ -39,6 +39,9 @@
 
 
 
+
+## 2026.02.15-30 - 2026-02-15
+- Critical fix: Mark as Malicious/Safe no longer freezes UI. Local model training now runs in background thread instead of blocking UI thread. Eliminates multi-second freeze when labeling captures with Use Local Model enabled.
 ## 2026.02.15-29 - 2026-02-15
 - Major UX improvement: Progress bar now pulses smoothly in constant motion until actual progress available, then shows real progress. Logo spins continuously throughout. Much simpler and smoother experience.
 ## 2026.02.15-28 - 2026-02-15
