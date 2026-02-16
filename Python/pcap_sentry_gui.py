@@ -195,7 +195,7 @@ DEFAULT_MAX_ROWS = 200000
 IOC_SET_LIMIT = 50000
 
 
-_EMBEDDED_VERSION = "2026.02.15-26"  # Stamped by update_version.ps1 at build time
+_EMBEDDED_VERSION = "2026.02.15-27"  # Stamped by update_version.ps1 at build time
 
 
 def _compute_app_version():

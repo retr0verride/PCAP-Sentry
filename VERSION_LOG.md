@@ -36,6 +36,9 @@
 
 
 
+
+## 2026.02.15-27 - 2026-02-15
+- Fix: Progress bar stays at 0 until 0.5 progress reached - prevents premature movement and percentage display during initial analysis startup
 ## 2026.02.15-26 - 2026-02-15
 - Fix: Eliminate initial analysis stuttering. Added startup grace period with 4x more aggressive throttling (2 to prevent UI flooding while threads spawn.
 ## 2026.02.15-25 - 2026-02-15
