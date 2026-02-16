@@ -195,7 +195,7 @@ DEFAULT_MAX_ROWS = 200000
 IOC_SET_LIMIT = 50000
 
 
-_EMBEDDED_VERSION = "2026.02.15-30"  # Stamped by update_version.ps1 at build time
+_EMBEDDED_VERSION = "2026.02.15-31"  # Stamped by update_version.ps1 at build time
 
 
 def _compute_app_version():
@@ -5127,8 +5127,7 @@ class PCAPSentryApp:
                 t.insert(tk.END, "  \u2014 none \u2014\n", "label_dim")
 
         # ── Credentials table ──
-        for row in self.cred_table.get_children():
-            self.cred_table.delete(row)
+        self.cred_table.delete(*self.cred_table.get_children())
 
         for cred in creds:
             cat, type_label = self._classify_cred_field(cred.get("field", ""))
@@ -5151,8 +5150,7 @@ class PCAPSentryApp:
             self.cred_count_var.set("No credentials or auth data found in cleartext traffic.")
 
         # ── Host table ──
-        for row in self.host_table.get_children():
-            self.host_table.delete(row)
+        self.host_table.delete(*self.host_table.get_children())
 
         def _ip_sort_key(ip_str):
             try:
@@ -5337,8 +5335,7 @@ class PCAPSentryApp:
     def _update_packet_table(self, df):
         if self.packet_table is None:
             return
-        for row in self.packet_table.get_children():
-            self.packet_table.delete(row)
+        self.packet_table.delete(*self.packet_table.get_children())
 
         if df is None or df.empty:
             return
@@ -10387,8 +10384,6 @@ class PCAPSentryApp:
             if hasattr(self, 'results_notebook') and hasattr(self, 'results_tab'):
                 try:
                     self.results_notebook.select(self.results_tab)
-                    self.results_tab.update_idletasks()
-                    self.results_tab.update()
                 except Exception:
                     pass
             self._apply_packet_filters()
@@ -10397,8 +10392,8 @@ class PCAPSentryApp:
 
             self.status_var.set("Done")
 
-            for row in self.flow_table.get_children():
-                self.flow_table.delete(row)
+            # Clear and populate flow table efficiently
+            self.flow_table.delete(*self.flow_table.get_children())
             for _, row in flow_df_early.head(25).iterrows():
                 self.flow_table.insert(
                     "",

@@ -40,6 +40,9 @@
 
 
 
+
+## 2026.02.15-31 - 2026-02-15
+- Performance fix: Eliminated UI freezes during analysis. Removed blocking .update() call and optimized tree table operations. Analysis completion now processes instantly without freezing UI thread.
 ## 2026.02.15-30 - 2026-02-15
 - Critical fix: Mark as Malicious/Safe no longer freezes UI. Local model training now runs in background thread instead of blocking UI thread. Eliminates multi-second freeze when labeling captures with Use Local Model enabled.
 ## 2026.02.15-29 - 2026-02-15
