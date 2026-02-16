@@ -350,7 +350,7 @@ def _is_valid_model_name(name: str) -> bool:
     return bool(name and _MODEL_NAME_RE.fullmatch(name))
 
 
-_EMBEDDED_VERSION = "2026.02.16-14"  # Stamped by update_version.ps1 at build time
+_EMBEDDED_VERSION = "2026.02.16-15"  # Stamped by update_version.ps1 at build time
 
 
 def _compute_app_version():
@@ -4457,7 +4457,7 @@ class PCAPSentryApp:
                                 "you can relaunch PCAP Sentry from your Start menu or desktop.",
                             )
                             if checker.launch_installer(dest_path):
-                                self.root.after(100, self.root.destroy)
+                                self.root.after(100, self._on_close)
                             else:
                                 messagebox.showinfo(
                                     "Download Complete",
@@ -4474,7 +4474,7 @@ class PCAPSentryApp:
                                     "PCAP Sentry will now close and restart with the new version.",
                                 )
                                 # Force quit immediately after user closes the messagebox
-                                self.root.after(100, self.root.destroy)
+                                self.root.after(100, self._on_close)
                             else:
                                 reason = getattr(checker, "_last_error", None)
                                 reason_text = f"\nReason: {reason}\n" if reason else "\n"
@@ -8962,6 +8962,8 @@ class PCAPSentryApp:
 
             def _apply(online):
                 try:
+                    if self._shutting_down:
+                        return
                     if not online and not self.offline_mode_var.get():
                         self.offline_mode_var.set(True)
                         self._save_settings_from_vars()
@@ -8974,7 +8976,8 @@ class PCAPSentryApp:
             def _run():
                 try:
                     online = _probe()
-                    self.root.after(0, lambda: _apply(online))
+                    if not self._shutting_down:
+                        self.root.after(0, lambda: _apply(online))
                 except Exception:
                     pass  # Don't crash startup
 
@@ -9017,7 +9020,7 @@ class PCAPSentryApp:
 
             def apply_result(result):
                 try:
-                    if not result:
+                    if self._shutting_down or not result:
                         return
                     self.llm_provider_var.set(result["provider"])
                     self.llm_endpoint_var.set(result["endpoint"])
@@ -9030,7 +9033,7 @@ class PCAPSentryApp:
             def run():
                 try:
                     result = worker()
-                    if result:
+                    if result and not self._shutting_down:
                         self.root.after(0, lambda: apply_result(result))
                 except Exception:
                     pass  # Don't crash startup
@@ -9065,8 +9068,8 @@ class PCAPSentryApp:
 
             def apply_result(success):
                 try:
-                    # Check if root still exists before updating UI
-                    if not self.root or not self.root.winfo_exists():
+                    # Check if shutting down or root still exists before updating UI
+                    if self._shutting_down or not self.root or not self.root.winfo_exists():
                         return
                     if success:
                         self._set_llm_test_status("Auto", self.colors.get("accent", "#58a6ff"))
@@ -9078,7 +9081,8 @@ class PCAPSentryApp:
             def run():
                 try:
                     success = worker()
-                    self.root.after(0, lambda: apply_result(success))
+                    if not self._shutting_down:
+                        self.root.after(0, lambda: apply_result(success))
                 except Exception:
                     pass
 
