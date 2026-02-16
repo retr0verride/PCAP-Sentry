@@ -44,6 +44,9 @@
 
 
 
+
+## 2026.02.16-4 - 2026-02-16
+- Performance fix: Removed blocking update_idletasks() calls from busy state changes. Eliminates stuttering during analysis startup by letting the event loop update naturally instead of forcing synchronous GUI updates.
 ## 2026.02.16-3 - 2026-02-16
 - UX improvement: Re-added spinning logo animation during analysis. Changed initial message to 'Initializing...' before progress starts, providing clearer feedback during startup phase.
 ## 2026.02.16-2 - 2026-02-16

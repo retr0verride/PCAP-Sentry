@@ -195,7 +195,7 @@ DEFAULT_MAX_ROWS = 200000
 IOC_SET_LIMIT = 50000
 
 
-_EMBEDDED_VERSION = "2026.02.16-3"  # Stamped by update_version.ps1 at build time
+_EMBEDDED_VERSION = "2026.02.16-4"  # Stamped by update_version.ps1 at build time
 
 
 def _compute_app_version():
@@ -5686,8 +5686,6 @@ class PCAPSentryApp:
                 # Show cancel button
                 self.cancel_button.configure(state=tk.NORMAL)
                 self.cancel_button.pack(side=tk.LEFT, padx=(4, 0))
-                # Force a single UI update after all changes
-                self.root.update_idletasks()
             else:
                 self.status_var.set(message)
         else:
@@ -5706,8 +5704,6 @@ class PCAPSentryApp:
                         pass  # Widget may be destroyed
                 # Hide cancel button
                 self.cancel_button.pack_forget()
-                # Force a single UI update after all changes
-                self.root.update_idletasks()
 
     def _reset_progress(self):
         self.progress.stop()
@@ -10409,7 +10405,7 @@ class PCAPSentryApp:
             # Fire LLM label suggestion in background (non-blocking)
             self._request_llm_suggestion_async(stats)
 
-        self._run_task(task, done, message="Initializing...", progress_label="Analyzing PCAP")
+        self._run_task(task, done, message="Analyzing PCAP...", progress_label="Analyzing PCAP")
 
     def _open_charts(self):
         if self.current_df is None:
