@@ -35,7 +35,7 @@ def test_large_ioc_parsing():
     """Test parsing large IOC lists"""
     print("\n=== Stress Test: Large IOC Parsing ===")
 
-    from pcap_sentry_gui import _parse_ioc_text  # noqa: PLC0415
+    from pcap_sentry_gui import _parse_ioc_text
 
     tracemalloc.start()
     start_mem = tracemalloc.get_traced_memory()[0]
@@ -72,7 +72,7 @@ def test_reservoir_sampling_performance():
     """Test reservoir sampling with large datasets"""
     print("\n=== Stress Test: Reservoir Sampling Performance ===")
 
-    from pcap_sentry_gui import _maybe_reservoir_append  # noqa: PLC0415
+    from pcap_sentry_gui import _maybe_reservoir_append
 
     tracemalloc.start()
     start_mem = tracemalloc.get_traced_memory()[0]
@@ -108,7 +108,7 @@ def test_counter_performance():
     """Test Counter performance with many unique items"""
     print("\n=== Stress Test: Counter Performance ===")
 
-    from collections import Counter  # noqa: PLC0415
+    from collections import Counter
 
     tracemalloc.start()
     start_mem = tracemalloc.get_traced_memory()[0]
@@ -178,7 +178,7 @@ def test_edge_cases():
     """Test edge cases and boundary conditions"""
     print("\n=== Stress Test: Edge Cases ===")
 
-    from pcap_sentry_gui import _normalize_ioc_item  # noqa: PLC0415
+    from pcap_sentry_gui import _normalize_ioc_item
 
     # Empty strings
     _key, _val = _normalize_ioc_item("")
@@ -225,9 +225,9 @@ def test_concurrent_operations():
     """Test thread safety of cache operations"""
     print("\n=== Stress Test: Concurrent Operations ===")
 
-    import threading  # noqa: PLC0415
+    import threading
 
-    from threat_intelligence import ThreatIntelligence  # noqa: PLC0415
+    from threat_intelligence import ThreatIntelligence
 
     ti = ThreatIntelligence()
     errors = []
@@ -276,7 +276,7 @@ def test_memory_cleanup():
     """Test that memory is properly released"""
     print("\n=== Stress Test: Memory Cleanup ===")
 
-    import gc  # noqa: PLC0415
+    import gc
 
     # Force garbage collection
     gc.collect()

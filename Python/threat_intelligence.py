@@ -25,6 +25,7 @@ Integrates with free/public threat intelligence sources:
 - Public DNS blacklists
 """
 
+import contextlib
 import ipaddress
 import json
 import re
@@ -94,10 +95,8 @@ class ThreatIntelligence:
         """Close the underlying HTTP session and release connection pool resources."""
         with self._session_lock:
             if self._session is not None:
-                try:
+                with contextlib.suppress(Exception):
                     self._session.close()
-                except Exception:
-                    pass
                 self._session = None
 
     def is_available(self) -> bool:
@@ -335,7 +334,7 @@ class ThreatIntelligence:
     def _check_abuseipdb_ip(self, ip: str) -> dict | None:
         """
         Check IP against AbuseIPDB (free tier, limited requests).
-        Note: Requires API key – returns None when no key is configured.
+        Note: Requires API key - returns None when no key is configured.
         """
         # This endpoint requires an API key; skip for truly free access.
         return None
@@ -479,11 +478,8 @@ class ThreatIntelligence:
 
         workers = min(_MAX_WORKERS, total_items)
         with ThreadPoolExecutor(max_workers=workers) as pool:
-            futures = []
-            for ip in ip_list:
-                futures.append(pool.submit(_check_ip, ip))
-            for domain in domain_list:
-                futures.append(pool.submit(_check_domain, domain))
+            futures = [pool.submit(_check_ip, ip) for ip in ip_list]
+            futures.extend(pool.submit(_check_domain, domain) for domain in domain_list)
             # Wait for all to finish
             for _f in as_completed(futures):
                 pass  # exceptions already handled inside workers

@@ -36,7 +36,7 @@ def test_settings_operations():
     """Test settings save/load operations"""
     print("\n=== Testing Settings Operations ===")
 
-    from pcap_sentry_gui import _default_settings, load_settings  # noqa: PLC0415
+    from pcap_sentry_gui import _default_settings, load_settings
 
     # Test default settings
     defaults = _default_settings()
@@ -54,7 +54,7 @@ def test_ioc_normalization():
     """Test IOC normalization and parsing"""
     print("\n=== Testing IOC Normalization ===")
 
-    from pcap_sentry_gui import _normalize_ioc_item, _parse_ioc_text  # noqa: PLC0415
+    from pcap_sentry_gui import _normalize_ioc_item, _parse_ioc_text
 
     # Test IP normalization
     key, val = _normalize_ioc_item("192.168.1.1")
@@ -100,19 +100,19 @@ def test_path_security():
     print("\n=== Testing Path Security ===")
 
 
-    from pcap_sentry_gui import _get_app_data_dir  # noqa: PLC0415
+    from pcap_sentry_gui import _get_app_data_dir
 
     # Test app data directory
     app_data = _get_app_data_dir()
     assert app_data is not None, "App data dir should not be None"
-    assert os.path.isabs(app_data), "App data dir should be absolute path"  # noqa: PTH117
+    assert os.path.isabs(app_data), "App data dir should be absolute path"
     print(f"✅ App data dir valid: {app_data}")
 
     # Test path traversal protection (simulated)
     # The actual function _extract_first_pcap_from_zip has the protection
     # We'll test that realpath normalization works
     with tempfile.TemporaryDirectory() as tmpdir:
-        safe_path = os.path.realpath(os.path.join(tmpdir, "safe.txt"))  # noqa: PTH118
+        safe_path = os.path.realpath(os.path.join(tmpdir, "safe.txt"))
         assert safe_path.startswith(os.path.realpath(tmpdir)), "Safe path should be inside temp dir"
         print("✅ Path normalization works correctly")
 
@@ -121,7 +121,7 @@ def test_input_validation():
     """Test input validation functions"""
     print("\n=== Testing Input Validation ===")
 
-    import re  # noqa: PLC0415
+    import re
 
     # Test model name validation pattern (from the code)
     valid_names = [
@@ -155,7 +155,7 @@ def test_credential_security():
     """Test credential storage functions"""
     print("\n=== Testing Credential Security ===")
 
-    from pcap_sentry_gui import (  # noqa: PLC0415
+    from pcap_sentry_gui import (
         _delete_api_key,
         _delete_otx_api_key,
         _keyring_available,
@@ -212,7 +212,7 @@ def test_threat_intelligence():
     """Test threat intelligence module"""
     print("\n=== Testing Threat Intelligence ===")
 
-    from threat_intelligence import ThreatIntelligence  # noqa: PLC0415
+    from threat_intelligence import ThreatIntelligence
 
     ti = ThreatIntelligence()
 
@@ -242,11 +242,11 @@ def test_file_operations():
     """Test atomic file write operations"""
     print("\n=== Testing File Operations ===")
 
-    import tempfile  # noqa: PLC0415
+    import tempfile
 
     # Simulate the atomic write pattern used in save_settings
     with tempfile.TemporaryDirectory() as tmpdir:
-        target_file = os.path.join(tmpdir, "test_settings.json")  # noqa: PTH118
+        target_file = os.path.join(tmpdir, "test_settings.json")
 
         # Atomic write pattern
         fd, tmp = tempfile.mkstemp(dir=tmpdir, suffix=".tmp")
@@ -255,18 +255,18 @@ def test_file_operations():
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump(test_data, f, indent=2)
-            os.replace(tmp, target_file)  # noqa: PTH105
+            os.replace(tmp, target_file)
         except Exception:
-            import contextlib  # noqa: PLC0415
+            import contextlib
 
             with contextlib.suppress(Exception):
-                os.unlink(tmp)  # noqa: PTH108
+                os.unlink(tmp)
             raise
 
         # Verify file was written
-        assert os.path.exists(target_file), "Target file should exist"  # noqa: PTH110
+        assert os.path.exists(target_file), "Target file should exist"
 
-        with open(target_file, encoding="utf-8") as f:  # noqa: PTH123
+        with open(target_file, encoding="utf-8") as f:
             loaded = json.load(f)
 
         assert loaded == test_data, "Loaded data should match written data"
@@ -277,14 +277,14 @@ def test_version_computation():
     """Test version computation"""
     print("\n=== Testing Version Computation ===")
 
-    from pcap_sentry_gui import _compute_app_version  # noqa: PLC0415
+    from pcap_sentry_gui import _compute_app_version
 
     version = _compute_app_version()
     assert version is not None, "Version should not be None"
     assert len(version) > 0, "Version should not be empty"
 
     # Version should match pattern YYYY.MM.DD-N
-    import re  # noqa: PLC0415
+    import re
     pattern = r'\d{4}\.\d{2}\.\d{2}(-\d+)?'
     assert re.match(pattern, version), f"Version {version} should match pattern YYYY.MM.DD-N"
 
@@ -295,7 +295,7 @@ def test_reservoir_sampling():
     """Test reservoir sampling algorithm"""
     print("\n=== Testing Reservoir Sampling ===")
 
-    from pcap_sentry_gui import _maybe_reservoir_append  # noqa: PLC0415
+    from pcap_sentry_gui import _maybe_reservoir_append
 
     # Test with small sample
     reservoir = []
@@ -320,8 +320,9 @@ def test_url_scheme_validation():
     """Test URL scheme validation in _safe_urlopen wrapper"""
     print("\n=== Testing URL Scheme Validation ===")
 
-    from pcap_sentry_gui import _safe_urlopen  # noqa: PLC0415
-    import urllib.request  # noqa: PLC0415
+    import urllib.request
+
+    from pcap_sentry_gui import _safe_urlopen
 
     # Test 1: Allowed schemes (http:// localhost and https://)
     allowed_schemes = [
@@ -433,7 +434,7 @@ def test_model_name_validation():
     """Test model name validation function"""
     print("\n=== Testing Model Name Validation ===")
 
-    from pcap_sentry_gui import _is_valid_model_name  # noqa: PLC0415
+    from pcap_sentry_gui import _is_valid_model_name
 
     valid_names = [
         "llama3.2:3b",
@@ -469,8 +470,9 @@ def test_kb_lock_exists():
     """Test that the knowledge base lock exists for thread safety"""
     print("\n=== Testing KB Thread Safety ===")
 
-    from pcap_sentry_gui import _kb_lock  # noqa: PLC0415
-    import threading  # noqa: PLC0415
+    import threading
+
+    from pcap_sentry_gui import _kb_lock
 
     assert isinstance(_kb_lock, type(threading.Lock())), "_kb_lock should be a threading.Lock"
     print("✅ Knowledge base lock exists")
@@ -486,7 +488,7 @@ def test_constants_defined():
     """Test that shared constants are properly defined at module level"""
     print("\n=== Testing Module Constants ===")
 
-    from pcap_sentry_gui import (  # noqa: PLC0415
+    from pcap_sentry_gui import (
         COMMON_PORTS,
         PATTERN_EDUCATION,
         PORT_DESCRIPTIONS,

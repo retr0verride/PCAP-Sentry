@@ -6,9 +6,12 @@ with a DNA double helix in the center (cyan/magenta strands with connecting rung
 representing genetic-level packet inspection and deep analysis capabilities.
 """
 
-from PIL import Image, ImageDraw, ImageFilter
-import math, struct, io, os
+import io
+import math
+import os
+import struct
 
+from PIL import Image, ImageDraw, ImageFilter
 
 # ── colour palette (matched to the original 48px icon) ──────────
 DARK_BG      = (10, 12, 17, 255)        # dark navy background
@@ -74,60 +77,60 @@ def generate_logo(size=512):
     helix_bottom = cy + helix_height * 0.55  # centered vertically
     turns = 2.0                              # complete cycles for clean end
     segments = 60                            # smoothness of curve
-    
+
     def draw_helix(d, s):
         strand_width = max(2, int(size * 0.008 * s))
         connector_width = max(1, int(size * 0.004 * s))
-        
+
         # Calculate helix points for both strands
         strand1_points = []
         strand2_points = []
         connector_pairs = []
-        
+
         for i in range(segments + 1):
             t = i / segments
             y = helix_top + t * (helix_bottom - helix_top)
             angle = t * turns * 2 * math.pi
-            
+
             # Strand 1 (cyan)
             x1 = cx + helix_width * math.sin(angle)
             strand1_points.append((x1 * s, y * s))
-            
+
             # Strand 2 (magenta) - 180 degrees out of phase
             x2 = cx + helix_width * math.sin(angle + math.pi)
             strand2_points.append((x2 * s, y * s))
-            
+
             # Draw connectors at crossover points (every ~15 segments)
             if i % 8 == 0 and i > 0:
                 connector_pairs.append(((x1 * s, y * s), (x2 * s, y * s)))
-        
+
         # Draw connecting bars (rungs of the DNA ladder)
         for p1, p2 in connector_pairs:
             d.line([p1, p2], fill=(*CONN_MAGENTA[:3], 120), width=connector_width)
-        
+
         # Draw the two strands with gradient effect
         # Strand 1 (cyan with subtle glow)
         d.line(strand1_points, fill=HELIX_BRIGHT, width=strand_width, joint="curve")
-        
+
         # Strand 2 (magenta with subtle glow)
         d.line(strand2_points, fill=HELIX_ACCENT, width=strand_width, joint="curve")
-        
+
         # Add small spheres at key points for depth
         sphere_r = max(2, int(size * 0.01 * s))
         for i in range(0, len(strand1_points), 10):
             x1, y1 = strand1_points[i]
-            d.ellipse([x1 - sphere_r, y1 - sphere_r, 
-                      x1 + sphere_r, y1 + sphere_r], 
+            d.ellipse([x1 - sphere_r, y1 - sphere_r,
+                      x1 + sphere_r, y1 + sphere_r],
                      fill=HELIX_BRIGHT)
-            
+
             x2, y2 = strand2_points[i]
-            d.ellipse([x2 - sphere_r, y2 - sphere_r, 
-                      x2 + sphere_r, y2 + sphere_r], 
+            d.ellipse([x2 - sphere_r, y2 - sphere_r,
+                      x2 + sphere_r, y2 + sphere_r],
                      fill=HELIX_ACCENT)
-    
+
     helix_layer = _draw_aa(size, draw_helix)
     img.alpha_composite(helix_layer)
-    
+
     # Add soft glow to helix
     helix_glow = _draw_aa(size, draw_helix, blur=size // 100)
     img.alpha_composite(helix_glow)
@@ -147,7 +150,7 @@ def build_ico(source_img, ico_path, sizes=None):
         frame = source_img.resize((s, s), Image.LANCZOS)
         frames.append((s, frame))
 
-    # Build ICO binary – all frames stored as PNG for best quality
+    # Build ICO binary - all frames stored as PNG for best quality
     image_data_list = []
     for _, frame in frames:
         buf = io.BytesIO()

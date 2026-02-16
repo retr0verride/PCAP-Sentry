@@ -603,7 +603,7 @@ _KEYRING_USERNAME_OTX = "otx_api_key"
 def _keyring_available():
     """Check if the keyring module is available and functional."""
     try:
-        import keyring  # noqa: F401
+        import keyring
         return True
     except Exception:
         return False
@@ -7792,11 +7792,11 @@ class PCAPSentryApp:
             name_lbl = ttk.Label(row, text=model_name, font=("Segoe UI", 11, "bold"))
             name_lbl.pack(side=tk.LEFT)
             # Clicking the name also selects the radio button
-            name_lbl.bind("<Button-1>", lambda e, v=model_name: selected_var.set(v))
+            name_lbl.bind("<Button-1>", lambda _, v=model_name: selected_var.set(v))
 
             desc_lbl = ttk.Label(row, text=f"  {desc}", style="Hint.TLabel")
             desc_lbl.pack(side=tk.LEFT)
-            desc_lbl.bind("<Button-1>", lambda e, v=model_name: selected_var.set(v))
+            desc_lbl.bind("<Button-1>", lambda _, v=model_name: selected_var.set(v))
 
         # Pre-select the first model
         selected_var.set(self._OLLAMA_SUGGESTED_MODELS[0][0])
@@ -8251,16 +8251,16 @@ class PCAPSentryApp:
                         continue
                     if line is None:
                         break
-                    parts = line.split('\r')
-                    for part in parts:
-                        part = part.strip()
+                    parts = line.split("\r")
+                    for raw_part in parts:
+                        part = raw_part.strip()
                         if not part:
                             continue
                         pct = self._extract_percent(part)
                         if pct is not None:
                             progress_cb(pct, label=f"Installing {name}")
                         else:
-                            progress_cb(None, label=f"Installing {name} — {part}")
+                            progress_cb(None, label=f"Installing {name} - {part}")
                 proc.wait()
                 if proc.returncode == 0:
                     # Kill Ollama desktop app if it auto-launched
@@ -9318,7 +9318,7 @@ class PCAPSentryApp:
             )
         else:
             lines.append(
-                "  This traffic looks like normal, everyday network activity —\n"
+                "  This traffic looks like normal, everyday network activity -\n"
                 "  web browsing, DNS lookups, email, etc. No red flags were\n"
                 "  detected by any of the checks.\n"
                 "\n"
@@ -9334,7 +9334,7 @@ class PCAPSentryApp:
         lines.append("-" * 60)
         lines.append("")
         lines.append(
-            "  The risk score (0–100) is a weighted combination of several\n"
+            "  The risk score (0-100) is a weighted combination of several\n"
             "  independent checks. Each check contributes a portion:\n"
             "\n"
             "    Machine Learning Model   ~50% of the score\n"
@@ -9342,7 +9342,7 @@ class PCAPSentryApp:
             "    Threat Intel (IoC) Match ~20% of the score\n"
             "\n"
             "  No single check decides the verdict alone. This layered\n"
-            "  approach is called 'defense in depth' — even if one check\n"
+            "  approach is called 'defense in depth' - even if one check\n"
             "  misses something, another may catch it."
         )
         lines.append("")
@@ -9473,7 +9473,7 @@ class PCAPSentryApp:
         elif avg_size and avg_size > 1200:
             lines.append(
                 "    !! Unusually large packets detected.\n"
-                "    Large packets can mean data exfiltration — an attacker\n"
+                "    Large packets can mean data exfiltration - an attacker\n"
                 "    copying files out of the network.  Check which hosts\n"
                 "    are sending the big packets and where they're going.\n"
                 "    In Wireshark, try:\n"
@@ -9483,7 +9483,7 @@ class PCAPSentryApp:
             lines.append(
                 "    Sizes look normal for typical web/network traffic.\n"
                 "    Normal browsing mixes small packets (TCP ACKs, ~54 B)\n"
-                "    with larger data packets (500–1,500 B)."
+                "    with larger data packets (500-1,500 B)."
             )
         lines.append("")
 
@@ -10661,7 +10661,7 @@ def _acquire_single_instance():
     ERROR_ALREADY_EXISTS = 183
 
     # Import wintypes submodule for type annotations
-    import ctypes.wintypes  # noqa: PLC0415
+    import ctypes.wintypes
 
     try:
         mutex = ctypes.windll.kernel32.CreateMutexW(None, False, MUTEX_NAME)

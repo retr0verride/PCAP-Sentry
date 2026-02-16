@@ -27,7 +27,6 @@ import json
 import os
 import shutil
 import ssl
-import subprocess
 import sys
 import threading
 import urllib.request
