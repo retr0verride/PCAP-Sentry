@@ -350,7 +350,7 @@ def _is_valid_model_name(name: str) -> bool:
     return bool(name and _MODEL_NAME_RE.fullmatch(name))
 
 
-_EMBEDDED_VERSION = "2026.02.16-16"  # Stamped by update_version.ps1 at build time
+_EMBEDDED_VERSION = "2026.02.16-17"  # Stamped by update_version.ps1 at build time
 
 
 def _compute_app_version():
@@ -6880,16 +6880,28 @@ class PCAPSentryApp:
                     self.bg_canvas.create_oval(x, y, x + 2, y + 2, fill=dot_color, outline=dot_color)
 
     def _setup_drag_drop(self):
+        print("_setup_drag_drop called")
         if not _check_tkinterdnd2():
+            print("tkinterdnd2 NOT available - drag/drop disabled")
+            messagebox.showwarning(
+                "Drag & Drop", 
+                "Drag and drop requires tkinterdnd2 module.\n\n"
+                "Install it with: pip install tkinterdnd2"
+            )
             return
 
+        print("tkinterdnd2 IS available")
         DND_FILES, _TkinterDnD = _get_tkinterdnd2()
+        print(f"DND_FILES = {DND_FILES}")
 
-        def bind_drop(widget, setter):
+        def bind_drop(widget, setter, widget_name="unknown"):
             if widget is None:
+                print(f"  Widget {widget_name} is None - skipping")
                 return
             try:
+                print(f"  Registering {widget_name} for drops...")
                 widget.drop_target_register(DND_FILES)
+                print(f"  ✓ {widget_name} registered")
 
                 def on_drop(event):
                     try:
@@ -6908,20 +6920,23 @@ class PCAPSentryApp:
                         return "none"
 
                 widget.dnd_bind("<<Drop>>", on_drop)
+                print(f"  ✓ {widget_name} drop handler bound")
             except (tk.TclError, AttributeError) as e:
                 import traceback
 
-                print(f"Drag/drop setup failed for widget: {e}")
+                print(f"Drag/drop setup FAILED for {widget_name}: {e}")
                 traceback.print_exc()
                 return
 
-        bind_drop(self.safe_entry, self.safe_path_var.set)
-        bind_drop(self.mal_entry, self.mal_path_var.set)
-        bind_drop(self.target_entry, self.target_path_var.set)
+        bind_drop(self.safe_entry, self.safe_path_var.set, "safe_entry")
+        bind_drop(self.mal_entry, self.mal_path_var.set, "mal_entry")
+        bind_drop(self.target_entry, self.target_path_var.set, "target_entry")
         if self.target_drop_area is not None:
-            bind_drop(self.target_drop_area, self.target_path_var.set)
-        bind_drop(self.analyze_tab, self.target_path_var.set)
-        bind_drop(self.result_text, self.target_path_var.set)
+            bind_drop(self.target_drop_area, self.target_path_var.set, "target_drop_area")
+        bind_drop(self.analyze_tab, self.target_path_var.set, "analyze_tab")
+        bind_drop(self.result_text, self.target_path_var.set, "result_text")
+        print("_setup_drag_drop completed")
+
 
     _ALLOWED_DROP_EXTENSIONS = {
         ".pcap",
