@@ -195,7 +195,7 @@ DEFAULT_MAX_ROWS = 200000
 IOC_SET_LIMIT = 50000
 
 
-_EMBEDDED_VERSION = "2026.02.15-23"  # Stamped by update_version.ps1 at build time
+_EMBEDDED_VERSION = "2026.02.15-24"  # Stamped by update_version.ps1 at build time
 
 
 def _compute_app_version():
@@ -5756,9 +5756,12 @@ class PCAPSentryApp:
         self.progress.stop()
         self.progress.configure(mode="determinate", maximum=100)
         percent_value = min(max(percent, 0.0), 100.0)
-        self._progress_target = percent_value
-        if not self._progress_animating:
-            self._animate_progress()
+        
+        # Direct update for smooth, immediate progress tracking (no animation lag)
+        self._progress_current = percent_value
+        self.progress["value"] = percent_value
+        self.progress_percent_var.set(f"{percent_value:.0f}%")
+        
         if label:
             status_text = f"{label} {percent:.0f}%"
             if processed is not None and total:

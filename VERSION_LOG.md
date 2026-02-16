@@ -33,6 +33,9 @@
 
 
 
+
+## 2026.02.15-24 - 2026-02-15
+- Fix: Progress bar stuttering. Removed easing animation in favor of direct updates for precise, stutter-free progress tracking during analysis.
 ## 2026.02.15-23 - 2026-02-15
 - Enhancement: Smoother progress updates. Reduced thresholds (0.5, 100ms vs 150ms), faster animation (40 easing, 20ms ticks), longer progress bar (300px), smoother spinner (8ms).
 ## 2026.02.15-22 - 2026-02-15
