@@ -762,13 +762,13 @@ def _default_settings():
         "max_rows": DEFAULT_MAX_ROWS,
         "parse_http": True,
         "use_high_memory": False,
-        "use_local_model": True,
+        "use_local_model": False,
         "use_multithreading": True,
         "turbo_parse": True,
         "backup_dir": os.path.dirname(KNOWLEDGE_BASE_FILE),
-        "llm_provider": "ollama",
-        "llm_model": "llama3",
-        "llm_endpoint": "http://localhost:11434",
+        "llm_provider": "disabled",
+        "llm_model": "",
+        "llm_endpoint": "",
         "llm_auto_detect": True,
         "theme": "system",
         "offline_mode": False,
@@ -3246,8 +3246,8 @@ class PCAPSentryApp:
         self.use_multithreading_var = tk.BooleanVar(value=self.settings.get("use_multithreading", True))
         self.turbo_parse_var = tk.BooleanVar(value=self.settings.get("turbo_parse", True))
         self.llm_provider_var = tk.StringVar(value=self.settings.get("llm_provider", "disabled"))
-        self.llm_model_var = tk.StringVar(value=self.settings.get("llm_model", "llama3"))
-        self.llm_endpoint_var = tk.StringVar(value=self.settings.get("llm_endpoint", "http://localhost:11434"))
+        self.llm_model_var = tk.StringVar(value=self.settings.get("llm_model", ""))
+        self.llm_endpoint_var = tk.StringVar(value=self.settings.get("llm_endpoint", ""))
         self.llm_api_key_var = tk.StringVar(value=self.settings.get("llm_api_key", ""))
         self.otx_api_key_var = tk.StringVar(value=self.settings.get("otx_api_key", ""))
         self.llm_test_status_var = tk.StringVar(value="Not tested")
@@ -3430,8 +3430,8 @@ class PCAPSentryApp:
                 "offline_mode": bool(self.offline_mode_var.get()),
                 "backup_dir": self.backup_dir_var.get().strip(),
                 "llm_provider": self.llm_provider_var.get().strip().lower() or "disabled",
-                "llm_model": self.llm_model_var.get().strip() or "llama3",
-                "llm_endpoint": self.llm_endpoint_var.get().strip() or "http://localhost:11434",
+                "llm_model": self.llm_model_var.get().strip(),
+                "llm_endpoint": self.llm_endpoint_var.get().strip(),
                 "llm_api_key": self.llm_api_key_var.get().strip(),
                 "otx_api_key": self.otx_api_key_var.get().strip(),
                 "llm_auto_detect": self.settings.get("llm_auto_detect", True),
@@ -4248,8 +4248,8 @@ class PCAPSentryApp:
             "offline_mode": bool(self.offline_mode_var.get()),
             "backup_dir": self.backup_dir_var.get().strip(),
             "llm_provider": self.llm_provider_var.get().strip().lower() or "disabled",
-            "llm_model": self.llm_model_var.get().strip() or "llama3",
-            "llm_endpoint": self.llm_endpoint_var.get().strip() or "http://localhost:11434",
+            "llm_model": self.llm_model_var.get().strip(),
+            "llm_endpoint": self.llm_endpoint_var.get().strip(),
             "llm_api_key": self.llm_api_key_var.get().strip(),
             "otx_api_key": self.otx_api_key_var.get().strip(),
             "llm_auto_detect": self.settings.get("llm_auto_detect", True),
@@ -4286,8 +4286,8 @@ class PCAPSentryApp:
         self.offline_mode_var.set(defaults.get("offline_mode", False))
         self.backup_dir_var.set(defaults["backup_dir"])
         self.llm_provider_var.set(defaults.get("llm_provider", "disabled"))
-        self.llm_model_var.set(defaults.get("llm_model", "llama3"))
-        self.llm_endpoint_var.set(defaults.get("llm_endpoint", "http://localhost:11434"))
+        self.llm_model_var.set(defaults.get("llm_model", ""))
+        self.llm_endpoint_var.set(defaults.get("llm_endpoint", ""))
         self.llm_api_key_var.set(defaults.get("llm_api_key", ""))
         self.otx_api_key_var.set(defaults.get("otx_api_key", ""))
         self.theme_var.set(defaults["theme"])
