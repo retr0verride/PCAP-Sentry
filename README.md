@@ -49,7 +49,7 @@
 winget install industrial-dave.PCAP-Sentry
 ```
 
-**Note:** Pending submission to [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs). Once approved, this will be the fastest way to install.
+**Note:** Pending review ([PR #340251](https://github.com/microsoft/winget-pkgs/pull/340251)). Once approved, this will be the fastest way to install.
 
 ### Option 2: Installer (Recommended)
 
