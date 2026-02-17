@@ -74,8 +74,6 @@
 
 
 ## 2026.02.17-10 - 2026-02-17
-- LLM UI improvements: instant cancel, best model selection, better field state management, fixed defaults
-## 2026.02.17-10 - 2026-02-17
 - **UX:** Move API key link below the API key field for better visibility
 - **UX:** Make cancel button instant (1ms polling instead of 30ms when cancelling)
 - **UX:** Always default to best model for selected LLM provider (deepseek-r1 for Ollama, gpt-4o for OpenAI, claude-3.5-sonnet for Anthropic)
