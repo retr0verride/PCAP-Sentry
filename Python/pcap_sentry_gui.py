@@ -9759,7 +9759,8 @@ class PCAPSentryApp:
             _show_api_key_row(is_cloud)
             _update_api_key_hint(name)
             _set_llm_fields_state()
-            # Refresh model list when changing servers and flag to select best model
+            # Clear current model selection and refresh model list when changing servers
+            self.llm_model_var.set("")
             if prov != "disabled":
                 self._llm_server_just_changed = True
                 self._refresh_llm_models(llm_model_combo)
