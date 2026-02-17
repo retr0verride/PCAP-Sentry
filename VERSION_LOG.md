@@ -71,6 +71,9 @@
 
 
 
+
+## 2026.02.17-9 - 2026-02-17
+- Update VERSION_LOG with comprehensive change details for v2026.2.17-8
 ## 2026.02.17-8 - 2026-02-17
 - **Feature:** Mark Unsure - Add uncertain classifications to Knowledge Base for later review
 - **Security:** API key verification with provider validation (OpenAI, Google, Anthropic)
