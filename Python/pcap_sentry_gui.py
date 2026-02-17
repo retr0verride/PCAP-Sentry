@@ -9970,16 +9970,18 @@ class PCAPSentryApp:
                 api_key_frame.grid(row=3, column=1, sticky="w", pady=6)
                 api_key_hint.grid(row=4, column=1, sticky="w", pady=(0, 4))
                 self._llm_verify_label.grid(row=5, column=1, sticky="w", pady=(0, 4))
-                # Enable API key entry and verify button for cloud providers
+                # Enable API key controls for cloud providers
                 api_key_entry.configure(state="normal")
+                api_key_show_btn.configure(state="normal")
                 verify_api_btn.configure(state="normal")
             else:
                 api_key_label.grid_remove()
                 api_key_frame.grid_remove()
                 api_key_hint.grid_remove()
                 self._llm_verify_label.grid_remove()
-                # Disable API key entry and verify button for local providers
+                # Disable API key controls for local providers
                 api_key_entry.configure(state="disabled")
+                api_key_show_btn.configure(state="disabled")
                 verify_api_btn.configure(state="disabled")
 
         def _on_server_selected(*_):
@@ -10100,7 +10102,9 @@ class PCAPSentryApp:
 
         llm_model_combo.bind("<<ComboboxSelected>>", _set_llm_fields_state)
         llm_model_combo.bind("<KeyRelease>", _set_llm_fields_state)
-        _set_llm_fields_state()
+        
+        # Set initial field states (skip refresh since we already refreshed models above)
+        _set_llm_fields_state(skip_refresh=True)
 
         # Button row
         frame.grid_columnconfigure(1, weight=1)
