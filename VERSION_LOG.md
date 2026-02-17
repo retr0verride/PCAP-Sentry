@@ -75,8 +75,11 @@
 
 
 
-## 2026.02.17-12 - 2026-02-17
-- Minor tweaks and improvements
+## 2026.02.17-13 - 2026-02-17
+- **Fix:** Invalid model persistence when no models available (automatically clear invalid models like llama3 when Gemini selected)
+- **Fix:** Startup model validation ensures saved model matches provider (auto-fixes mismatches on program startup)
+- **Fix:** Enhanced model validation logic to handle empty model lists from cloud providers without API keys
+
 ## 2026.02.17-12 - 2026-02-17
 - **UX:** Simplified installer information screen (43 lines instead of 209-line README)
 - **UX:** Created focused INSTALL_INFO.txt with only essential installation information
