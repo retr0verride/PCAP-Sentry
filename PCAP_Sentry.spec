@@ -83,6 +83,17 @@ tmp_ret = _collect_package('joblib')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = _collect_package('tkinterdnd2')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+
+# Explicitly include tkinterdnd2 package directory and all DLLs
+try:
+    import tkinterdnd2
+    tkdnd_path = os.path.dirname(tkinterdnd2.__file__)
+    # Include the entire tkdnd directory with all DLLs
+    datas.append((tkdnd_path, 'tkinterdnd2'))
+    print(f"Added tkinterdnd2 package from: {tkdnd_path}")
+except Exception as e:
+    print(f"WARNING: Could not add tkinterdnd2 package: {e}")
+
 _require_package('requests')
 tmp_ret = _collect_package('requests')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]

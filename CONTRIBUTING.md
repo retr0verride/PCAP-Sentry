@@ -22,7 +22,8 @@ Use the [Bug Report template](https://github.com/industrial-dave/PCAP-Sentry/iss
 Feature suggestions are welcome! Use the [Feature Request template](https://github.com/industrial-dave/PCAP-Sentry/issues/new?template=feature_request.yml).
 
 Consider:
-- How does it fit with PCAP Sentry's focus on malware detection and network analysis?
+- How does it fit with PCAP Sentry's focus on **beginner education** in malware network traffic identification?
+- Would this help users learn to recognize malicious network patterns?
 - Would this benefit multiple users?
 - Is it feasible given the project's architecture?
 

@@ -4,7 +4,7 @@
 
 # PCAP Sentry
 
-### Malware Analysis and Education Console for Network Packet Captures
+### Learn Malware Network Traffic Analysis — Beginner-Friendly Educational Tool
 
 ![Version](https://img.shields.io/badge/Version-Date_Based_(YYYY.MM.DD)-58a6ff?style=for-the-badge&labelColor=0d1117)
 ![Platform](https://img.shields.io/badge/Platform-Windows-58a6ff?style=for-the-badge&logo=windows&logoColor=white&labelColor=0d1117)
@@ -16,26 +16,30 @@
 
 ---
 
-PCAP Sentry parses network captures (`.pcap` / `.pcapng`), summarizes traffic statistics, and provides heuristic signals to help triage suspicious network activity.
+**PCAP Sentry is a beginner-friendly educational tool for learning to identify malware network traffic patterns.** It analyzes network packet captures (`.pcap` / `.pcapng`) and teaches you how to recognize suspicious activity with clear explanations and hands-on practice.
 
 ## Features
 
-| | Feature |
-|---|---|
-| 🔍 | **Analyzes PCAP/PCAPNG files** for signs of malicious activity |
-| 📊 | **Scores network traffic** with a risk rating from 0–100 |
-| 🔑 | **Extracts credentials** from cleartext protocols (FTP, HTTP, Telnet, etc.) |
-| 🖧 | **Discovers hosts** including IP addresses, MAC addresses, and hostnames |
-| 🛡️ | **Detects C2 and exfiltration** patterns automatically |
-| 🔬 | **Behavioral anomaly detection** — beaconing, DNS tunneling, port scanning, SYN floods, data exfiltration |
-| 🦈 | **Generates Wireshark filters** for follow-up investigation |
-| 🌐 | **Concurrent threat intelligence** — queries OTX, URLhaus & AbuseIPDB in parallel with connection pooling |
-| 🧠 | **Learns from your data** via a trainable knowledge base and optional ML model (25-feature vector) |
-| 💬 | **Chat interface** powered by a local LLM (Ollama, offline) or OpenAI-compatible endpoint (local or cloud) |
-| ♻️ | **LLM status is now saved and restored automatically** |
-| 🔒 | **Security hardened** with SHA-256 download verification, HMAC model integrity, OS credential storage, path-traversal guards, input sanitization, response-size limits, and API-key-over-HTTP protection |
-| ⚡ | **Optimized analysis engine** with cached vector computations, mask-based filtering, and centralized LLM retry logic |
-| 🐍 | **Python 3.14 compatible** with onedir build architecture for reliable DLL loading and dependency management |
+### 🎓 Learn Malware Network Traffic Analysis
+
+- **Beginner-focused explanations** — Understand what makes network traffic suspicious
+- **Risk scoring (0–100)** — Learn which patterns indicate malicious behavior
+- **Behavioral detection** — Identify beaconing, DNS tunneling, port scanning, data exfiltration
+- **Real-world threat intel** — See how malicious IPs, URLs, and domains are flagged by security researchers
+- **AI-powered guidance** — Ask questions and get plain-language explanations via local LLM chat
+
+### 🔍 Hands-On Analysis Tools
+
+- **Credential extraction** — Discover how attackers steal passwords from unencrypted protocols
+- **C2 pattern detection** — Learn to spot command-and-control communication
+- **Wireshark integration** — Generate filters for deeper packet investigation
+- **Trainable knowledge base** — Build your own malware signature library as you learn
+
+### 🛡️ Safe & Offline-Capable
+
+- **Works offline** — Practice with local models and threat databases
+- **Privacy-first** — Optional cloud features, nothing shared without permission
+- **Secure by design** — Built with best practices for handling untrusted network data
 
 ## Quick Start
 
