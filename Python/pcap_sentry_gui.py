@@ -784,7 +784,7 @@ def _format_bytes(value):
 
 
 def _default_kb():
-    return {"safe": [], "malicious": [], "ioc": {"ips": [], "domains": [], "hashes": []}}
+    return {"safe": [], "malicious": [], "unsure": [], "ioc": {"ips": [], "domains": [], "hashes": []}}
 
 
 def load_knowledge_base():
@@ -796,6 +796,7 @@ def load_knowledge_base():
                 if isinstance(data, dict):
                     data.setdefault("safe", [])
                     data.setdefault("malicious", [])
+                    data.setdefault("unsure", [])
                     ioc = data.setdefault("ioc", {})
                     ioc.setdefault("ips", [])
                     ioc.setdefault("domains", [])
@@ -3151,6 +3152,7 @@ class PCAPSentryApp:
         self.sample_note_var = tk.StringVar(value="")
         self.ioc_path_var = tk.StringVar()
         self.ioc_summary_var = tk.StringVar(value="")
+        self.unsure_count_var = tk.StringVar(value="0 items")
         self.backup_dir_var = tk.StringVar(value=self.settings.get("backup_dir", os.path.dirname(KNOWLEDGE_BASE_FILE)))
         self.safe_path_var = None
         self.mal_path_var = None
@@ -3175,6 +3177,7 @@ class PCAPSentryApp:
         self.overlay_percent_label = None
         self.bg_canvas = None
         self.label_safe_button = None
+        self.label_unsure_button = None
         self.label_mal_button = None
         self.llm_suggestion_frame = None
         self.llm_suggestion_label = None
@@ -5139,10 +5142,12 @@ class PCAPSentryApp:
         label_frame.pack(fill=tk.X, padx=16, pady=(8, 0))
         self._help_icon(
             label_frame,
-            "After analyzing a PCAP, you can label it as 'Safe' or 'Malicious' to "
+            "After analyzing a PCAP, you can label it as 'Safe', 'Malicious', or 'Unsure' to "
             "add it to the knowledge base. This is how the app learns from YOUR judgment. "
             "Over time, this improves detection accuracy for traffic similar to what you've labeled.\n\n"
-            "Tip: Only label captures you're confident about. Mislabeling teaches the app wrong patterns.",
+            "Tip: Only label captures you're confident about as Safe or Malicious. "
+            "Use 'Unsure' for captures you want to review later. "
+            "Mislabeling teaches the app wrong patterns.",
         )
         self.label_safe_button = ttk.Button(
             label_frame,
@@ -5152,6 +5157,14 @@ class PCAPSentryApp:
             state=tk.DISABLED,
         )
         self.label_safe_button.pack(side=tk.LEFT, padx=(0, 8))
+        self.label_unsure_button = ttk.Button(
+            label_frame,
+            text="Mark Unsure",
+            style="Secondary.TButton",
+            command=lambda: self._label_current("unsure"),
+            state=tk.DISABLED,
+        )
+        self.label_unsure_button.pack(side=tk.LEFT, padx=(0, 8))
         self.label_mal_button = ttk.Button(
             label_frame,
             text="Mark as Malicious",
@@ -5886,6 +5899,19 @@ class PCAPSentryApp:
         ttk.Button(header, text="Backup", style="Secondary.TButton", command=self._backup_kb).pack(
             side=tk.RIGHT, padx=6
         )
+
+        # Unsure items review section
+        unsure_frame = ttk.LabelFrame(container, text="  Unsure Items  ", padding=12)
+        unsure_frame.pack(fill=tk.X, pady=8)
+        self._help_icon(
+            unsure_frame,
+            "Items marked as 'Unsure' are stored here for review. "
+            "Review them when you have more information or context to make a confident decision.\n\n"
+            "You can reclassify unsure items as Safe or Malicious, or keep them unsure for later.",
+        )
+        ttk.Button(unsure_frame, text="Review Unsure Items", command=self._review_unsure_items).pack(side=tk.LEFT)
+        self.unsure_count_var = tk.StringVar(value="0 items")
+        ttk.Label(unsure_frame, textvariable=self.unsure_count_var).pack(side=tk.LEFT, padx=(12, 0))
 
         ioc_frame = ttk.LabelFrame(container, text="  IoC Feed  ", padding=12)
         ioc_frame.pack(fill=tk.X, pady=8)
@@ -7380,6 +7406,119 @@ class PCAPSentryApp:
         except Exception as e:
             _write_error_log("Error clearing IoCs", e, sys.exc_info()[2])
             messagebox.showerror("Error", f"Failed to clear IoCs: {e!s}")
+
+    def _review_unsure_items(self):
+        """Open a window to review and reclassify unsure items."""
+        kb = load_knowledge_base()
+        unsure_items = kb.get("unsure", [])
+        
+        if not unsure_items:
+            messagebox.showinfo("Unsure Items", "No unsure items to review.")
+            return
+        
+        # Create review window
+        review_window = tk.Toplevel(self.root)
+        review_window.title("Review Unsure Items")
+        review_window.geometry("900x600")
+        review_window.transient(self.root)
+        
+        # Header
+        header = ttk.Frame(review_window, padding=10)
+        header.pack(fill=tk.X)
+        ttk.Label(header, text=f"Reviewing {len(unsure_items)} unsure item(s)", 
+                 font=("Segoe UI", 12, "bold")).pack(side=tk.LEFT)
+        
+        # Main content with scrollbar
+        main_frame = ttk.Frame(review_window)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        canvas = tk.Canvas(main_frame, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+        
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Track items to remove/reclassify
+        items_to_process = []
+        
+        def reclassify(index, new_label):
+            """Reclassify an unsure item to safe or malicious."""
+            item = unsure_items[index]
+            items_to_process.append(("reclassify", index, new_label, item))
+            
+        def delete_item(index):
+            """Remove an unsure item without reclassifying."""
+            items_to_process.append(("delete", index, None, None))
+        
+        # Create review cards for each unsure item
+        for idx, item in enumerate(unsure_items):
+            card = ttk.LabelFrame(scrollable_frame, text=f"  Item {idx + 1}  ", padding=12)
+            card.pack(fill=tk.X, pady=8, padx=4)
+            
+            # Display summary info
+            summary = item.get("summary", "No summary available")
+            info_text = tk.Text(card, height=6, wrap=tk.WORD, font=("Segoe UI", 10))
+            info_text.insert("1.0", summary)
+            info_text.configure(state=tk.DISABLED)
+            info_text.pack(fill=tk.X, pady=(0, 8))
+            
+            # Buttons for reclassification
+            button_frame = ttk.Frame(card)
+            button_frame.pack(fill=tk.X)
+            
+            ttk.Button(button_frame, text="Mark as Safe", style="Success.TButton",
+                      command=lambda i=idx: reclassify(i, "safe")).pack(side=tk.LEFT, padx=(0, 4))
+            ttk.Button(button_frame, text="Mark as Malicious", style="Warning.TButton",
+                      command=lambda i=idx: reclassify(i, "malicious")).pack(side=tk.LEFT, padx=(0, 4))
+            ttk.Button(button_frame, text="Delete", style="Secondary.TButton",
+                      command=lambda i=idx: delete_item(i)).pack(side=tk.LEFT, padx=(0, 4))
+        
+        # Bottom buttons
+        bottom_frame = ttk.Frame(review_window, padding=10)
+        bottom_frame.pack(fill=tk.X, side=tk.BOTTOM)
+        
+        def apply_changes():
+            """Apply all reclassifications and close the window."""
+            if not items_to_process:
+                review_window.destroy()
+                return
+            
+            try:
+                # Reload KB to ensure we have latest data
+                kb = load_knowledge_base()
+                unsure = kb.get("unsure", [])
+                
+                # Process items in reverse order to maintain indices
+                for action, index, new_label, item in sorted(items_to_process, key=lambda x: x[1], reverse=True):
+                    if index < len(unsure):
+                        if action == "reclassify":
+                            # Remove from unsure and add to new category
+                            removed_item = unsure.pop(index)
+                            kb[new_label].append(removed_item)
+                        elif action == "delete":
+                            # Just remove from unsure
+                            unsure.pop(index)
+                
+                save_knowledge_base(kb)
+                self._refresh_kb()
+                messagebox.showinfo("Review Complete", f"Processed {len(items_to_process)} item(s).")
+                review_window.destroy()
+            except Exception as e:
+                _write_error_log("Error applying unsure item changes", e, sys.exc_info()[2])
+                messagebox.showerror("Error", f"Failed to apply changes: {e!s}")
+        
+        ttk.Button(bottom_frame, text="Apply Changes", command=apply_changes).pack(side=tk.RIGHT, padx=(4, 0))
+        ttk.Button(bottom_frame, text="Cancel", style="Secondary.TButton",
+                  command=review_window.destroy).pack(side=tk.RIGHT)
 
     def _llm_is_enabled(self):
         provider = self.llm_provider_var.get().strip().lower()
@@ -11495,6 +11634,7 @@ class PCAPSentryApp:
             if result.get("empty"):
                 messagebox.showwarning("No data", "No IP packets found in this capture.")
                 self.label_safe_button.configure(state=tk.DISABLED)
+                self.label_unsure_button.configure(state=tk.DISABLED)
                 self.label_mal_button.configure(state=tk.DISABLED)
                 return
 
@@ -11570,6 +11710,7 @@ class PCAPSentryApp:
 
             self.charts_button.configure(state=tk.NORMAL)
             self.label_safe_button.configure(state=tk.NORMAL)
+            self.label_unsure_button.configure(state=tk.NORMAL)
             self.label_mal_button.configure(state=tk.NORMAL)
 
             self.extracted_data = extracted_data
@@ -11617,7 +11758,11 @@ class PCAPSentryApp:
     def _refresh_kb(self):
         kb = load_knowledge_base()
         self.kb_cache = kb  # Update cache with fresh KB
-        self.kb_summary_var.set(f"Safe entries: {len(kb['safe'])} | Malware entries: {len(kb['malicious'])}")
+        unsure_count = len(kb.get('unsure', []))
+        self.kb_summary_var.set(
+            f"Safe entries: {len(kb['safe'])} | Unsure entries: {unsure_count} | Malware entries: {len(kb['malicious'])}"
+        )
+        self.unsure_count_var.set(f"{unsure_count} item{'s' if unsure_count != 1 else ''}")
         ioc = kb.get("ioc", {})
         ioc_counts = f"IoCs: {len(ioc.get('domains', []))} domains, {len(ioc.get('ips', []))} ips"
         self.ioc_summary_var.set(ioc_counts)
