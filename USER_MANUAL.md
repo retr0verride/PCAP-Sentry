@@ -35,8 +35,9 @@
 15. [Troubleshooting](#15-troubleshooting)
    - [LLM Server Management (from Preferences)](#llm-server-management-from-preferences)
 16. [Testing & Quality Assurance](#16-testing--quality-assurance)
-17. [FAQ](#17-faq)
-18. [Appendix](#18-appendix)
+17. [Known Limitations & Disclaimer](#17-known-limitations--disclaimer)
+18. [FAQ](#18-faq)
+19. [Appendix](#19-appendix)
 
 ---
 
@@ -1003,7 +1004,99 @@ For developers and security auditors, see:
 
 ---
 
-<h2><img src="https://img.shields.io/badge/17-FAQ-58a6ff?style=flat-square&labelColor=0d1117" height="28" /></h2>
+<h2><img src="https://img.shields.io/badge/17-Known_Limitations_%26_Disclaimer-58a6ff?style=flat-square&labelColor=0d1117" height="28" /></h2>
+
+### ⚠️ Educational Tool - Not for Production Use
+
+**PCAP Sentry is designed for learning purposes only.** While it provides valuable insights for understanding malware network traffic patterns, it has important limitations you must understand.
+
+### What This Tool IS
+
+✅ **Educational resource** for learning network traffic analysis
+✅ **Training platform** for recognizing malicious patterns
+✅ **Research tool** for security experiments and practice
+✅ **Triage assistant** to help prioritize further investigation
+
+### What This Tool IS NOT
+
+❌ **NOT a production security solution**
+❌ **NOT a substitute for professional security tools** (e.g., enterprise IDS/IPS, SIEM)
+❌ **NOT validated for compliance** (PCI-DSS, HIPAA, SOC 2, etc.)
+❌ **NOT suitable for legal proceedings** (forensic evidence)
+❌ **NOT a guaranteed threat detector** (will miss sophisticated attacks)
+
+### Known Limitations
+
+#### Detection Accuracy
+
+- **False Positives**: Normal traffic may be flagged as suspicious
+  - High packet rates from legitimate services
+  - Legitimate beaconing (IoT devices, monitoring tools)
+  - Benign protocols on non-standard ports
+
+- **False Negatives**: Malicious traffic may go undetected
+  - Encrypted C2 channels (HTTPS, DNS-over-HTTPS)
+  - Low-and-slow attacks (evading behavioral detection)
+  - Zero-day malware with unknown signatures
+  - Advanced evasion techniques (domain generation algorithms, steganography)
+
+#### Analysis Capabilities
+
+- **No TLS/HTTPS decryption** — Cannot inspect encrypted payloads
+- **No deep protocol analysis** — Limited to packet metadata and cleartext content
+- **No packet reassembly** — May miss patterns spanning fragmented packets
+- **Metadata-only threat intel** — Only IPs/domains are checked, not file hashes or behaviors
+
+#### Knowledge Base & ML Model
+
+- **Training required** — Accuracy depends on quality and quantity of labeled samples
+- **Supervised learning only** — Cannot detect truly novel attack patterns
+- **No model validation** — No ground truth accuracy metrics provided
+- **Bias potential** — Model reflects biases in training data
+
+#### Performance
+
+- **Large PCAP files** (>1 GB) may take significant time to parse
+- **Memory constraints** on systems with <8 GB RAM
+- **CPU bottleneck** on older processors during analysis
+
+#### Threat Intelligence
+
+- **Third-party dependency** — Relies on AlienVault OTX and AbuseIPDB data accuracy
+- **Rate limiting** — API quotas may restrict lookups
+- **Delayed updates** — Threat feeds may lag behind emerging threats
+- **Geographic bias** — Better coverage for some regions than others
+
+### Responsible Use Guidelines
+
+✓ **Always verify findings** with additional tools (Wireshark, VirusTotal, sandbox analysis)
+✓ **Understand context** — High risk scores don't guarantee malicious activity
+✓ **Check legal authority** — Ensure you have permission to analyze network traffic
+✓ **Maintain chain of custody** — Don't rely on PCAP Sentry alone for forensic evidence
+✓ **Combine with other data** — Correlate with logs, EDR, SIEM for complete picture
+✓ **Report responsibly** — Clearly state tool limitations when sharing results
+
+### Legal Disclaimer
+
+**NO WARRANTY**: This program comes with ABSOLUTELY NO WARRANTY. See the [LICENSE](LICENSE) file for details.
+
+By using PCAP Sentry, you acknowledge:
+
+1. **Educational purpose** — All analysis results are for learning and reference only
+2. **Independent verification** — You are responsible for validating findings
+3. **Risk assumption** — You assume all risks associated with network traffic analysis
+4. **No liability** — Developers are not liable for decisions made based on this tool's output
+5. **Legal compliance** — You must comply with applicable laws regarding network monitoring
+
+For production security needs, use enterprise-grade tools from established vendors with:
+- Validated detection accuracy
+- Compliance certifications
+- Professional support and SLAs
+- Forensic-quality evidence handling
+
+---
+
+<h2><img src="https://img.shields.io/badge/18-FAQ-58a6ff?style=flat-square&labelColor=0d1117" height="28" /></h2>
 
 **Q: Does PCAP Sentry send my PCAP files anywhere?**
 A: No. All analysis is performed locally on your machine. The only network activity is optional threat intelligence lookups (which send only IP addresses and domain names, not packet contents) and update checks to GitHub.
@@ -1031,7 +1124,7 @@ A: PCAP Sentry is developed and tested for Windows. While it may run from source
 
 ---
 
-<h2><img src="https://img.shields.io/badge/18-Appendix-58a6ff?style=flat-square&labelColor=0d1117" height="28" /></h2>
+<h2><img src="https://img.shields.io/badge/19-Appendix-58a6ff?style=flat-square&labelColor=0d1117" height="28" /></h2>
 
 ### A. Keyboard & Mouse Controls
 

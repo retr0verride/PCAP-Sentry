@@ -199,8 +199,34 @@ Quick links:
 - [Request a Feature](https://github.com/industrial-dave/PCAP-Sentry/issues/new?template=feature_request.yml)
 - [View All Issues](https://github.com/industrial-dave/PCAP-Sentry/issues)
 
+## ⚠️ Disclaimer
+
+**EDUCATIONAL TOOL - NOT FOR PRODUCTION USE**
+
+PCAP Sentry is designed for **learning purposes only**. It should NOT be used for:
+- Production security decisions
+- Legal proceedings or investigations
+- Mission-critical threat detection
+- Compliance requirements
+
+**Important Limitations:**
+- ❌ **No accuracy guarantee** — May produce false positives or miss real threats
+- ❌ **Not a substitute** for professional security analysis tools
+- ❌ **Results are not validated** — Manual verification required
+- ⚠️ **Use responsibly** — Ensure you have legal authority to analyze network traffic
+
+By using this tool, you acknowledge:
+1. All analysis results are for educational reference only
+2. You are responsible for verifying any findings independently  
+3. You assume all risks associated with analyzing network captures
+4. The developers are not liable for decisions made based on this tool's output
+
+See [LICENSE](LICENSE) for full warranty disclaimer and limitation of liability.
+
 ## License
 
 This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
+
+**NO WARRANTY:** This program comes with ABSOLUTELY NO WARRANTY. This is free software, and you are welcome to redistribute it under certain conditions. See LICENSE for details.
 
 Copyright (C) 2026 industrial-dave
