@@ -74,6 +74,9 @@
 
 
 
+
+## 2026.02.17-12 - 2026-02-17
+- Minor tweaks and improvements
 ## 2026.02.17-12 - 2026-02-17
 - **UX:** Simplified installer information screen (43 lines instead of 209-line README)
 - **UX:** Created focused INSTALL_INFO.txt with only essential installation information
