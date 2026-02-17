@@ -3109,7 +3109,10 @@ class PCAPSentryApp:
 
         self.root_title = self._get_window_title()
         self.root.title(self.root_title)
-        self.root.geometry("1200x950")
+        
+        # Restore window geometry from last session
+        saved_geometry = self.settings.get("window_geometry", "1200x950")
+        self.root.geometry(saved_geometry)
 
         self.theme_var = tk.StringVar(value=self.settings.get("theme", "system"))
         self.colors = {}
@@ -3229,6 +3232,12 @@ class PCAPSentryApp:
         self._build_header()
         self._build_tabs()
         self._build_status()
+        
+        # Restore chat history from last session
+        self.chat_history = self.settings.get("chat_history", [])
+        if self.chat_history and hasattr(self, 'chat_text') and self.chat_text:
+            self.root.after(500, self._restore_chat_history)
+        
         if APP_DATA_FALLBACK_NOTICE and not self.settings.get("app_data_notice_shown"):
             self.root.after(200, self._show_app_data_notice)
 
@@ -3247,7 +3256,7 @@ class PCAPSentryApp:
             pass  # Don't crash if LLM auto-detect can't be scheduled
 
     def _on_close(self):
-        """Handle window close – cancel timers, backup KB, persist LLM status, then destroy."""
+        """Handle window close – cancel timers, backup KB, persist all state, then destroy."""
         self._shutting_down = True
 
         # Signal all background operations to stop
@@ -3265,8 +3274,32 @@ class PCAPSentryApp:
         # Stop animations
         self._logo_spinning = False
 
-        # Save settings snapshot before destroying window
+        # Save complete settings and state snapshot before destroying window
         try:
+            # Get current window geometry
+            window_geometry = self.root.geometry()
+            
+            # Get selected tab index
+            selected_tab_index = 0
+            try:
+                if hasattr(self, 'notebook') and self.notebook:
+                    tab_map = [self.analyze_tab, self.train_tab, self.kb_tab, self.chat_tab]
+                    current_tab = self.notebook.select()
+                    for idx, tab in enumerate(tab_map):
+                        if str(tab) == current_tab:
+                            selected_tab_index = idx
+                            break
+            except Exception:
+                pass
+            
+            # Capture chat history (limit to last 100 messages to avoid file bloat)
+            chat_history_snapshot = self.chat_history[-100:] if len(self.chat_history) > 100 else self.chat_history
+            
+            # Capture last used file paths
+            last_safe_path = self.safe_path_var.get().strip() if self.safe_path_var else ""
+            last_mal_path = self.mal_path_var.get().strip() if self.mal_path_var else ""
+            last_target_path = self.target_path_var.get().strip() if self.target_path_var else ""
+            
             settings_snapshot = {
                 "max_rows": int(self.max_rows_var.get()),
                 "parse_http": bool(self.parse_http_var.get()),
@@ -3284,6 +3317,12 @@ class PCAPSentryApp:
                 "llm_auto_detect": self.settings.get("llm_auto_detect", True),
                 "theme": self.theme_var.get().strip().lower() or "system",
                 "app_data_notice_shown": bool(self.settings.get("app_data_notice_shown")),
+                "window_geometry": window_geometry,
+                "selected_tab": selected_tab_index,
+                "chat_history": chat_history_snapshot,
+                "last_safe_path": last_safe_path,
+                "last_mal_path": last_mal_path,
+                "last_target_path": last_target_path,
             }
         except Exception:
             settings_snapshot = self.settings
@@ -3800,7 +3839,16 @@ class PCAPSentryApp:
         self._build_kb_tab()
         self._build_chat_tab()
 
-        notebook.select(self.analyze_tab)
+        # Restore last selected tab from settings
+        saved_tab_index = self.settings.get("selected_tab", 0)
+        tab_map = [self.analyze_tab, self.train_tab, self.kb_tab, self.chat_tab]
+        if 0 <= saved_tab_index < len(tab_map):
+            notebook.select(tab_map[saved_tab_index])
+        else:
+            notebook.select(self.analyze_tab)
+        
+        # Store notebook reference for later use
+        self.notebook = notebook
 
         notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
 
@@ -4068,6 +4116,7 @@ class PCAPSentryApp:
         window.destroy()
 
     def _save_settings_from_vars(self):
+        # Preserve state data that shouldn't be overwritten by preferences dialog
         settings = {
             "max_rows": int(self.max_rows_var.get()),
             "parse_http": bool(self.parse_http_var.get()),
@@ -4085,6 +4134,13 @@ class PCAPSentryApp:
             "llm_auto_detect": self.settings.get("llm_auto_detect", True),
             "theme": self.theme_var.get().strip().lower() or "system",
             "app_data_notice_shown": bool(self.settings.get("app_data_notice_shown")),
+            # Preserve window state and chat history from current settings
+            "window_geometry": self.settings.get("window_geometry", "1200x950"),
+            "selected_tab": self.settings.get("selected_tab", 0),
+            "chat_history": self.settings.get("chat_history", []),
+            "last_safe_path": self.settings.get("last_safe_path", ""),
+            "last_mal_path": self.settings.get("last_mal_path", ""),
+            "last_target_path": self.settings.get("last_target_path", ""),
         }
         self.settings = settings
         save_settings(settings)
@@ -4702,6 +4758,19 @@ class PCAPSentryApp:
         self.chat_text.delete("1.0", tk.END)
         self.chat_text.configure(state=tk.DISABLED)
 
+    def _restore_chat_history(self):
+        """Restore chat history from saved settings on startup."""
+        if self.chat_text is None or not self.chat_history:
+            return
+        try:
+            for msg in self.chat_history:
+                role = msg.get("role", "user")
+                content = msg.get("content", "")
+                if content:
+                    self._append_chat_message(role, content)
+        except Exception:
+            pass  # Don't crash if history restoration fails
+
     def _build_chat_context(self):
         if self.current_stats is None:
             return {"status": "no_analysis"}
@@ -4933,7 +5002,7 @@ class PCAPSentryApp:
             "you add, the smarter the detection becomes.",
         )
 
-        self.safe_path_var = tk.StringVar()
+        self.safe_path_var = tk.StringVar(value=self.settings.get("last_safe_path", ""))
         self.safe_entry = ttk.Entry(safe_frame, textvariable=self.safe_path_var, width=90)
         self.safe_entry.pack(side=tk.LEFT, padx=6)
         self._add_clear_x(self.safe_entry, self.safe_path_var)
@@ -4968,7 +5037,7 @@ class PCAPSentryApp:
             "  cyberdefenders.org",
         )
 
-        self.mal_path_var = tk.StringVar()
+        self.mal_path_var = tk.StringVar(value=self.settings.get("last_mal_path", ""))
         self.mal_entry = ttk.Entry(mal_frame, textvariable=self.mal_path_var, width=90)
         self.mal_entry.pack(side=tk.LEFT, padx=6)
         self._add_clear_x(self.mal_entry, self.mal_path_var)
@@ -5046,7 +5115,7 @@ class PCAPSentryApp:
             "Supported formats: .pcap and .pcapng files.",
         )
 
-        self.target_path_var = tk.StringVar()
+        self.target_path_var = tk.StringVar(value=self.settings.get("last_target_path", ""))
         self.target_entry = ttk.Entry(file_frame, textvariable=self.target_path_var, width=90)
         self.target_entry.pack(side=tk.LEFT, padx=(0, 8))
         self._add_clear_x(self.target_entry, self.target_path_var)
