@@ -2345,7 +2345,7 @@ def _fast_parse_pcap_path(
     captures (>50 MB).
     """
     DNS, DNSQR, IP, _PcapReader, _Raw, _TCP, _UDP = _get_scapy()
-    from scapy.utils import RawPcapReader
+    from scapy.utils import RawPcapReader, RawPcapNgReader
 
     # Import PacketMetadataNg to handle pcapng files
     try:
@@ -2394,13 +2394,32 @@ def _fast_parse_pcap_path(
         progress_cb(0.0, None, 0, file_size)
 
     try:
-        reader = RawPcapReader(resolved_path)
-        # RawPcapNgReader (used for .pcapng) doesn't have linktype attribute
-        # Default to Ethernet (1) if not available
+        # Detect file format and use appropriate reader
+        # Check magic bytes: pcapng starts with 0x0a0d0d0a, pcap with 0xa1b2c3d4 or 0xd4c3b2a1
+        is_pcapng = False
+        try:
+            with open(resolved_path, 'rb') as f:
+                magic = f.read(4)
+                if magic == b'\x0a\x0d\x0d\x0a':  # pcapng Section Header Block magic
+                    is_pcapng = True
+                elif resolved_path.lower().endswith('.pcapng'):
+                    is_pcapng = True
+        except Exception:
+            # Fallback to extension check
+            if resolved_path.lower().endswith('.pcapng'):
+                is_pcapng = True
+        
+        # Use appropriate reader
+        if is_pcapng:
+            reader = RawPcapNgReader(resolved_path)
+        else:
+            reader = RawPcapReader(resolved_path)
+        
+        # Get linktype - RawPcapNgReader doesn't have linktype attribute
         try:
             linktype = reader.linktype  # 1=Ethernet, 101=Raw IP, 113=Linux Cooked
         except AttributeError:
-            linktype = 1  # Default to Ethernet
+            linktype = 1  # Default to Ethernet for pcapng
 
         with reader:
             for raw_data, pkt_metadata in reader:
