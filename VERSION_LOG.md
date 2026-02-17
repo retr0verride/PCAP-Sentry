@@ -75,6 +75,9 @@
 
 
 
+
+## 2026.02.17-13 - 2026-02-17
+- Model validation fixes: auto-clear invalid models, startup validation, enhanced cloud provider handling
 ## 2026.02.17-13 - 2026-02-17
 - **Fix:** Invalid model persistence when no models available (automatically clear invalid models like llama3 when Gemini selected)
 - **Fix:** Startup model validation ensures saved model matches provider (auto-fixes mismatches on program startup)
