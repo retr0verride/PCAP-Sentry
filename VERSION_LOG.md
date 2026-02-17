@@ -65,6 +65,9 @@
 
 
 
+
+## 2026.02.17-3 - 2026-02-17
+- Add Windows Package Manager (winget) support - submitted to microsoft/winget-pkgs for publication
 ## 2026.02.17-2 - 2026-02-17
 - Suppress Bandit B608 false positive for batch script creation
 ## 2026.02.17-1 - 2026-02-17
