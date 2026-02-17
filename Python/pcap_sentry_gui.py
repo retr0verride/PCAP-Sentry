@@ -8099,17 +8099,23 @@ class PCAPSentryApp:
                     # Select best model if:
                     # 1. Model field is empty
                     # 2. Server was just changed
-                    # 3. Current model is not in the list of valid models
+                    # 3. Current model is not in the list of valid models (when list is NOT empty)
+                    # 4. No models available but current model exists (clear invalid model)
                     should_select_best = (
                         not current_model
                         or getattr(self, "_llm_server_just_changed", False)
                         or (names and current_model not in names)
+                        or (not names and current_model)  # Clear invalid model when no models fetched
                     )
-                    if names and should_select_best:
-                        # Always select the best/recommended model for this provider
-                        selected = self._select_best_model(names, provider)
-                        if selected:
-                            self.llm_model_var.set(selected)
+                    if should_select_best:
+                        if names:
+                            # Select the best/recommended model for this provider
+                            selected = self._select_best_model(names, provider)
+                            if selected:
+                                self.llm_model_var.set(selected)
+                        else:
+                            # No models available - clear the field
+                            self.llm_model_var.set("")
                 except tk.TclError:
                     return
 
