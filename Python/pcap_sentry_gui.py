@@ -9921,7 +9921,7 @@ class PCAPSentryApp:
             command=self._verify_llm_api_key,
         )
         verify_api_btn.pack(side=tk.LEFT, padx=(6, 0))
-        
+
         # API key hint link (shown below API key field)
         api_key_hint = tk.Label(
             frame,
@@ -10102,7 +10102,7 @@ class PCAPSentryApp:
 
         llm_model_combo.bind("<<ComboboxSelected>>", _set_llm_fields_state)
         llm_model_combo.bind("<KeyRelease>", _set_llm_fields_state)
-        
+
         # Set initial field states (skip refresh since we already refreshed models above)
         _set_llm_fields_state(skip_refresh=True)
 
