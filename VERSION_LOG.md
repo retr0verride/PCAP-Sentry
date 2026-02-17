@@ -72,7 +72,21 @@
 
 
 ## 2026.02.17-8 - 2026-02-17
-- Mark Unsure feature
+- **Feature:** Mark Unsure - Add uncertain classifications to Knowledge Base for later review
+- **Security:** API key verification with provider validation (OpenAI, Google, Anthropic)
+- **Security:** Encrypt chat history, Knowledge Base, and API keys (Fernet encryption)
+- **Security:** Git history sanitization - removed sensitive network data from all 281 commits
+- **Legal:** Comprehensive liability protections and export control compliance
+- **Legal:** U.S. Export Administration Regulations (EAR) compliance notices
+- **Legal:** Network monitoring legality warnings (18 U.S.C. § 2511, GDPR, CCPA)
+- **Legal:** Dual-use technology notice (defensive vs. offensive use)
+- **Legal:** Prohibited uses documentation and responsible disclosure policy
+- **Documentation:** LEGAL_PROTECTIONS.md - Complete legal protection inventory
+- **Documentation:** DOCUMENTATION_AUDIT.md - Comprehensive documentation verification
+- **Documentation:** COPYRIGHT_HEADER.txt - GPL header template for source files
+- **Documentation:** HISTORY_REWRITE_NOTICE.md - Git sanitization notice
+- **Documentation:** USER_MANUAL.md Section 17 - Legal compliance guide (200+ lines)
+- **UI:** Improved button ordering and dropdown clearing
 ## 2026.02.17-7 - 2026-02-17
 - Fix pcapng reading - use PcapReader instead of RawPcapNgReader to prevent freeze
 ## 2026.02.17-6 - 2026-02-17
