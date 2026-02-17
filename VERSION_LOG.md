@@ -66,6 +66,9 @@
 
 
 
+
+## 2026.02.17-4 - 2026-02-17
+- Update dependencies to latest versions (pyinstaller 6.19.0, filelock 3.24.2, platformdirs 4.9.2, cssselect2 0.9.0, typer-slim 0.24.0)
 ## 2026.02.17-3 - 2026-02-17
 - Add Windows Package Manager (winget) support - submitted to microsoft/winget-pkgs for publication
 ## 2026.02.17-2 - 2026-02-17
