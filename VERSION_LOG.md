@@ -74,8 +74,10 @@
 
 
 
-## 2026.02.17-11 - 2026-02-17
-- Model validation: automatically match model to selected server, clear invalid models
+## 2026.02.17-12 - 2026-02-17
+- **UX:** Simplified installer information screen (43 lines instead of 209-line README)
+- **UX:** Created focused INSTALL_INFO.txt with only essential installation information
+
 ## 2026.02.17-11 - 2026-02-17
 - **Fix:** Model field now always matches selected server (automatically clears invalid models when switching servers)
 - **Fix:** Auto-select best model when current model is not in the provider's available models list
