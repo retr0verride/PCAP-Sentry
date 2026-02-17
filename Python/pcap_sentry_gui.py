@@ -8095,7 +8095,17 @@ class PCAPSentryApp:
                         return
                     combo["values"] = names
 
-                    if names and not self.llm_model_var.get().strip():
+                    current_model = self.llm_model_var.get().strip()
+                    # Select best model if:
+                    # 1. Model field is empty
+                    # 2. Server was just changed
+                    # 3. Current model is not in the list of valid models
+                    should_select_best = (
+                        not current_model
+                        or getattr(self, "_llm_server_just_changed", False)
+                        or (names and current_model not in names)
+                    )
+                    if names and should_select_best:
                         # Always select the best/recommended model for this provider
                         selected = self._select_best_model(names, provider)
                         if selected:
