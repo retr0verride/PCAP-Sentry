@@ -3371,6 +3371,11 @@ class PCAPSentryApp:
             pass  # Don't crash if internet check can't be scheduled
 
         try:
+            self.root.after(300, self._validate_llm_model_on_startup)
+        except Exception:
+            pass  # Don't crash if model validation can't be scheduled
+
+        try:
             self.root.after(400, self._auto_detect_llm)
         except Exception:
             pass  # Don't crash if LLM auto-detect can't be scheduled
@@ -9563,6 +9568,80 @@ class PCAPSentryApp:
             threading.Thread(target=_run, daemon=True).start()
         except Exception:
             pass  # Don't crash startup if internet check fails to initialize
+
+    def _validate_llm_model_on_startup(self):
+        """Validate that saved model name makes sense for the saved provider."""
+        try:
+            provider = self.llm_provider_var.get().strip().lower()
+            current_model = self.llm_model_var.get().strip()
+            endpoint = self.llm_endpoint_var.get().strip().lower()
+
+            # Skip if disabled or no model set
+            if provider == "disabled" or not current_model:
+                return
+
+            # Define expected model patterns for each provider type
+            provider_patterns = {
+                "ollama": ["deepseek", "qwq", "qwen", "llama", "mistral", "gemma", "phi", "codellama"],
+                "openai": ["gpt", "text-davinci", "text-curie"],
+                "gemini": ["gemini"],
+                "anthropic": ["claude"],
+                "deepseek_api": ["deepseek"],
+                "groq": ["llama", "mixtral", "gemma"],
+                "mistral_api": ["mistral"],
+                "together": ["meta-llama", "llama"],
+                "openrouter": ["anthropic/", "google/", "meta-llama/"],
+                "perplexity": ["sonar", "llama"],
+            }
+
+            # Determine provider type from endpoint for openai_compatible
+            detected_provider = provider
+            if provider == "openai_compatible" and endpoint:
+                if "openai" in endpoint:
+                    detected_provider = "openai"
+                elif "gemini" in endpoint or "generativelanguage.googleapis" in endpoint:
+                    detected_provider = "gemini"
+                elif "anthropic" in endpoint:
+                    detected_provider = "anthropic"
+                elif "deepseek" in endpoint:
+                    detected_provider = "deepseek_api"
+                elif "groq" in endpoint:
+                    detected_provider = "groq"
+                elif "mistral" in endpoint:
+                    detected_provider = "mistral_api"
+                elif "together" in endpoint:
+                    detected_provider = "together"
+                elif "openrouter" in endpoint:
+                    detected_provider = "openrouter"
+                elif "perplexity" in endpoint:
+                    detected_provider = "perplexity"
+
+            # Check if current model matches expected patterns
+            expected_patterns = provider_patterns.get(detected_provider, [])
+            model_lower = current_model.lower()
+            model_valid = any(pattern in model_lower for pattern in expected_patterns)
+
+            # If model doesn't match provider, set a sensible default
+            if not model_valid:
+                default_models = {
+                    "ollama": "deepseek-r1:latest",
+                    "openai": "gpt-4o",
+                    "gemini": "gemini-2.0-flash-exp",
+                    "anthropic": "claude-3.5-sonnet",
+                    "deepseek_api": "deepseek-chat",
+                    "groq": "llama-3.3-70b",
+                    "mistral_api": "mistral-large-latest",
+                    "together": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+                    "openrouter": "anthropic/claude-3.5-sonnet",
+                    "perplexity": "llama-3.1-sonar-large-128k-online",
+                }
+                default_model = default_models.get(detected_provider, "")
+                if default_model:
+                    self.llm_model_var.set(default_model)
+                    self._save_settings_from_vars()
+
+        except Exception:
+            pass  # Don't crash if validation fails
 
     def _auto_detect_llm(self):
         try:
