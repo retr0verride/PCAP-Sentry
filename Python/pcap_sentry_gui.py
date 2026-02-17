@@ -708,7 +708,7 @@ def _get_or_create_encryption_key(username: str) -> bytes | None:
         key_str = keyring.get_password(_KEYRING_SERVICE, username)
         if key_str:
             return key_str.encode()
-        
+
         # Generate new key
         new_key = Fernet.generate_key()
         keyring.set_password(_KEYRING_SERVICE, username, new_key.decode())
@@ -728,11 +728,11 @@ def _encrypt_json(data: dict | list, username: str) -> str | None:
         key = _get_or_create_encryption_key(username)
         if not key:
             return None
-        
+
         cipher = Fernet(key)
         json_str = json.dumps(data)
-        encrypted_bytes = cipher.encrypt(json_str.encode('utf-8'))
-        return base64.b64encode(encrypted_bytes).decode('ascii')
+        encrypted_bytes = cipher.encrypt(json_str.encode("utf-8"))
+        return base64.b64encode(encrypted_bytes).decode("ascii")
     except Exception:
         return None
 
@@ -748,11 +748,11 @@ def _decrypt_json(encrypted_str: str, username: str) -> dict | list | None:
         key = _get_or_create_encryption_key(username)
         if not key:
             return None
-        
+
         cipher = Fernet(key)
-        encrypted_bytes = base64.b64decode(encrypted_str.encode('ascii'))
+        encrypted_bytes = base64.b64decode(encrypted_str.encode("ascii"))
         decrypted_bytes = cipher.decrypt(encrypted_bytes)
-        return json.loads(decrypted_bytes.decode('utf-8'))
+        return json.loads(decrypted_bytes.decode("utf-8"))
     except Exception:
         return None
 
@@ -803,7 +803,7 @@ def load_settings():
                         # Migrate plaintext OTX key to keyring on first load
                         _store_otx_api_key(data["otx_api_key"])
                         defaults["otx_api_key"] = data["otx_api_key"]
-                    
+
                     # Decrypt chat_history if encrypted
                     encrypted_chat = data.get("chat_history_encrypted")
                     if encrypted_chat:
@@ -831,7 +831,7 @@ def save_settings(settings):
             settings = dict(settings)
             settings.pop("llm_api_key", None)
             settings.pop("otx_api_key", None)
-            
+
             # Encrypt chat_history
             chat_history = settings.get("chat_history", [])
             if chat_history:
@@ -875,7 +875,7 @@ def load_knowledge_base():
             if os.path.exists(KNOWLEDGE_BASE_FILE):
                 with open(KNOWLEDGE_BASE_FILE, encoding="utf-8") as f:
                     content = f.read().strip()
-                
+
                 # Try to decrypt if keyring is available
                 if _keyring_available() and content:
                     try:
@@ -896,7 +896,7 @@ def load_knowledge_base():
                 else:
                     # No keyring, use plain JSON
                     data = json.loads(content)
-                
+
                 if isinstance(data, dict):
                     data.setdefault("safe", [])
                     data.setdefault("malicious", [])
