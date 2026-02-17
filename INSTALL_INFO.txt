@@ -1,0 +1,46 @@
+PCAP Sentry - Network Traffic Analysis Educational Tool
+========================================================
+
+PCAP Sentry is a beginner-friendly educational tool for learning malware 
+network traffic analysis. Analyze .pcap/.pcapng files to identify suspicious 
+patterns with AI-powered guidance and real-world threat intelligence.
+
+KEY FEATURES
+------------
+* Risk scoring and behavioral detection (beaconing, DNS tunneling, etc.)
+* AI-powered chat using local or cloud LLM models
+* Credential extraction and C2 pattern detection
+* Wireshark integration with auto-generated filters
+* Works offline with local models and threat databases
+
+SYSTEM REQUIREMENTS
+-------------------
+* Windows 10 or later (64-bit)
+* Microsoft Visual C++ Redistributable (will be installed if needed)
+* 4 GB RAM minimum, 8 GB recommended
+* 500 MB disk space
+
+IMPORTANT LEGAL NOTICES
+-----------------------
+This software is subject to U.S. Export Administration Regulations (EAR).
+By installing, you confirm:
+  - You are not in an embargoed country (Cuba, Iran, North Korea, Syria, etc.)
+  - You will not use this for illegal network monitoring
+
+Network monitoring may be illegal without authorization. Ensure you have 
+proper authorization before analyzing network traffic (18 U.S.C. § 2511).
+
+LICENSE
+-------
+GNU General Public License v3.0 - This software comes with ABSOLUTELY NO 
+WARRANTY. Use at your own risk. See LICENSE file for full terms.
+
+PRIVACY & SECURITY
+------------------
+* Works offline - Optional cloud features (LLM providers, threat intel)
+* API keys encrypted locally
+* No telemetry or data collection
+* Built following OpenSSF secure development best practices
+
+For documentation and support, visit:
+https://github.com/industrial-dave/PCAP-Sentry
