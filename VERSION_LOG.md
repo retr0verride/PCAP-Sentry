@@ -69,6 +69,9 @@
 
 
 
+
+## 2026.02.17-7 - 2026-02-17
+- Fix pcapng reading - use PcapReader instead of RawPcapNgReader to prevent freeze
 ## 2026.02.17-6 - 2026-02-17
 - Fix pcapng file reader freeze during initialization
 ## 2026.02.17-5 - 2026-02-17
