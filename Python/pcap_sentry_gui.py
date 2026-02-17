@@ -2392,15 +2392,15 @@ def _fast_parse_pcap_path(
         # Extract raw bytes for fast parsing (RawPcapNgReader can freeze on some files)
         reader = _PcapReader(resolved_path)
         linktype = 1  # Assume Ethernet (most common)
-        
+
         with reader:
             for pkt in reader:
-                # Get raw bytes from packet
-                if hasattr(pkt, 'original') and pkt.original:
-                    raw_data = bytes(pkt.original)
+                # Get raw bytes from packet (pkt.original is already bytes)
+                if hasattr(pkt, "original") and pkt.original:
+                    raw_data = pkt.original
                 else:
                     raw_data = bytes(pkt)
-                
+
                 data_len = len(raw_data)
 
                 # ── Determine IP start offset based on link type ──
@@ -2554,12 +2554,12 @@ def _fast_parse_pcap_path(
                 # ── Reservoir sampling ──
                 if should_sample_rows:
                     # Extract timestamp from packet (PcapReader provides pkt.time)
-                    if hasattr(pkt, 'time') and pkt.time:
+                    if hasattr(pkt, "time") and pkt.time:
                         ts = float(pkt.time)
                     else:
                         # Fallback - use packet count as pseudo-timestamp
                         ts = float(packet_count)
-                    
+
                     row = {
                         "Time": ts,
                         "Size": pkt_size,
