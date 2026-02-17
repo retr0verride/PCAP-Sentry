@@ -68,6 +68,9 @@
 
 
 
+
+## 2026.02.17-6 - 2026-02-17
+- Fix pcapng file reader freeze during initialization
 ## 2026.02.17-5 - 2026-02-17
 - Fix pcapng file support and correct SHA256 checksums
 ## 2026.02.17-4 - 2026-02-17
