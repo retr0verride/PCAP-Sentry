@@ -78,6 +78,9 @@
 
 
 
+
+## 2026.02.17-16 - 2026-02-17
+- Minor tweaks and improvements
 ## 2026.02.17-16 - 2026-02-17
 - **Fix:** API key field now appears correctly on startup for cloud providers (fixed cloud icon stripping)
 
