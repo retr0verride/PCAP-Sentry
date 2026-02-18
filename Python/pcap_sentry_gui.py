@@ -8474,6 +8474,17 @@ class PCAPSentryApp:
             if combo is not None:
                 combo["values"] = []
             return
+        
+        # Show loading indicator
+        if combo is not None:
+            try:
+                if combo.winfo_exists():
+                    old_value = self.llm_model_var.get()
+                    self.llm_model_var.set("Loading models...")
+                    combo["values"] = ["Loading models..."]
+                    combo.configure(state="disabled")
+            except tk.TclError:
+                pass
 
         def _dedupe_names(names):
             unique = []
@@ -8552,15 +8563,17 @@ class PCAPSentryApp:
                     if not combo.winfo_exists():
                         return
                     combo["values"] = names
+                    combo.configure(state="normal")  # Re-enable after loading
 
                     current_model = self.llm_model_var.get().strip()
                     # Select best model if:
-                    # 1. Model field is empty
+                    # 1. Model field is empty or showing "Loading models..."
                     # 2. Server was just changed
                     # 3. Current model is not in the list of valid models (when list is NOT empty)
                     # 4. No models available but current model exists (clear invalid model)
                     should_select_best = (
                         not current_model
+                        or current_model == "Loading models..."
                         or getattr(self, "_llm_server_just_changed", False)
                         or (names and current_model not in names)
                         or (not names and current_model)  # Clear invalid model when no models fetched
