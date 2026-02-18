@@ -457,17 +457,16 @@ def _preload_scapy_background():
     if _scapy_preload_done:
         return
     _scapy_preload_done = True
-    
+
     def _preload():
         try:
             _get_scapy()
             _get_tls_support()
         except Exception:
             pass  # Silently fail, will retry on first analysis
-    
+
     thread = threading.Thread(target=_preload, daemon=True, name="ScapyPreload")
     thread.start()
-
 
 
 def _format_tls_version(version):
