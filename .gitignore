@@ -22,12 +22,6 @@ logo_previews/
 models/*.gguf
 models/.cache/
 
-# Test builds (never commit test builds - local only)
-*_TEST.exe
-*_test.exe
-dist/*_TEST.*
-dist/*_test.*
-
 # Redistributables (download via script instead)
 assets/vcredist_x64.exe
 
