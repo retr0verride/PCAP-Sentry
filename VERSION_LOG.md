@@ -83,6 +83,9 @@
 
 
 
+
+## 2026.02.17-20 - 2026-02-17
+- Minor tweaks and improvements
 ## 2026.02.17-20 - 2026-02-17
 - **Fix:** Online/offline indicator now syncs with title bar when auto-detecting offline mode at startup
 - **UX:** Improved internet connectivity detection - tests 3 endpoints sequentially (Cloudflare, Google, Microsoft)
