@@ -15,6 +15,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+from _thread import lock
+from _tkinter import TclError
 import base64
 import ctypes
 import hashlib
@@ -37,10 +39,118 @@ import threading
 import time
 import traceback
 import urllib.error
+from urllib.parse import ParseResult
 import urllib.request
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+
+from matplotlib.figure import Figure
+
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+
+from sklearn.feature_extraction._dict_vectorizer import DictVectorizer
+
+from numpy import ndarray
+from scipy.sparse._matrix import spmatrix
+
+from sklearn.linear_model._logistic import LogisticRegression
+
+from matplotlib.figure import Figure
+
+from matplotlib.figure import Figure
+
+from matplotlib.figure import Figure
+
+from matplotlib.axes import Axes
+
+from matplotlib.figure import Figure
+
+from matplotlib.figure import Figure
+
+from matplotlib.figure import Figure
+
+from matplotlib.axes import Axes
+
+from matplotlib.figure import Figure
+
+from matplotlib.figure import Figure
+
+from matplotlib.figure import Figure
+
+from matplotlib.axes import Axes
+
+from matplotlib.figure import Figure
+
+from matplotlib.figure import Figure
+
+from matplotlib.figure import Figure
+
+from matplotlib.axes import Axes
+
+from matplotlib.figure import Figure
+
+from matplotlib.figure import Figure
+
+from matplotlib.figure import Figure
+
+from matplotlib.axes import Axes
+
+from matplotlib.figure import Figure
+
+from matplotlib.figure import Figure
+
+from matplotlib.figure import Figure
+
+from matplotlib.axes import Axes
+
+from matplotlib.figure import Figure
+
+from matplotlib.figure import Figure
+
+from matplotlib.figure import Figure
+
+from matplotlib.axes import Axes
+
+from matplotlib.figure import Figure
+
+from matplotlib.figure import Figure
+
+from matplotlib.figure import Figure
+
+from matplotlib.axes import Axes
+
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+
+from PIL.Image import Image
+
+from PIL.Image import Image
+
+from PIL.Image import Image
+
+from PIL.Image import Image
+
+from PIL.Image import Image
+
+from PIL.Image import Image
+
+from PIL.Image import Image
+
+from pandas import Series
+from winreg import HKEYType
+
+from requests import Response
+
+from requests import Response
+
+from requests import Response
+
+from requests import Response
+
+from requests import Response
+from winreg import HKEYType
 
 
 class AnalysisCancelledError(Exception):
@@ -60,7 +170,7 @@ try:
     from update_checker import BackgroundUpdateChecker, UpdateChecker
 
     _update_checker_available = True
-except ImportError as _uc_err:
+except ImportError as _uc_err: ImportError:
     _update_checker_available = False
     # Log the failure so we can diagnose bundling issues
     import traceback as _tb
@@ -76,7 +186,7 @@ _tls_cache = None
 _scapy_preload_done = False
 
 
-def _check_threat_intel():
+def _check_threat_intel() -> bool:
     global _threat_intel_available
     if _threat_intel_available is not None:
         return _threat_intel_available
@@ -90,28 +200,28 @@ def _check_threat_intel():
         return False
 
 
-def _utcnow():
+def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _init_error_logs():
+def _init_error_logs() -> None:
     try:
-        log_dir = _get_app_data_dir()
-        for name in ("startup_errors.log", "app_errors.log"):
-            log_path = os.path.join(log_dir, name)
+        log_dir: str = _get_app_data_dir()
+        for name: str in ("startup_errors.log", "app_errors.log"):
+            log_path: str = os.path.join(log_dir, name)
             if not os.path.exists(log_path):
-                with open(log_path, "a", encoding="utf-8") as handle:
+                with open(log_path, "a", encoding="utf-8") as handle: io.TextIOWrapper[io._WrappedBuffer]:
                     handle.write("")
     except Exception:
         pass
 
 
-def _write_startup_log(message, exc=None):
+def _write_startup_log(message, exc=None) -> None:
     try:
-        log_dir = _get_app_data_dir()
-        log_path = os.path.join(log_dir, "startup_errors.log")
-        timestamp = _utcnow().strftime("%Y-%m-%d %H:%M:%SZ")
-        with open(log_path, "a", encoding="utf-8") as handle:
+        log_dir: str = _get_app_data_dir()
+        log_path: str = os.path.join(log_dir, "startup_errors.log")
+        timestamp: str = _utcnow().strftime("%Y-%m-%d %H:%M:%SZ")
+        with open(log_path, "a", encoding="utf-8") as handle: io.TextIOWrapper[io._WrappedBuffer]:
             handle.write(f"[{timestamp}] {message}\n")
             if exc is not None:
                 handle.write(f"[{timestamp}] {type(exc).__name__}: {exc}\n")
@@ -119,17 +229,17 @@ def _write_startup_log(message, exc=None):
         pass
 
 
-def _write_error_log(message, exc=None, tb=None):
+def _write_error_log(message, exc=None, tb=None) -> None:
     try:
-        log_dir = _get_app_data_dir()
-        log_path = os.path.join(log_dir, "app_errors.log")
-        timestamp = _utcnow().strftime("%Y-%m-%d %H:%M:%SZ")
-        with open(log_path, "a", encoding="utf-8") as handle:
+        log_dir: str = _get_app_data_dir()
+        log_path: str = os.path.join(log_dir, "app_errors.log")
+        timestamp: str = _utcnow().strftime("%Y-%m-%d %H:%M:%SZ")
+        with open(log_path, "a", encoding="utf-8") as handle: io.TextIOWrapper[io._WrappedBuffer]:
             handle.write(f"[{timestamp}] {message}\n")
             if exc is not None:
                 handle.write(f"[{timestamp}] {type(exc).__name__}: {exc}\n")
             if tb is not None:
-                formatted = "".join(traceback.format_exception(type(exc), exc, tb))
+                formatted: str = "".join(traceback.format_exception(type(exc), exc, tb))
                 handle.write(formatted)
                 if not formatted.endswith("\n"):
                     handle.write("\n")
@@ -137,7 +247,7 @@ def _write_error_log(message, exc=None, tb=None):
         pass
 
 
-def _handle_exception(exc_type, exc, tb):
+def _handle_exception(exc_type, exc, tb) -> None:
     try:
         _write_error_log("Unhandled exception", exc, tb)
         if threading.current_thread() is threading.main_thread():
@@ -167,7 +277,7 @@ def _handle_exception(exc_type, exc, tb):
             pass
 
 
-def _show_startup_error(message, exc=None):
+def _show_startup_error(message, exc=None) -> None:
     _write_startup_log(message, exc)
     try:
         if tk._default_root is None:
@@ -181,7 +291,7 @@ def _show_startup_error(message, exc=None):
         pass
 
 
-def _check_sklearn():
+def _check_sklearn() -> bool:
     global _sklearn_available
     if _sklearn_available is not None:
         return _sklearn_available
@@ -196,7 +306,7 @@ def _check_sklearn():
     return _sklearn_available
 
 
-def _check_tkinterdnd2():
+def _check_tkinterdnd2() -> bool:
     global _tkinterdnd2_available
     if _tkinterdnd2_available is not None:
         return _tkinterdnd2_available
@@ -214,12 +324,12 @@ DEFAULT_MAX_ROWS = 200000
 IOC_SET_LIMIT = 50000
 
 # ── Thread lock for knowledge base read-modify-write operations ──────────
-_kb_lock = threading.Lock()
+_kb_lock: lock = threading.Lock()
 
 # ── Common/well-known ports (shared across education, hints, analysis) ───
-COMMON_PORTS = {22, 53, 80, 123, 443, 445, 3389, 25, 110, 143, 21, 8080}
+COMMON_PORTS: set[int] = {22, 53, 80, 123, 443, 445, 3389, 25, 110, 143, 21, 8080}
 
-PORT_DESCRIPTIONS = {
+PORT_DESCRIPTIONS: dict[int, str] = {
     22: "SSH — Secure remote terminal access",
     53: "DNS — Translates domain names to IP addresses",
     80: "HTTP — Unencrypted web traffic",
@@ -235,7 +345,7 @@ PORT_DESCRIPTIONS = {
 }
 
 # Short-form descriptions for compact UI areas
-PORT_DESCRIPTIONS_SHORT = {
+PORT_DESCRIPTIONS_SHORT: dict[int, str] = {
     22: "SSH (Secure Shell)",
     53: "DNS (Domain Name System)",
     80: "HTTP (Unencrypted Web)",
@@ -251,7 +361,7 @@ PORT_DESCRIPTIONS_SHORT = {
 }
 
 # ── Education pattern descriptions (rebuilt every analysis → now a constant) ──
-PATTERN_EDUCATION = {
+PATTERN_EDUCATION: dict[str, tuple[str, str]] = {
     "high_volume": (
         "HIGH DATA VOLUME",
         "A large amount of data was moved in this conversation.\n"
@@ -341,7 +451,7 @@ PATTERN_EDUCATION = {
 }
 
 # ── Regex for validating LLM model names before passing to subprocess ────
-_MODEL_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:\-/]{0,127}$")
+_MODEL_NAME_RE: re.Pattern[str] = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:\-/]{0,127}$")
 
 
 def _is_valid_model_name(name: str) -> bool:
@@ -353,66 +463,66 @@ def _is_valid_model_name(name: str) -> bool:
     return bool(name and _MODEL_NAME_RE.fullmatch(name))
 
 
-_EMBEDDED_VERSION = "2026.02.18-4"  # Stamped by update_version.ps1 at build time
+_EMBEDDED_VERSION = "2026.02.18-5"  # Stamped by update_version.ps1 at build time
 
 
-def _compute_app_version():
+def _compute_app_version() -> str:
     # In a frozen (PyInstaller) build, use the version stamped at build time.
     if getattr(sys, "frozen", False):
         return _EMBEDDED_VERSION
     # Prefer version_info.txt when running from source so UI matches release tags.
     try:
-        root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-        version_path = os.path.join(root_dir, "version_info.txt")
+        root_dir: str = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+        version_path: str = os.path.join(root_dir, "version_info.txt")
         if os.path.exists(version_path):
-            with open(version_path, encoding="utf-8") as handle:
-                raw = handle.read()
-            match = re.search(r"filevers=\((\d+),\s*(\d+),\s*(\d+),\s*(\d+)\)", raw)
+            with open(version_path, encoding="utf-8") as handle: io.TextIOWrapper[io._WrappedBuffer]:
+                raw: str = handle.read()
+            match: re.Match[str] | None = re.search(r"filevers=\((\d+),\s*(\d+),\s*(\d+),\s*(\d+)\)", raw)
             if match:
-                year, month, day, build = (int(match.group(i)) for i in range(1, 5))
+                year, month, day, build = (int(match.group(i)) for i: int in range(1, 5))
                 return f"{year}.{month:02d}.{day:02d}-{build}"
     except Exception:
         pass
     # During development, compute dynamically from date + git commit count.
-    today = datetime.now().date()
-    date_str = today.strftime("%Y.%m.%d")
+    today: date = datetime.now().date()
+    date_str: str = today.strftime("%Y.%m.%d")
     try:
-        since = today.strftime("%Y-%m-%dT00:00:00")
-        result = subprocess.run(
+        since: str = today.strftime("%Y-%m-%dT00:00:00")
+        result: subprocess.CompletedProcess[str] = subprocess.run(
             ["git", "log", "--oneline", f"--since={since}"],
             capture_output=True,
             text=True,
             timeout=3,
             cwd=os.path.dirname(os.path.abspath(__file__)),
         )
-        count = len(result.stdout.strip().splitlines()) if result.returncode == 0 and result.stdout.strip() else 0
+        count: int = len(result.stdout.strip().splitlines()) if result.returncode == 0 and result.stdout.strip() else 0
     except Exception:
         count = 0
     return f"{date_str}-{count}" if count > 1 else date_str
 
 
-APP_VERSION = _compute_app_version()
+APP_VERSION: str = _compute_app_version()
 
 
-def _get_pandas():
+def _get_pandas() -> Any:
     import pandas as pd
 
     return pd
 
 
-def _get_figure():
+def _get_figure() -> type[Figure]:
     from matplotlib.figure import Figure
 
     return Figure
 
 
-def _get_figure_canvas():
+def _get_figure_canvas() -> type[FigureCanvasTkAgg]:
     from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
     return FigureCanvasTkAgg
 
 
-def _get_numpy():
+def _get_numpy() -> Any:
     import numpy as np
 
     return np
@@ -427,7 +537,7 @@ def _get_scapy():
 
         _scapy_cache = (DNS, DNSQR, IP, PcapReader, Raw, TCP, UDP)
         return _scapy_cache
-    except Exception as exc:
+    except Exception as exc: Exception:
         _show_startup_error(
             "Scapy is required but was not found. Please reinstall PCAP Sentry or contact support.",
             exc,
@@ -451,7 +561,7 @@ def _get_tls_support():
         return _tls_cache
 
 
-def _preload_scapy_background(app=None):
+def _preload_scapy_background(app=None) -> None:
     """Pre-import Scapy in a background thread to avoid delay on first analysis."""
     global _scapy_preload_done
     if _scapy_preload_done:
@@ -465,7 +575,7 @@ def _preload_scapy_background(app=None):
         except Exception:
             pass
 
-    def _preload():
+    def _preload() -> None:
         try:
             _get_scapy()
             _get_tls_support()
@@ -483,7 +593,7 @@ def _preload_scapy_background(app=None):
     thread.start()
 
 
-def _format_tls_version(version):
+def _format_tls_version(version) -> str:
     if version is None:
         return ""
     try:
@@ -492,7 +602,7 @@ def _format_tls_version(version):
         value = int(version)
     except Exception:
         return ""
-    mapping = {
+    mapping: dict[int, str] = {
         0x0301: "1.0",
         0x0302: "1.1",
         0x0303: "1.2",
@@ -501,7 +611,7 @@ def _format_tls_version(version):
     return mapping.get(value, f"0x{value:04x}")
 
 
-def _extract_tls_metadata(pkt, tls_support):
+def _extract_tls_metadata(pkt, tls_support) -> tuple[Literal[''], Literal[''], Literal['']] | tuple[str, str, LiteralString | Literal['']] | tuple[Literal[''], str, Literal['']]:
     tls_layer, client_hello, ext_sni, ext_alpn = tls_support
     if tls_layer is None:
         return "", "", ""
@@ -510,28 +620,28 @@ def _extract_tls_metadata(pkt, tls_support):
     if tls is None:
         return "", "", ""
 
-    tls_version = _format_tls_version(getattr(tls, "version", None))
-    tls_sni = ""
-    tls_alpn = ""
+    tls_version: str = _format_tls_version(getattr(tls, "version", None))
+    tls_sni: str = ""
+    tls_alpn: str = ""
 
     ch = pkt.getlayer(client_hello) if client_hello is not None else None
     if ch is not None:
         if not tls_version:
-            tls_version = _format_tls_version(getattr(ch, "version", None))
-        extensions = getattr(ch, "ext", []) or []
+            tls_version: str = _format_tls_version(getattr(ch, "version", None))
+        extensions: ctypes.Any | list[Any] = getattr(ch, "ext", []) or []
         for ext in extensions:
             if ext_sni is not None and isinstance(ext, ext_sni):
-                server_names = getattr(ext, "servernames", []) or []
+                server_names: ctypes.Any | list[Any] = getattr(ext, "servernames", []) or []
                 for server in server_names:
-                    name = getattr(server, "servername", None)
+                    name: ctypes.Any | None = getattr(server, "servername", None)
                     if name:
                         if isinstance(name, bytes):
-                            tls_sni = name.decode("utf-8", errors="ignore")
+                            tls_sni: str = name.decode("utf-8", errors="ignore")
                         else:
                             tls_sni = str(name)
                         break
             if ext_alpn is not None and isinstance(ext, ext_alpn):
-                protocols = getattr(ext, "alpn_protocols", []) or []
+                protocols: ctypes.Any | list[Any] = getattr(ext, "alpn_protocols", []) or []
                 if protocols:
                     cleaned = []
                     for proto in protocols:
@@ -539,7 +649,7 @@ def _extract_tls_metadata(pkt, tls_support):
                             cleaned.append(proto.decode("utf-8", errors="ignore"))
                         else:
                             cleaned.append(str(proto))
-                    tls_alpn = ",".join(cleaned)
+                    tls_alpn: str = ",".join(cleaned)
         return tls_sni, tls_version, tls_alpn
 
     return "", tls_version, ""
@@ -561,28 +671,28 @@ def _get_sklearn():
     return _sklearn_cache
 
 
-def _get_tkinterdnd2():
+def _get_tkinterdnd2() -> tuple[Literal['DND_Files'], ModuleType]:
     from tkinterdnd2 import DND_FILES, TkinterDnD
 
     return DND_FILES, TkinterDnD
 
 
-def _get_app_base_dir():
+def _get_app_base_dir() -> str:
     if getattr(sys, "frozen", False):
         return os.path.dirname(sys.executable)
     return os.path.dirname(os.path.abspath(__file__))
 
 
 def _get_app_icon_path(prefer_png=False):
-    base_dir = _get_app_base_dir()
+    base_dir: str = _get_app_base_dir()
     candidates = []
-    frozen_dir = getattr(sys, "_MEIPASS", None)
+    frozen_dir: ctypes.Any | None = getattr(sys, "_MEIPASS", None)
     if prefer_png:
         # Prefer high-res 256px PNG, fall back to 48px
-        png_names = ["pcap_sentry_256.png", "pcap_sentry_48.png"]
+        png_names: list[str] = ["pcap_sentry_256.png", "pcap_sentry_48.png"]
     else:
-        png_names = ["pcap_sentry.ico"]
-    for ext in png_names:
+        png_names: list[str] = ["pcap_sentry.ico"]
+    for ext: str in png_names:
         if frozen_dir:
             candidates.append(os.path.join(frozen_dir, "assets", ext))
             candidates.append(os.path.join(frozen_dir, ext))
@@ -602,7 +712,7 @@ def _get_app_icon_path(prefer_png=False):
     return None
 
 
-def _set_app_icon(root):
+def _set_app_icon(root) -> None:
     icon_path = _get_app_icon_path()
     if not icon_path:
         return
@@ -617,40 +727,40 @@ APP_DATA_FALLBACK_NOTICE = None
 APP_DATA_DIR = None
 
 
-def _get_app_data_dir():
+def _get_app_data_dir() -> str:
     global APP_DATA_FALLBACK_NOTICE
     global APP_DATA_DIR
     fallback_notice = None
     if getattr(sys, "frozen", False):
-        base_dir = _get_app_base_dir()
-        data_dir = os.path.join(base_dir, "data")
+        base_dir: str = _get_app_base_dir()
+        data_dir: str = os.path.join(base_dir, "data")
         if _is_writable_dir(base_dir):
             try:
                 os.makedirs(data_dir, exist_ok=True)
-                APP_DATA_DIR = data_dir
+                APP_DATA_DIR: str = data_dir
                 return data_dir
             except OSError:
                 fallback_notice = "App data folder in install directory is not writable."
 
-    base_dir = os.getenv("LOCALAPPDATA") or os.getenv("APPDATA") or os.path.expanduser("~")
-    data_dir = os.path.join(base_dir, "PCAP_Sentry")
+    base_dir: str = os.getenv("LOCALAPPDATA") or os.getenv("APPDATA") or os.path.expanduser("~")
+    data_dir: str = os.path.join(base_dir, "PCAP_Sentry")
     os.makedirs(data_dir, exist_ok=True)
-    APP_DATA_DIR = data_dir
+    APP_DATA_DIR: str = data_dir
     if fallback_notice:
-        APP_DATA_FALLBACK_NOTICE = f"{fallback_notice} Using {data_dir} instead."
+        APP_DATA_FALLBACK_NOTICE: str = f"{fallback_notice} Using {data_dir} instead."
     return data_dir
 
 
-def _is_writable_dir(path):
+def _is_writable_dir(path) -> bool:
     try:
         return os.access(path, os.W_OK)
     except Exception:
         return False
 
 
-KNOWLEDGE_BASE_FILE = os.path.join(_get_app_data_dir(), "pcap_knowledge_base_offline.json")
-SETTINGS_FILE = os.path.join(_get_app_data_dir(), "settings.json")
-MODEL_FILE = os.path.join(_get_app_data_dir(), "pcap_local_model.joblib")
+KNOWLEDGE_BASE_FILE: str = os.path.join(_get_app_data_dir(), "pcap_knowledge_base_offline.json")
+SETTINGS_FILE: str = os.path.join(_get_app_data_dir(), "settings.json")
+MODEL_FILE: str = os.path.join(_get_app_data_dir(), "pcap_local_model.joblib")
 
 
 # ── Secure credential helpers ────────────────────────────────────────────────
@@ -661,7 +771,7 @@ _KEYRING_USERNAME_CHAT_KEY = "chat_encryption_key"
 _KEYRING_USERNAME_KB_KEY = "kb_encryption_key"
 
 
-def _keyring_available():
+def _keyring_available() -> bool:
     """Check if the keyring module is available and functional."""
     try:
         import keyring
@@ -702,7 +812,7 @@ def _load_api_key() -> str:
     try:
         import keyring
 
-        val = keyring.get_password(_KEYRING_SERVICE, _KEYRING_USERNAME_LLM)
+        val: str | None = keyring.get_password(_KEYRING_SERVICE, _KEYRING_USERNAME_LLM)
         return val or ""
     except Exception:
         return ""
@@ -713,7 +823,7 @@ def _load_otx_api_key() -> str:
     try:
         import keyring
 
-        val = keyring.get_password(_KEYRING_SERVICE, _KEYRING_USERNAME_OTX)
+        val: str | None = keyring.get_password(_KEYRING_SERVICE, _KEYRING_USERNAME_OTX)
         return val or ""
     except Exception:
         return ""
@@ -749,12 +859,12 @@ def _get_or_create_encryption_key(username: str) -> bytes | None:
         from cryptography.fernet import Fernet
 
         # Try to load existing key
-        key_str = keyring.get_password(_KEYRING_SERVICE, username)
+        key_str: str | None = keyring.get_password(_KEYRING_SERVICE, username)
         if key_str:
             return key_str.encode()
 
         # Generate new key
-        new_key = Fernet.generate_key()
+        new_key: bytes = Fernet.generate_key()
         keyring.set_password(_KEYRING_SERVICE, username, new_key.decode())
         return new_key
     except Exception:
@@ -769,13 +879,13 @@ def _encrypt_json(data: dict | list, username: str) -> str | None:
         from cryptography.fernet import Fernet
         import base64
 
-        key = _get_or_create_encryption_key(username)
+        key: bytes | None = _get_or_create_encryption_key(username)
         if not key:
             return None
 
         cipher = Fernet(key)
-        json_str = json.dumps(data)
-        encrypted_bytes = cipher.encrypt(json_str.encode("utf-8"))
+        json_str: str = json.dumps(data)
+        encrypted_bytes: bytes = cipher.encrypt(json_str.encode("utf-8"))
         return base64.b64encode(encrypted_bytes).decode("ascii")
     except Exception:
         return None
@@ -789,13 +899,13 @@ def _decrypt_json(encrypted_str: str, username: str) -> dict | list | None:
         from cryptography.fernet import Fernet
         import base64
 
-        key = _get_or_create_encryption_key(username)
+        key: bytes | None = _get_or_create_encryption_key(username)
         if not key:
             return None
 
         cipher = Fernet(key)
-        encrypted_bytes = base64.b64decode(encrypted_str.encode("ascii"))
-        decrypted_bytes = cipher.decrypt(encrypted_bytes)
+        encrypted_bytes: bytes = base64.b64decode(encrypted_str.encode("ascii"))
+        decrypted_bytes: bytes = cipher.decrypt(encrypted_bytes)
         return json.loads(decrypted_bytes.decode("utf-8"))
     except Exception:
         return None
@@ -824,7 +934,7 @@ def _default_settings():
 def load_settings():
     try:
         if os.path.exists(SETTINGS_FILE):
-            with open(SETTINGS_FILE, encoding="utf-8") as f:
+            with open(SETTINGS_FILE, encoding="utf-8") as f: io.TextIOWrapper[io._WrappedBuffer]:
                 data = json.load(f)
             if isinstance(data, dict):
                 defaults = _default_settings()
@@ -832,7 +942,7 @@ def load_settings():
                 # Prefer OS credential store for API keys
                 if _keyring_available():
                     # Handle LLM API key
-                    stored_key = _load_api_key()
+                    stored_key: str = _load_api_key()
                     if stored_key:
                         defaults["llm_api_key"] = stored_key
                     elif data.get("llm_api_key"):
@@ -840,7 +950,7 @@ def load_settings():
                         _store_api_key(data["llm_api_key"])
                         defaults["llm_api_key"] = data["llm_api_key"]
                     # Handle OTX API key
-                    stored_otx_key = _load_otx_api_key()
+                    stored_otx_key: str = _load_otx_api_key()
                     if stored_otx_key:
                         defaults["otx_api_key"] = stored_otx_key
                     elif data.get("otx_api_key"):
@@ -863,7 +973,7 @@ def load_settings():
     return _default_settings()
 
 
-def save_settings(settings):
+def save_settings(settings) -> None:
     try:
         # Store API keys in OS credential store if available
         llm_api_key = settings.get("llm_api_key", "")
@@ -879,7 +989,7 @@ def save_settings(settings):
             # Encrypt chat_history
             chat_history = settings.get("chat_history", [])
             if chat_history:
-                encrypted = _encrypt_json(chat_history, _KEYRING_USERNAME_CHAT_KEY)
+                encrypted: str | None = _encrypt_json(chat_history, _KEYRING_USERNAME_CHAT_KEY)
                 if encrypted:
                     settings["chat_history_encrypted"] = encrypted
                     settings.pop("chat_history", None)
@@ -887,7 +997,7 @@ def save_settings(settings):
         # a predictable ".tmp" path).
         fd, tmp = tempfile.mkstemp(dir=os.path.dirname(SETTINGS_FILE), suffix=".tmp")
         try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
+            with os.fdopen(fd, "w", encoding="utf-8") as f: io.TextIOWrapper[io._WrappedBuffer]:
                 json.dump(settings, f, indent=2)
             os.replace(tmp, SETTINGS_FILE)
         except BaseException:
@@ -898,11 +1008,11 @@ def save_settings(settings):
         pass
 
 
-def _format_bytes(value):
+def _format_bytes(value) -> str | None:
     if value is None:
         return ""
     size = float(value)
-    for unit in ("B", "KB", "MB", "GB", "TB"):
+    for unit: str in ("B", "KB", "MB", "GB", "TB"):
         if size < 1024.0 or unit == "TB":
             return f"{size:.1f} {unit}"
         size /= 1024.0
@@ -917,8 +1027,8 @@ def load_knowledge_base():
     with _kb_lock:
         try:
             if os.path.exists(KNOWLEDGE_BASE_FILE):
-                with open(KNOWLEDGE_BASE_FILE, encoding="utf-8") as f:
-                    content = f.read().strip()
+                with open(KNOWLEDGE_BASE_FILE, encoding="utf-8") as f: io.TextIOWrapper[io._WrappedBuffer]:
+                    content: str = f.read().strip()
 
                 # Try to decrypt if keyring is available
                 if _keyring_available() and content:
@@ -955,25 +1065,25 @@ def load_knowledge_base():
         return _default_kb()
 
 
-def save_knowledge_base(data):
+def save_knowledge_base(data) -> None:
     with _kb_lock:
         os.makedirs(os.path.dirname(KNOWLEDGE_BASE_FILE), exist_ok=True)
         fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(KNOWLEDGE_BASE_FILE), suffix=".tmp")
         try:
             # Encrypt KB data if keyring is available
             if _keyring_available():
-                encrypted = _encrypt_json(data, _KEYRING_USERNAME_KB_KEY)
+                encrypted: str | None = _encrypt_json(data, _KEYRING_USERNAME_KB_KEY)
                 if encrypted:
                     # Write encrypted string
-                    with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    with os.fdopen(fd, "w", encoding="utf-8") as f: io.TextIOWrapper[io._WrappedBuffer]:
                         f.write(encrypted)
                 else:
                     # Encryption failed, fall back to plain JSON
-                    with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    with os.fdopen(fd, "w", encoding="utf-8") as f: io.TextIOWrapper[io._WrappedBuffer]:
                         json.dump(data, f, indent=2)
             else:
                 # No keyring, write plain JSON
-                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                with os.fdopen(fd, "w", encoding="utf-8") as f: io.TextIOWrapper[io._WrappedBuffer]:
                     json.dump(data, f, indent=2)
             os.replace(tmp_path, KNOWLEDGE_BASE_FILE)
         except BaseException:
@@ -982,22 +1092,22 @@ def save_knowledge_base(data):
             raise
 
 
-def _backup_knowledge_base(max_backups=3):
+def _backup_knowledge_base(max_backups=3) -> None:
     """Copy the knowledge base file to a timestamped backup, keeping only the most recent *max_backups* versions."""
     try:
         if not os.path.exists(KNOWLEDGE_BASE_FILE):
             return
-        backup_dir = os.path.join(os.path.dirname(KNOWLEDGE_BASE_FILE), "kb_backups")
+        backup_dir: str = os.path.join(os.path.dirname(KNOWLEDGE_BASE_FILE), "kb_backups")
         os.makedirs(backup_dir, exist_ok=True)
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_path = os.path.join(backup_dir, f"pcap_knowledge_base_{ts}.json")
+        ts: str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_path: str = os.path.join(backup_dir, f"pcap_knowledge_base_{ts}.json")
         shutil.copy2(KNOWLEDGE_BASE_FILE, backup_path)
         # Prune old backups – keep only the most recent max_backups files
-        backups = sorted(
-            [f for f in os.listdir(backup_dir) if f.startswith("pcap_knowledge_base_") and f.endswith(".json")],
+        backups: list[str] = sorted(
+            [f for f: str in os.listdir(backup_dir) if f.startswith("pcap_knowledge_base_") and f.endswith(".json")],
         )
         while len(backups) > max_backups:
-            oldest = backups.pop(0)
+            oldest: str = backups.pop(0)
             with contextlib.suppress(OSError):
                 os.remove(os.path.join(backup_dir, oldest))
     except Exception:
@@ -1047,8 +1157,8 @@ def _parse_ioc_text(raw_text):
 
 
 def load_iocs_from_file(path):
-    with open(path, encoding="utf-8") as f:
-        raw = f.read()
+    with open(path, encoding="utf-8") as f: io.TextIOWrapper[io._WrappedBuffer]:
+        raw: str = f.read()
 
     try:
         parsed = json.loads(raw)
@@ -1057,7 +1167,7 @@ def load_iocs_from_file(path):
 
     if isinstance(parsed, dict):
         iocs = {"ips": set(), "domains": set(), "hashes": set()}
-        for key in ("ips", "domains", "hashes"):
+        for key: str in ("ips", "domains", "hashes"):
             values = parsed.get(key, [])
             if isinstance(values, list):
                 for item in values:
@@ -1074,7 +1184,7 @@ def load_iocs_from_file(path):
 
 def merge_iocs_into_kb(kb, new_iocs):
     kb_ioc = kb.get("ioc", {})
-    for key in ("ips", "domains", "hashes"):
+    for key: str in ("ips", "domains", "hashes"):
         combined = set(kb_ioc.get(key, [])) | set(new_iocs.get(key, set()))
         kb["ioc"][key] = sorted(combined)
     return kb
@@ -1118,8 +1228,8 @@ def _safe_urlopen(url, data=None, headers=None, timeout=30, context=None):
     if url_lower.startswith("http://"):
         from urllib.parse import urlparse as _urlparse
 
-        _host = (_urlparse(url_str).hostname or "").lower()
-        _localhost = {"localhost", "127.0.0.1", "::1", "[::1]"}
+        _host: str = (_urlparse(url_str).hostname or "").lower()
+        _localhost: set[str] = {"localhost", "127.0.0.1", "::1", "[::1]"}
         if _host not in _localhost:
             raise ValueError(
                 f"Unencrypted http:// connections are only allowed to localhost.\n"
@@ -1146,7 +1256,7 @@ def _safe_urlopen(url, data=None, headers=None, timeout=30, context=None):
 
 
 # Well-known malware / C2 ports used by common threats
-MALWARE_PORTS = frozenset(
+MALWARE_PORTS: frozenset[int] = frozenset(
     {
         4444,
         5555,
@@ -1185,7 +1295,7 @@ MALWARE_PORTS = frozenset(
     }
 )
 
-FEATURE_NAMES = [
+FEATURE_NAMES: list[str] = [
     "packet_count",
     "avg_size",
     "median_size",
@@ -1214,11 +1324,11 @@ FEATURE_NAMES = [
 ]
 
 
-def _vector_from_features(features):
+def _vector_from_features(features) -> list[float]:
     proto = features.get("proto_ratio", {})
     top_ports = features.get("top_ports", [])
 
-    def port_at(idx):
+    def port_at(idx) -> float:
         return float(top_ports[idx]) if idx < len(top_ports) else 0.0
 
     pkt_count = float(features.get("packet_count", 0.0))
@@ -1255,9 +1365,9 @@ def _vector_from_features(features):
 def _compute_normalizer(vectors):
     if not vectors:
         return None
-    columns = list(zip(*vectors, strict=False))
-    means = [sum(col) / len(col) for col in columns]
-    stds = [statistics.pstdev(col) or 1.0 for col in columns]
+    columns: list[tuple[Any, ...]] = list(zip(*vectors, strict=False))
+    means: list[float] = [sum(col) / len(col) for col: tuple[Any, ...] in columns]
+    stds: list[Any | float] = [statistics.pstdev(col) or 1.0 for col: tuple[Any, ...] in columns]
     return {"mean": means, "std": stds}
 
 
@@ -1267,25 +1377,25 @@ def _normalize_vector(vector, normalizer):
     ]
 
 
-def _vectorize_kb(kb):
+def _vectorize_kb(kb) -> dict[str, list[list[float]]]:
     """Pre-compute feature vectors and normalized centroids for all KB entries (call once per analysis)."""
-    safe_vectors = [_vector_from_features(entry["features"]) for entry in kb.get("safe", [])]
-    mal_vectors = [_vector_from_features(entry["features"]) for entry in kb.get("malicious", [])]
-    result = {"safe": safe_vectors, "malicious": mal_vectors}
+    safe_vectors: list[list[float]] = [_vector_from_features(entry["features"]) for entry in kb.get("safe", [])]
+    mal_vectors: list[list[float]] = [_vector_from_features(entry["features"]) for entry in kb.get("malicious", [])]
+    result: dict[str, list[list[float]]] = {"safe": safe_vectors, "malicious": mal_vectors}
     # Pre-compute normalized centroids for classify_vector to avoid re-normalizing every call
     if safe_vectors and mal_vectors:
-        all_vectors = safe_vectors + mal_vectors
+        all_vectors: list[list[float]] = safe_vectors + mal_vectors
         normalizer = _compute_normalizer(all_vectors)
-        safe_norm = [_normalize_vector(v, normalizer) for v in safe_vectors]
-        mal_norm = [_normalize_vector(v, normalizer) for v in mal_vectors]
-        cols_s = list(zip(*safe_norm, strict=False))
-        cols_m = list(zip(*mal_norm, strict=False))
-        result["_safe_centroid"] = [sum(c) / len(c) for c in cols_s]
-        result["_mal_centroid"] = [sum(c) / len(c) for c in cols_m]
+        safe_norm = [_normalize_vector(v, normalizer) for v: list[float] in safe_vectors]
+        mal_norm = [_normalize_vector(v, normalizer) for v: list[float] in mal_vectors]
+        cols_s: list[tuple[Any, ...]] = list(zip(*safe_norm, strict=False))
+        cols_m: list[tuple[Any, ...]] = list(zip(*mal_norm, strict=False))
+        result["_safe_centroid"] = [sum(c) / len(c) for c: tuple[Any, ...] in cols_s]
+        result["_mal_centroid"] = [sum(c) / len(c) for c: tuple[Any, ...] in cols_m]
         result["_normalizer"] = normalizer
         # Per-cluster variance for Mahalanobis-like distance
-        result["_safe_var"] = [max(statistics.pvariance(c), 1e-6) for c in cols_s]
-        result["_mal_var"] = [max(statistics.pvariance(c), 1e-6) for c in cols_m]
+        result["_safe_var"] = [max(statistics.pvariance(c), 1e-6) for c: tuple[Any, ...] in cols_s]
+        result["_mal_var"] = [max(statistics.pvariance(c), 1e-6) for c: tuple[Any, ...] in cols_m]
     return result
 
 
@@ -1308,23 +1418,23 @@ def anomaly_score(vector, baseline):
         z = abs(value - mean) / (std or 1.0)
         zscores.append(z)
 
-    capped = [min(z, 4.0) for z in zscores]
-    avg_score = sum(capped) / max(len(capped), 1) / 4.0 * 100.0
+    capped: list[float] = [min(z, 4.0) for z in zscores]
+    avg_score: float = sum(capped) / max(len(capped), 1) / 4.0 * 100.0
     # Use max z-score as secondary signal to avoid masking critical anomalies
     max_z = max(zscores) if zscores else 0.0
-    max_score = min(max_z / 4.0, 1.0) * 100.0
+    max_score: float = min(max_z / 4.0, 1.0) * 100.0
     # Blend: 60% average + 40% max to catch single extreme outliers
-    score = avg_score * 0.6 + max_score * 0.4
+    score: float = avg_score * 0.6 + max_score * 0.4
 
     # Critical outlier floor: if any z-score exceeds 6.0, impose a minimum
     # anomaly score to prevent extreme single-feature anomalies from being
     # masked by many normal features in the blend.
     if max_z > 6.0:
-        critical_floor = min(75.0, max_z * 8.0)
-        score = max(score, critical_floor)
+        critical_floor: float = min(75.0, max_z * 8.0)
+        score: float = max(score, critical_floor)
 
     top = sorted(enumerate(zscores), key=lambda item: item[1], reverse=True)[:3]
-    reasons = [f"{FEATURE_NAMES[idx]} z={value:.1f}" for idx, value in top if value > 0]
+    reasons: list[str] = [f"{FEATURE_NAMES[idx]} z={value:.1f}" for idx, value in top if value > 0]
     return round(score, 1), reasons
 
 
@@ -1363,29 +1473,29 @@ def classify_vector(vector, kb, normalizer_cache=None, kb_vectors=None):
         mal_norm = [_normalize_vector(vec, normalizer) for vec in mal_vectors]
         target = _normalize_vector(vector, normalizer)
 
-        def centroid(vectors):
-            cols = list(zip(*vectors, strict=False))
-            return [sum(col) / len(col) for col in cols]
+        def centroid(vectors) -> list[float]:
+            cols: list[tuple[Any, ...]] = list(zip(*vectors, strict=False))
+            return [sum(col) / len(col) for col: tuple[Any, ...] in cols]
 
-        safe_centroid = centroid(safe_norm)
-        mal_centroid = centroid(mal_norm)
+        safe_centroid: list[float] = centroid(safe_norm)
+        mal_centroid: list[float] = centroid(mal_norm)
         # Compute per-cluster variance for weighted distance
-        cols_s = list(zip(*safe_norm, strict=False))
-        cols_m = list(zip(*mal_norm, strict=False))
-        safe_var = [max(statistics.pvariance(c), 1e-6) for c in cols_s]
-        mal_var = [max(statistics.pvariance(c), 1e-6) for c in cols_m]
+        cols_s: list[tuple[Any, ...]] = list(zip(*safe_norm, strict=False))
+        cols_m: list[tuple[Any, ...]] = list(zip(*mal_norm, strict=False))
+        safe_var: list[Any] = [max(statistics.pvariance(c), 1e-6) for c: tuple[Any, ...] in cols_s]
+        mal_var: list[Any] = [max(statistics.pvariance(c), 1e-6) for c: tuple[Any, ...] in cols_m]
 
     # Variance-weighted (Mahalanobis-like) distance for more robust classification
-    def weighted_distance(a, b, var):
+    def weighted_distance(a, b, var) -> float:
         return math.sqrt(sum((x - y) ** 2 / v for x, y, v in zip(a, b, var, strict=False)))
 
-    dist_safe = weighted_distance(target, safe_centroid, safe_var)
-    dist_mal = weighted_distance(target, mal_centroid, mal_var)
+    dist_safe: float = weighted_distance(target, safe_centroid, safe_var)
+    dist_mal: float = weighted_distance(target, mal_centroid, mal_var)
     if dist_safe + dist_mal == 0:
         prob_mal = 0.5
     else:
-        prob_mal = dist_safe / (dist_safe + dist_mal)
-    score = round(prob_mal * 100.0, 1)
+        prob_mal: float = dist_safe / (dist_safe + dist_mal)
+    score: float = round(prob_mal * 100.0, 1)
     return {
         "score": score,
         "dist_safe": dist_safe,
@@ -1400,8 +1510,8 @@ def _domain_matches(domain, ioc_domains):
         return domain
     parts = domain.split(".")
     # Require at least 2 parts to avoid matching bare TLDs (e.g., "com", "net")
-    for idx in range(1, len(parts)):
-        candidate = ".".join(parts[idx:])
+    for idx: int in range(1, len(parts)):
+        candidate: str = ".".join(parts[idx:])
         if len(candidate.split(".")) >= 2 and candidate in ioc_domains:
             return candidate
     return None
@@ -1433,7 +1543,7 @@ def match_iocs(stats, iocs):
     return {"ips": sorted(matches["ips"]), "domains": sorted(matches["domains"])}
 
 
-def summarize_stats(stats):
+def summarize_stats(stats) -> str:
     top_ports = stats.get("top_ports", [])
     proto = stats.get("protocol_counts", {})
     dns_count = stats.get("dns_query_count", 0)
@@ -1457,7 +1567,7 @@ def build_features(stats):
     top_ports = [p for p, _ in stats.get("top_ports", [])]
 
     # Count how many top ports are known malware / C2 ports
-    malware_port_hits = sum(1 for p in top_ports if p in MALWARE_PORTS)
+    malware_port_hits: int = sum(1 for p in top_ports if p in MALWARE_PORTS)
 
     features = {
         "packet_count": stats.get("packet_count", 0),
@@ -1486,13 +1596,13 @@ def build_features(stats):
         features["flagged_domain_count"] = len(risky_domains)
 
         if risky_ips:
-            avg_ip_risk = sum(ip["risk_score"] for ip in risky_ips) / len(risky_ips)
+            avg_ip_risk: float = sum(ip["risk_score"] for ip in risky_ips) / len(risky_ips)
             features["avg_ip_risk_score"] = avg_ip_risk
         else:
             features["avg_ip_risk_score"] = 0.0
 
         if risky_domains:
-            avg_domain_risk = sum(d["risk_score"] for d in risky_domains) / len(risky_domains)
+            avg_domain_risk: float = sum(d["risk_score"] for d in risky_domains) / len(risky_domains)
             features["avg_domain_risk_score"] = avg_domain_risk
         else:
             features["avg_domain_risk_score"] = 0.0
@@ -1505,9 +1615,9 @@ def build_features(stats):
     return features
 
 
-def _vectorize_features(features):
+def _vectorize_features(features) -> dict[str, float]:
     pkt_count = float(features.get("packet_count", 0))
-    vector = {
+    vector: dict[str, float] = {
         "packet_count": pkt_count,
         "avg_size": float(features.get("avg_size", 0.0)),
         "median_size": float(features.get("median_size", 0.0)),
@@ -1549,7 +1659,7 @@ def _train_local_model(kb):
 
     rows = []
     labels = []
-    for label in ("safe", "malicious"):
+    for label: str in ("safe", "malicious"):
         for entry in kb.get(label, []):
             rows.append(_vectorize_features(entry.get("features", {})))
             labels.append(label)
@@ -1557,10 +1667,10 @@ def _train_local_model(kb):
     if len(set(labels)) < 2 or len(labels) < 2:
         return None, "Need at least one safe and one malware sample to train."
 
-    vectorizer = DictVectorizer(sparse=True)
-    X = vectorizer.fit_transform(rows)
+    vectorizer: DictVectorizer = DictVectorizer(sparse=True)
+    X: ndarray[tuple[Any, ...], dtype[Any]] | spmatrix = vectorizer.fit_transform(rows)
 
-    model = LogisticRegression(
+    model: LogisticRegression = LogisticRegression(
         max_iter=1000,
         class_weight="balanced",
         random_state=42,
@@ -1578,17 +1688,17 @@ def _train_local_model(kb):
 # app data directory.  This is far stronger than deriving a key from
 # predictable environment variables (COMPUTERNAME/USERNAME).
 def _get_model_hmac_key() -> bytes:
-    key_path = os.path.join(_get_app_data_dir(), ".model_hmac_key")
+    key_path: str = os.path.join(_get_app_data_dir(), ".model_hmac_key")
     if os.path.isfile(key_path):
         try:
-            with open(key_path, "rb") as f:
-                key = f.read()
+            with open(key_path, "rb") as f: io.BufferedReader[_BufferedReaderStream]:
+                key: bytes = f.read()
             if len(key) == 32:
                 return key
         except OSError:
             pass
     # Generate a new random key and persist it
-    key = os.urandom(32)
+    key: bytes = os.urandom(32)
     try:
         fd, tmp = tempfile.mkstemp(dir=os.path.dirname(key_path))
         closed = False
@@ -1609,38 +1719,38 @@ def _get_model_hmac_key() -> bytes:
     return key
 
 
-_MODEL_HMAC_KEY = _get_model_hmac_key()
+_MODEL_HMAC_KEY: bytes = _get_model_hmac_key()
 
 
-def _model_hmac_path():
+def _model_hmac_path() -> str:
     return MODEL_FILE + ".hmac"
 
 
-def _write_model_hmac():
+def _write_model_hmac() -> None:
     """Compute and write HMAC-SHA256 for the saved model file."""
-    h = hmac.new(_MODEL_HMAC_KEY, digestmod=hashlib.sha256)
-    with open(MODEL_FILE, "rb") as f:
+    h: hmac.HMAC = hmac.new(_MODEL_HMAC_KEY, digestmod=hashlib.sha256)
+    with open(MODEL_FILE, "rb") as f: io.BufferedReader[_BufferedReaderStream]:
         while True:
-            chunk = f.read(65536)
+            chunk: bytes = f.read(65536)
             if not chunk:
                 break
             h.update(chunk)
-    with open(_model_hmac_path(), "w", encoding="utf-8") as f:
+    with open(_model_hmac_path(), "w", encoding="utf-8") as f: io.TextIOWrapper[io._WrappedBuffer]:
         f.write(h.hexdigest())
 
 
-def _verify_model_hmac():
+def _verify_model_hmac() -> bool:
     """Verify HMAC-SHA256 of the model file. Returns False if tampered or missing."""
-    hmac_file = _model_hmac_path()
+    hmac_file: str = _model_hmac_path()
     if not os.path.exists(hmac_file):
         return False
     try:
-        with open(hmac_file, encoding="utf-8") as f:
-            expected = f.read().strip().lower()
-        h = hmac.new(_MODEL_HMAC_KEY, digestmod=hashlib.sha256)
-        with open(MODEL_FILE, "rb") as f:
+        with open(hmac_file, encoding="utf-8") as f: io.TextIOWrapper[io._WrappedBuffer]:
+            expected: str = f.read().strip().lower()
+        h: hmac.HMAC = hmac.new(_MODEL_HMAC_KEY, digestmod=hashlib.sha256)
+        with open(MODEL_FILE, "rb") as f: io.BufferedReader[_BufferedReaderStream]:
             while True:
-                chunk = f.read(65536)
+                chunk: bytes = f.read(65536)
                 if not chunk:
                     break
                 h.update(chunk)
@@ -1649,7 +1759,7 @@ def _verify_model_hmac():
         return False
 
 
-def _save_local_model(model_bundle):
+def _save_local_model(model_bundle) -> None:
     _joblib_dump, _joblib_load, _DictVectorizer, _LogisticRegression = _get_sklearn()
     _joblib_dump(model_bundle, MODEL_FILE)
     with contextlib.suppress(Exception):
@@ -1685,25 +1795,25 @@ def _load_local_model():
     return meta
 
 
-def _predict_local_model(model_bundle, features):
+def _predict_local_model(model_bundle, features) -> tuple[None, None] | tuple[str, float | None]:
     vectorizer = model_bundle.get("vectorizer")
     model = model_bundle.get("model")
     if vectorizer is None or model is None:
         return None, None
 
-    row = _vectorize_features(features)
+    row: dict[str, float] = _vectorize_features(features)
     X = vectorizer.transform([row])
 
     pred = model.predict(X)[0]
     proba = None
     if hasattr(model, "predict_proba"):
         probas = model.predict_proba(X)[0]
-        class_index = list(model.classes_).index("malicious")
+        class_index: int = list(model.classes_).index("malicious")
         proba = float(probas[class_index])
     return str(pred), proba
 
 
-def similarity_score(target, entry, _target_ports=None, _target_proto=None):
+def similarity_score(target, entry, _target_ports=None, _target_proto=None) -> float:
     target_count = target.get("packet_count", 0)
     entry_count = entry.get("packet_count", 0)
     if not target_count or not entry_count:
@@ -1713,25 +1823,25 @@ def similarity_score(target, entry, _target_ports=None, _target_proto=None):
     target_ports = _target_ports if _target_ports is not None else set(target.get("top_ports", []))
     entry_ports = set(entry.get("top_ports", []))
     ports_union = target_ports | entry_ports
-    port_overlap = len(target_ports & entry_ports) / max(len(ports_union), 1)
+    port_overlap: float = len(target_ports & entry_ports) / max(len(ports_union), 1)
 
     target_proto = _target_proto if _target_proto is not None else target.get("proto_ratio", {})
     entry_proto = entry.get("proto_ratio", {})
     proto_keys = set(target_proto) | set(entry_proto)
-    proto_diff = sum(abs(target_proto.get(k, 0) - entry_proto.get(k, 0)) for k in proto_keys)
-    proto_similarity = max(0.0, 1.0 - proto_diff)
+    proto_diff: int = sum(abs(target_proto.get(k, 0) - entry_proto.get(k, 0)) for k in proto_keys)
+    proto_similarity: float = max(0.0, 1.0 - proto_diff)
 
-    def similarity_metric(a, b):
+    def similarity_metric(a, b) -> float:
         return 1.0 - min(abs(a - b) / max(a, b, 1.0), 1.0)
 
-    size_similarity = similarity_metric(target.get("avg_size", 0.0), entry.get("avg_size", 0.0))
-    count_similarity = similarity_metric(target_count, entry_count)
-    dns_similarity = similarity_metric(target.get("dns_query_count", 0), entry.get("dns_query_count", 0))
-    http_similarity = similarity_metric(target.get("http_request_count", 0), entry.get("http_request_count", 0))
-    tls_similarity = similarity_metric(target.get("tls_packet_count", 0), entry.get("tls_packet_count", 0))
-    dst_similarity = similarity_metric(target.get("unique_dst", 1), entry.get("unique_dst", 1))
+    size_similarity: float = similarity_metric(target.get("avg_size", 0.0), entry.get("avg_size", 0.0))
+    count_similarity: float = similarity_metric(target_count, entry_count)
+    dns_similarity: float = similarity_metric(target.get("dns_query_count", 0), entry.get("dns_query_count", 0))
+    http_similarity: float = similarity_metric(target.get("http_request_count", 0), entry.get("http_request_count", 0))
+    tls_similarity: float = similarity_metric(target.get("tls_packet_count", 0), entry.get("tls_packet_count", 0))
+    dst_similarity: float = similarity_metric(target.get("unique_dst", 1), entry.get("unique_dst", 1))
 
-    score = 100.0 * (
+    score: float = 100.0 * (
         0.25 * port_overlap
         + 0.20 * proto_similarity
         + 0.12 * size_similarity
@@ -1776,20 +1886,20 @@ def get_top_k_similar_entries(features, kb_entries, k=5):
 
     # Score only candidates, then get top K
     if len(candidates) <= k:
-        scores = [
+        scores: list[float] = [
             similarity_score(features, e["features"], _target_ports=target_ports, _target_proto=target_proto)
             for e in candidates
         ]
-        sorted_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
-        return [candidates[i] for i in sorted_indices], [scores[i] for i in sorted_indices]
+        sorted_indices: list[int] = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
+        return [candidates[i] for i: int in sorted_indices], [scores[i] for i: int in sorted_indices]
 
     # Score all candidates and take top K
-    scores = [
+    scores: list[float] = [
         similarity_score(features, e["features"], _target_ports=target_ports, _target_proto=target_proto)
         for e in candidates
     ]
-    top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:k]
-    return [candidates[i] for i in top_indices], [scores[i] for i in top_indices]
+    top_indices: list[int] = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:k]
+    return [candidates[i] for i: int in top_indices], [scores[i] for i: int in top_indices]
 
 
 def parse_http_payload(payload):
@@ -1824,7 +1934,7 @@ def parse_http_payload(payload):
         path = parts[1]
 
         # Fast host header search
-        host = ""
+        host: str = ""
         host_idx = payload.find(b"\r\nHost:", 0, min(len(payload), 2000))
         if host_idx == -1:
             host_idx = payload.find(b"\r\nhost:", 0, min(len(payload), 2000))
@@ -1846,12 +1956,12 @@ def parse_http_payload(payload):
 
 
 # Pre-compiled regex patterns for HTTP credential extraction (P4 fix)
-_RE_HTTP_BASIC = re.compile(r"(?i)\r\nAuthorization:\s*Basic\s+([A-Za-z0-9+/=]+)")
-_RE_HTTP_NTLM = re.compile(r"(?i)\r\nAuthorization:\s*NTLM\s+([A-Za-z0-9+/=]+)")
-_RE_HTTP_COOKIE = re.compile(r"(?i)\r\nCookie:\s*(.+?)\r\n")
-_RE_HTTP_SET_COOKIE = re.compile(r"(?i)\r\nSet-Cookie:\s*(.+?)\r\n")
-_RE_FORM_USER = re.compile(r"(?:user(?:name)?|login|email|acct)=([^&\r\n]+)", re.IGNORECASE)
-_RE_FORM_PASS = re.compile(r"(?:pass(?:word)?|passwd|pw|secret)=([^&\r\n]+)", re.IGNORECASE)
+_RE_HTTP_BASIC: re.Pattern[str] = re.compile(r"(?i)\r\nAuthorization:\s*Basic\s+([A-Za-z0-9+/=]+)")
+_RE_HTTP_NTLM: re.Pattern[str] = re.compile(r"(?i)\r\nAuthorization:\s*NTLM\s+([A-Za-z0-9+/=]+)")
+_RE_HTTP_COOKIE: re.Pattern[str] = re.compile(r"(?i)\r\nCookie:\s*(.+?)\r\n")
+_RE_HTTP_SET_COOKIE: re.Pattern[str] = re.compile(r"(?i)\r\nSet-Cookie:\s*(.+?)\r\n")
+_RE_FORM_USER: re.Pattern[str] = re.compile(r"(?:user(?:name)?|login|email|acct)=([^&\r\n]+)", re.IGNORECASE)
+_RE_FORM_PASS: re.Pattern[str] = re.compile(r"(?:pass(?:word)?|passwd|pw|secret)=([^&\r\n]+)", re.IGNORECASE)
 
 
 def extract_credentials_and_hosts(file_path, use_high_memory=False):
@@ -1880,7 +1990,7 @@ def extract_credentials_and_hosts(file_path, use_high_memory=False):
     ftp_state = OrderedDict()  # src_ip:src_port -> last USER value
     MAX_CREDS = 5000
 
-    def _add_host(ip, mac=None, hostname=None):
+    def _add_host(ip, mac=None, hostname=None) -> None:
         if ip not in hosts:
             hosts[ip] = {"mac": set(), "hostnames": set()}
         if mac and mac not in {"00:00:00:00:00:00", "ff:ff:ff:ff:ff:ff"}:
@@ -1888,7 +1998,7 @@ def extract_credentials_and_hosts(file_path, use_high_memory=False):
         if hostname:
             hosts[ip]["hostnames"].add(hostname)
 
-    def _add_cred(protocol, src, dst, field, value, detail=""):
+    def _add_cred(protocol, src, dst, field, value, detail="") -> None:
         if len(credentials) >= MAX_CREDS:
             return
         key = (protocol, src, dst, field, value)
@@ -1906,22 +2016,22 @@ def extract_credentials_and_hosts(file_path, use_high_memory=False):
             }
         )
 
-    def _try_decode(data):
+    def _try_decode(data) -> str:
         if isinstance(data, bytes):
             return data.decode("utf-8", errors="replace").strip()
         return str(data).strip()
 
-    def _parse_http_auth(payload, src, dst):
+    def _parse_http_auth(payload, src, dst) -> None:
         """Extract HTTP Basic/Digest auth, form POST credentials, cookies."""
         try:
             text = payload.decode("latin-1", errors="ignore")
         except Exception:
             return
         # Authorization header (Basic) — uses pre-compiled regex
-        auth_match = _RE_HTTP_BASIC.search(text)
+        auth_match: re.Match[str] | None = _RE_HTTP_BASIC.search(text)
         if auth_match:
             try:
-                decoded = base64.b64decode(auth_match.group(1)).decode("utf-8", errors="replace")
+                decoded: str = base64.b64decode(auth_match.group(1)).decode("utf-8", errors="replace")
                 if ":" in decoded:
                     user, pw = decoded.split(":", 1)
                     _add_cred("HTTP-Basic", src, dst, "Username", user)
@@ -1929,7 +2039,7 @@ def extract_credentials_and_hosts(file_path, use_high_memory=False):
             except Exception:
                 pass
         # NTLM in HTTP — uses pre-compiled regex
-        ntlm_match = _RE_HTTP_NTLM.search(text)
+        ntlm_match: re.Match[str] | None = _RE_HTTP_NTLM.search(text)
         if ntlm_match:
             _add_cred("HTTP-NTLM", src, dst, "NTLM Token", ntlm_match.group(1)[:60] + "...", "NTLM auth exchange")
         # Form POST with common credential field names — uses pre-compiled regex
@@ -1937,54 +2047,54 @@ def extract_credentials_and_hosts(file_path, use_high_memory=False):
             body_start = text.find("\r\n\r\n")
             if body_start != -1:
                 body = text[body_start + 4 : body_start + 4 + 2000]
-                for compiled_re in (_RE_FORM_USER, _RE_FORM_PASS):
-                    for m in compiled_re.finditer(body):
-                        field_name = m.group(0).split("=", 1)[0]
+                for compiled_re: re.Pattern[str] in (_RE_FORM_USER, _RE_FORM_PASS):
+                    for m: re.Match[str] in compiled_re.finditer(body):
+                        field_name: str = m.group(0).split("=", 1)[0]
                         _add_cred("HTTP-POST", src, dst, field_name, m.group(1))
         # Cookie header — uses pre-compiled regex
-        cookie_match = _RE_HTTP_COOKIE.search(text)
+        cookie_match: re.Match[str] | None = _RE_HTTP_COOKIE.search(text)
         if cookie_match:
-            cookie_val = cookie_match.group(1).strip()
+            cookie_val: str | ctypes.Any = cookie_match.group(1).strip()
             if len(cookie_val) > 120:
-                cookie_val = cookie_val[:120] + "..."
+                cookie_val: str | ctypes.Any = cookie_val[:120] + "..."
             _add_cred("HTTP-Cookie", src, dst, "Cookie", cookie_val)
         # Set-Cookie (server response) — uses pre-compiled regex
-        set_cookie_match = _RE_HTTP_SET_COOKIE.search(text)
+        set_cookie_match: re.Match[str] | None = _RE_HTTP_SET_COOKIE.search(text)
         if set_cookie_match:
-            sc_val = set_cookie_match.group(1).strip()
+            sc_val: str | ctypes.Any = set_cookie_match.group(1).strip()
             if len(sc_val) > 120:
-                sc_val = sc_val[:120] + "..."
+                sc_val: str | ctypes.Any = sc_val[:120] + "..."
             _add_cred("HTTP-SetCookie", dst, src, "Set-Cookie", sc_val, "Server-issued session cookie")
 
-    def _parse_ftp(line, src, dst, sport, dport):
+    def _parse_ftp(line, src, dst, sport, dport) -> None:
         """Extract FTP USER/PASS commands."""
-        text = _try_decode(line)
-        upper = text.upper()
-        conn_key = f"{src}:{sport}"
+        text: str = _try_decode(line)
+        upper: str = text.upper()
+        conn_key: str = f"{src}:{sport}"
         if upper.startswith("USER "):
-            user = text[5:].strip()
+            user: str = text[5:].strip()
             ftp_state[conn_key] = user
             # Evict oldest entries to bound memory usage
             while len(ftp_state) > _FTP_STATE_MAX:
                 ftp_state.popitem(last=False)
             _add_cred("FTP", src, dst, "Username", user)
         elif upper.startswith("PASS "):
-            pw = text[5:].strip()
+            pw: str = text[5:].strip()
             user = ftp_state.get(conn_key, "")
             _add_cred("FTP", src, dst, "Password", pw, f"User: {user}" if user else "")
 
-    def _parse_smtp(line, src, dst):
+    def _parse_smtp(line, src, dst) -> None:
         """Extract SMTP AUTH credentials."""
-        text = _try_decode(line)
-        upper = text.upper()
+        text: str = _try_decode(line)
+        upper: str = text.upper()
         if upper.startswith("AUTH LOGIN") or upper.startswith("AUTH PLAIN"):
-            parts = text.split()
+            parts: list[str] = text.split()
             if len(parts) >= 3 and parts[1].upper() == "PLAIN":
                 try:
-                    decoded = base64.b64decode(parts[2]).decode("utf-8", errors="replace")
+                    decoded: str = base64.b64decode(parts[2]).decode("utf-8", errors="replace")
                     # AUTH PLAIN format: \x00user\x00pass
-                    pieces = decoded.split("\x00")
-                    pieces = [p for p in pieces if p]
+                    pieces: list[str] = decoded.split("\x00")
+                    pieces: list[str] = [p for p: str in pieces if p]
                     if len(pieces) >= 2:
                         _add_cred("SMTP", src, dst, "Username", pieces[0])
                         _add_cred("SMTP", src, dst, "Password", pieces[1])
@@ -1993,44 +2103,44 @@ def extract_credentials_and_hosts(file_path, use_high_memory=False):
                 except Exception:
                     pass
         elif upper.startswith("EHLO ") or upper.startswith("HELO "):
-            hostname = text.split(None, 1)[1].strip() if len(text.split(None, 1)) > 1 else ""
+            hostname: str = text.split(None, 1)[1].strip() if len(text.split(None, 1)) > 1 else ""
             if hostname:
                 _add_host(src, hostname=hostname)
                 _add_cred("SMTP", src, dst, "EHLO/HELO", hostname, "Client hostname announcement")
         elif upper.startswith("MAIL FROM:"):
-            sender = text[10:].strip().strip("<>")
+            sender: str = text[10:].strip().strip("<>")
             if sender:
                 _add_cred("SMTP", src, dst, "MAIL FROM", sender)
 
-    def _parse_pop3(line, src, dst):
+    def _parse_pop3(line, src, dst) -> None:
         """Extract POP3 USER/PASS."""
-        text = _try_decode(line)
-        upper = text.upper()
+        text: str = _try_decode(line)
+        upper: str = text.upper()
         if upper.startswith("USER "):
             _add_cred("POP3", src, dst, "Username", text[5:].strip())
         elif upper.startswith("PASS "):
             _add_cred("POP3", src, dst, "Password", text[5:].strip())
 
-    def _parse_imap(line, src, dst):
+    def _parse_imap(line, src, dst) -> None:
         """Extract IMAP LOGIN credentials."""
-        text = _try_decode(line)
+        text: str = _try_decode(line)
         # IMAP LOGIN: tag LOGIN user pass
-        login_match = re.match(r"\S+\s+LOGIN\s+(\S+)\s+(\S+)", text, re.IGNORECASE)
+        login_match: re.Match[str] | None = re.match(r"\S+\s+LOGIN\s+(\S+)\s+(\S+)", text, re.IGNORECASE)
         if login_match:
             _add_cred("IMAP", src, dst, "Username", login_match.group(1).strip('"'))
             _add_cred("IMAP", src, dst, "Password", login_match.group(2).strip('"'))
 
-    def _parse_telnet_line(line, src, dst):
+    def _parse_telnet_line(line, src, dst) -> None:
         """Heuristic extraction from telnet-like cleartext sessions."""
-        text = _try_decode(line)
-        lower = text.lower()
+        text: str = _try_decode(line)
+        lower: str = text.lower()
         if "login:" in lower or "username:" in lower:
             # This is a prompt; the actual username comes in a subsequent packet
             _add_cred("Telnet", dst, src, "Login Prompt", text.strip(), "Server login prompt")
         elif "password:" in lower:
             _add_cred("Telnet", dst, src, "Password Prompt", text.strip(), "Server password prompt")
 
-    def _parse_snmp(payload, src, dst):
+    def _parse_snmp(payload, src, dst) -> None:
         """Extract SNMP community strings (v1/v2c)."""
         try:
             # SNMPv1/v2c community string is in a simple ASN.1 structure
@@ -2065,19 +2175,19 @@ def extract_credentials_and_hosts(file_path, use_high_memory=False):
         except Exception:
             pass
 
-    def _parse_kerberos(payload, src, dst):
+    def _parse_kerberos(payload, src, dst) -> None:
         """Basic Kerberos principal extraction from AS-REQ."""
         try:
             # Look for common Kerberos realm/principal patterns in the payload
             text = payload.decode("utf-8", errors="ignore")
             # Kerberos principals often appear as name@REALM
-            krb_match = re.findall(r"([a-zA-Z0-9_.+-]+@[A-Z0-9.\-]+)", text)
+            krb_match: list[Any] = re.findall(r"([a-zA-Z0-9_.+-]+@[A-Z0-9.\-]+)", text)
             for principal in krb_match[:3]:
                 _add_cred("Kerberos", src, dst, "Principal", principal)
         except Exception:
             pass
 
-    def _check_dhcp_hostname(payload, src, mac):
+    def _check_dhcp_hostname(payload, src, mac) -> None:
         """Extract hostname from DHCP options."""
         try:
             if len(payload) < 240:
@@ -2106,8 +2216,8 @@ def extract_credentials_and_hosts(file_path, use_high_memory=False):
     try:
         if use_high_memory:
             try:
-                with open(resolved_path, "rb") as handle:
-                    pcap_bytes = handle.read()
+                with open(resolved_path, "rb") as handle: io.BufferedReader[_BufferedReaderStream]:
+                    pcap_bytes: bytes = handle.read()
                 reader = PcapReader(io.BytesIO(pcap_bytes))
             except Exception:
                 reader = PcapReader(resolved_path)
@@ -2140,9 +2250,9 @@ def extract_credentials_and_hosts(file_path, use_high_memory=False):
                     _add_host(dst_ip, mac=dst_mac)
 
                 tcp_layer = pkt.getlayer(TCP)
-                udp_layer = pkt.getlayer(UDP) if tcp_layer is None else None
+                udp_layer: ctypes.Any | None = pkt.getlayer(UDP) if tcp_layer is None else None
                 raw_layer = pkt.getlayer(Raw)
-                payload = bytes(raw_layer.load) if raw_layer and raw_layer.load else b""
+                payload: bytes = bytes(raw_layer.load) if raw_layer and raw_layer.load else b""
 
                 if tcp_layer is not None:
                     sport = int(tcp_layer.sport)
@@ -2151,31 +2261,31 @@ def extract_credentials_and_hosts(file_path, use_high_memory=False):
                     if payload:
                         # FTP (ports 21, 2121)
                         if dport in (21, 2121) or sport in (21, 2121):
-                            for line in payload.split(b"\r\n"):
+                            for line: bytes in payload.split(b"\r\n"):
                                 if line:
                                     _parse_ftp(line, src_ip, dst_ip, sport, dport)
 
                         # SMTP (ports 25, 465, 587)
                         elif dport in (25, 465, 587) or sport in (25, 465, 587):
-                            for line in payload.split(b"\r\n"):
+                            for line: bytes in payload.split(b"\r\n"):
                                 if line:
                                     _parse_smtp(line, src_ip, dst_ip)
 
                         # POP3 (port 110, 995)
                         elif dport in (110, 995) or sport in (110, 995):
-                            for line in payload.split(b"\r\n"):
+                            for line: bytes in payload.split(b"\r\n"):
                                 if line:
                                     _parse_pop3(line, src_ip, dst_ip)
 
                         # IMAP (port 143, 993)
                         elif dport in (143, 993) or sport in (143, 993):
-                            for line in payload.split(b"\r\n"):
+                            for line: bytes in payload.split(b"\r\n"):
                                 if line:
                                     _parse_imap(line, src_ip, dst_ip)
 
                         # Telnet (port 23)
                         elif dport == 23 or sport == 23:
-                            for line in payload.split(b"\r\n"):
+                            for line: bytes in payload.split(b"\r\n"):
                                 if line:
                                     _parse_telnet_line(line, src_ip, dst_ip)
 
@@ -2214,13 +2324,13 @@ def extract_credentials_and_hosts(file_path, use_high_memory=False):
                         elif qd:
                             qname = qd[0].qname
                         else:
-                            qname = b""
+                            qname: bytes = b""
                         if isinstance(qname, bytes):
-                            dn = qname.decode("utf-8", errors="ignore").rstrip(".")
+                            dn: str = qname.decode("utf-8", errors="ignore").rstrip(".")
                         elif qname:
-                            dn = str(qname).rstrip(".")
+                            dn: str = str(qname).rstrip(".")
                         else:
-                            dn = ""
+                            dn: str = ""
                         if dn:
                             _add_host(dst_ip, hostname=dn)
                     except Exception:
@@ -2243,13 +2353,13 @@ def extract_credentials_and_hosts(file_path, use_high_memory=False):
     return {"credentials": credentials, "hosts": hosts_out}
 
 
-def _maybe_reservoir_append(items, item, limit, seen_count):
+def _maybe_reservoir_append(items, item, limit, seen_count) -> None:
     if limit <= 0:
         return
     if len(items) < limit:
         items.append(item)
         return
-    j = random.randint(1, seen_count)
+    j: int = random.randint(1, seen_count)
     if j <= limit:
         items[j - 1] = item
 
@@ -2257,11 +2367,11 @@ def _maybe_reservoir_append(items, item, limit, seen_count):
 def _resolve_pcap_source(file_path, progress_cb=None):
     """Get the PCAP file path and size."""
 
-    def cleanup():
+    def cleanup() -> None:
         return None
 
     try:
-        file_size = os.path.getsize(file_path)
+        file_size: int = os.path.getsize(file_path)
     except OSError:
         file_size = 0
     return file_path, cleanup, file_size
@@ -2272,13 +2382,13 @@ def parse_pcap_path(
 ):
     DNS, DNSQR, IP, PcapReader, Raw, TCP, UDP = _get_scapy()
     tls_support = _get_tls_support()
-    pd = _get_pandas()
+    pd: Any = _get_pandas()
     rows = []
     size_samples = []
-    should_sample_rows = max_rows > 0
+    should_sample_rows: bool = max_rows > 0
     resolved_path, cleanup, file_size = _resolve_pcap_source(file_path, progress_cb)
-    start_time = _utcnow()
-    last_progress_time = start_time
+    start_time: datetime = _utcnow()
+    last_progress_time: datetime = start_time
     # Scale progress check interval based on file size
     if file_size and file_size > 100_000_000:
         update_every = 5000
@@ -2312,8 +2422,8 @@ def parse_pcap_path(
     try:
         if use_high_memory:
             try:
-                with open(resolved_path, "rb") as handle:
-                    pcap_bytes = handle.read()
+                with open(resolved_path, "rb") as handle: io.BufferedReader[_BufferedReaderStream]:
+                    pcap_bytes: bytes = handle.read()
                 pcap_source = io.BytesIO(pcap_bytes)
                 reader = PcapReader(pcap_source)
             except Exception:
@@ -2328,7 +2438,7 @@ def parse_pcap_path(
                     continue
 
                 packet_count += 1
-                pkt_size = len(pkt)
+                pkt_size: int = len(pkt)
                 sum_size += pkt_size
                 _maybe_reservoir_append(size_samples, pkt_size, SIZE_SAMPLE_LIMIT, packet_count)
 
@@ -2360,7 +2470,7 @@ def parse_pcap_path(
                 unique_dst.add(dst_ip)
 
                 # DNS parsing
-                dns_query = ""
+                dns_query: str = ""
                 dns_layer = pkt.getlayer(DNS)
                 if dns_layer is not None:
                     try:
@@ -2370,13 +2480,13 @@ def parse_pcap_path(
                         elif qd:
                             qname = qd[0].qname
                         else:
-                            qname = b""
+                            qname: bytes = b""
                         if isinstance(qname, bytes):
-                            dns_query = qname.decode("utf-8", errors="ignore").rstrip(".")
+                            dns_query: str = qname.decode("utf-8", errors="ignore").rstrip(".")
                         elif qname:
-                            dns_query = str(qname).rstrip(".")
+                            dns_query: str = str(qname).rstrip(".")
                     except Exception:
-                        dns_query = ""
+                        dns_query: str = ""
 
                 if dns_query:
                     dns_query_count += 1
@@ -2387,17 +2497,17 @@ def parse_pcap_path(
                         ioc_truncated = True
 
                 # HTTP parsing - only if TCP and parse_http enabled
-                http_host = ""
-                http_path = ""
-                http_method = ""
+                http_host: str = ""
+                http_path: str = ""
+                http_method: str = ""
                 if parse_http and tcp_layer is not None:
                     raw_layer = pkt.getlayer(Raw)
                     if raw_layer is not None and raw_layer.load:
                         http_host, http_path, http_method = parse_http_payload(bytes(raw_layer.load))
 
-                tls_sni = ""
-                tls_version = ""
-                tls_alpn = ""
+                tls_sni: str = ""
+                tls_version: str = ""
+                tls_alpn: str = ""
                 if tcp_layer is not None:
                     tls_sni, tls_version, tls_alpn = _extract_tls_metadata(pkt, tls_support)
                 if tls_sni or tls_version or tls_alpn:
@@ -2439,21 +2549,21 @@ def parse_pcap_path(
 
                 # Progress updates
                 if packet_count % update_every == 0:
-                    now = _utcnow()
+                    now: datetime = _utcnow()
                     if (now - last_progress_time).total_seconds() >= 0.2:
-                        elapsed = (now - start_time).total_seconds()
-                        avg_size = sum_size / packet_count
+                        elapsed: float = (now - start_time).total_seconds()
+                        avg_size: float = sum_size / packet_count
                         if file_size:
-                            progress = min(99.0, (sum_size / file_size) * 100.0)
-                            est_total = file_size / avg_size
-                            rate = packet_count / elapsed if elapsed > 0 else 0.0
-                            eta = ((est_total - packet_count) / rate) if rate > 0 else None
+                            progress: float = min(99.0, (sum_size / file_size) * 100.0)
+                            est_total: float = file_size / avg_size
+                            rate: float = packet_count / elapsed if elapsed > 0 else 0.0
+                            eta: float | None = ((est_total - packet_count) / rate) if rate > 0 else None
                         else:
                             progress = None
                             eta = None
 
                         progress_cb(progress, eta, sum_size, file_size)
-                        last_progress_time = now
+                        last_progress_time: datetime = now
                 # Fast cancellation check (every 200 packets)
                 elif cancel_event is not None and packet_count % 200 == 0 and cancel_event.is_set():
                     raise AnalysisCancelledError("Analysis cancelled by user.")
@@ -2461,8 +2571,8 @@ def parse_pcap_path(
         cleanup()
 
     # Build final stats
-    avg_size = sum_size / packet_count if packet_count else 0.0
-    median_size = float(statistics.median(size_samples)) if size_samples else 0.0
+    avg_size: float = sum_size / packet_count if packet_count else 0.0
+    median_size: float = float(statistics.median(size_samples)) if size_samples else 0.0
     top_ports = port_counts.most_common(5)
 
     final_stats = {
@@ -2487,7 +2597,7 @@ def parse_pcap_path(
         "tls_sni": sorted(tls_sni_set),
         "ioc_truncated": bool(ioc_truncated),
     }
-    sample_info = {
+    sample_info: dict[str, int] = {
         "sample_count": len(rows),
         "total_count": packet_count,
     }
@@ -2510,14 +2620,14 @@ def _fast_parse_pcap_path(
     # Note: Using PcapReader for both .pcap and .pcapng (more reliable than RawPcapNgReader)
 
     tls_support = _get_tls_support()
-    pd = _get_pandas()
+    pd: Any = _get_pandas()
 
     rows = []
     size_samples = []
-    should_sample_rows = max_rows > 0
+    should_sample_rows: bool = max_rows > 0
     resolved_path, cleanup, file_size = _resolve_pcap_source(file_path, progress_cb)
-    start_time = _utcnow()
-    last_progress_time = start_time
+    start_time: datetime = _utcnow()
+    last_progress_time: datetime = start_time
 
     # Larger update interval for speed – checked every N packets
     update_every = 5000
@@ -2541,10 +2651,10 @@ def _fast_parse_pcap_path(
     tls_sni_set = set()
 
     # Pre-bind for speed
-    _unpack_HH = struct.Struct("!HH").unpack_from
-    _unpack_H = struct.Struct("!H").unpack_from
+    _unpack_HH: Callable[..., tuple[Any, ...]] = struct.Struct("!HH").unpack_from
+    _unpack_H: Callable[..., tuple[Any, ...]] = struct.Struct("!H").unpack_from
 
-    DNS_PORTS = frozenset({53, 5353, 5355})
+    DNS_PORTS: frozenset[int] = frozenset({53, 5353, 5355})
 
     if progress_cb and file_size:
         progress_cb(0.0, None, 0, file_size)
@@ -2563,7 +2673,7 @@ def _fast_parse_pcap_path(
                 else:
                     raw_data = bytes(pkt)
 
-                data_len = len(raw_data)
+                data_len: int = len(raw_data)
 
                 # ── Determine IP start offset based on link type ──
                 if linktype == 1:  # Ethernet
@@ -2590,27 +2700,27 @@ def _fast_parse_pcap_path(
                     continue
 
                 # ── Parse IP header ──
-                ip_b0 = raw_data[ip_start]
+                ip_b0: ctypes.Any | int = raw_data[ip_start]
                 if (ip_b0 >> 4) != 4:  # Not IPv4
                     continue
-                ip_ihl = (ip_b0 & 0x0F) * 4
+                ip_ihl: ctypes.Any | int = (ip_b0 & 0x0F) * 4
                 if ip_ihl < 20 or data_len < ip_start + ip_ihl:
                     continue
 
                 packet_count += 1
-                pkt_size = data_len
+                pkt_size: int = data_len
                 sum_size += pkt_size
                 _maybe_reservoir_append(size_samples, pkt_size, SIZE_SAMPLE_LIMIT, packet_count)
 
-                ip_proto = raw_data[ip_start + 9]
-                sb = raw_data[ip_start + 12 : ip_start + 16]
-                db = raw_data[ip_start + 16 : ip_start + 20]
-                src_ip = f"{sb[0]}.{sb[1]}.{sb[2]}.{sb[3]}"
-                dst_ip = f"{db[0]}.{db[1]}.{db[2]}.{db[3]}"
+                ip_proto: ctypes.Any | int = raw_data[ip_start + 9]
+                sb: ctypes.Any | bytes = raw_data[ip_start + 12 : ip_start + 16]
+                db: ctypes.Any | bytes = raw_data[ip_start + 16 : ip_start + 20]
+                src_ip: str = f"{sb[0]}.{sb[1]}.{sb[2]}.{sb[3]}"
+                dst_ip: str = f"{db[0]}.{db[1]}.{db[2]}.{db[3]}"
                 unique_src.add(src_ip)
                 unique_dst.add(dst_ip)
 
-                transport_start = ip_start + ip_ihl
+                transport_start: ctypes.Any | int = ip_start + ip_ihl
 
                 # ── Parse transport header ──
                 if ip_proto == 6:  # TCP
@@ -2634,13 +2744,13 @@ def _fast_parse_pcap_path(
                     port_counts[dport] += 1
 
                 # ── Deep inspection: DNS, HTTP, TLS ──
-                dns_query = ""
-                http_host = ""
-                http_path = ""
-                http_method = ""
-                tls_sni = ""
-                tls_version = ""
-                tls_alpn = ""
+                dns_query: str = ""
+                http_host: str = ""
+                http_path: str = ""
+                http_method: str = ""
+                tls_sni: str = ""
+                tls_version: str = ""
+                tls_alpn: str = ""
 
                 # -- DNS (use Scapy for reliable parsing) --
                 if dport in DNS_PORTS or sport in DNS_PORTS:
@@ -2654,22 +2764,22 @@ def _fast_parse_pcap_path(
                             elif qd:
                                 qname = qd[0].qname
                             else:
-                                qname = b""
+                                qname: bytes = b""
                             if isinstance(qname, bytes):
-                                dns_query = qname.decode("utf-8", errors="ignore").rstrip(".")
+                                dns_query: str = qname.decode("utf-8", errors="ignore").rstrip(".")
                             elif qname:
-                                dns_query = str(qname).rstrip(".")
+                                dns_query: str = str(qname).rstrip(".")
                     except Exception:
                         pass
 
                 # -- Compute TCP data offset once for HTTP + TLS --
                 tcp_data_offset = None
                 if ip_proto == 6 and data_len > transport_start + 12:
-                    tcp_data_offset = (raw_data[transport_start + 12] >> 4) * 4
+                    tcp_data_offset: ctypes.Any | int = (raw_data[transport_start + 12] >> 4) * 4
 
                 # -- HTTP (parse directly from raw bytes – no Scapy needed) --
                 if parse_http and tcp_data_offset is not None and data_len >= transport_start + 14:
-                    payload_start = transport_start + tcp_data_offset
+                    payload_start: ctypes.Any | int = transport_start + tcp_data_offset
                     if data_len > payload_start + 14:
                         http_host, http_path, http_method = parse_http_payload(
                             bytes(raw_data[payload_start : payload_start + 2048])
@@ -2677,9 +2787,9 @@ def _fast_parse_pcap_path(
 
                 # -- TLS (only inspect likely TLS handshake packets) --
                 if tcp_data_offset is not None and tls_support[0] is not None:
-                    payload_start = transport_start + tcp_data_offset
+                    payload_start: ctypes.Any | int = transport_start + tcp_data_offset
                     if data_len > payload_start + 5:
-                        content_type = raw_data[payload_start]
+                        content_type: ctypes.Any | int = raw_data[payload_start]
                         if content_type == 0x16:  # TLS Handshake
                             try:
                                 pkt_obj = IP(bytes(raw_data[ip_start:]))
@@ -2743,20 +2853,20 @@ def _fast_parse_pcap_path(
                 # ── Progress / cancel ──
                 if packet_count % update_every == 0:
                     if progress_cb:
-                        now = _utcnow()
+                        now: datetime = _utcnow()
                         if (now - last_progress_time).total_seconds() >= 0.15:
-                            elapsed = (now - start_time).total_seconds()
-                            avg_sz = sum_size / packet_count
+                            elapsed: float = (now - start_time).total_seconds()
+                            avg_sz: float = sum_size / packet_count
                             if file_size:
-                                progress = min(99.0, (sum_size / file_size) * 100.0)
-                                est_total = file_size / avg_sz
-                                rate = packet_count / elapsed if elapsed > 0 else 0.0
-                                eta = ((est_total - packet_count) / rate) if rate > 0 else None
+                                progress: float = min(99.0, (sum_size / file_size) * 100.0)
+                                est_total: float = file_size / avg_sz
+                                rate: float = packet_count / elapsed if elapsed > 0 else 0.0
+                                eta: float | None = ((est_total - packet_count) / rate) if rate > 0 else None
                             else:
                                 progress = None
                                 eta = None
                             progress_cb(progress, eta, sum_size, file_size)
-                            last_progress_time = now
+                            last_progress_time: datetime = now
                 # Fast cancellation check (every 200 packets)
                 elif cancel_event is not None and packet_count % 200 == 0 and cancel_event.is_set():
                     raise AnalysisCancelledError("Analysis cancelled by user.")
@@ -2764,8 +2874,8 @@ def _fast_parse_pcap_path(
         cleanup()
 
     # ── Build final stats (same structure as parse_pcap_path) ──
-    avg_size = sum_size / packet_count if packet_count else 0.0
-    median_size = float(statistics.median(size_samples)) if size_samples else 0.0
+    avg_size: float = sum_size / packet_count if packet_count else 0.0
+    median_size: float = float(statistics.median(size_samples)) if size_samples else 0.0
     top_ports = port_counts.most_common(5)
 
     final_stats = {
@@ -2790,7 +2900,7 @@ def _fast_parse_pcap_path(
         "tls_sni": sorted(tls_sni_set),
         "ioc_truncated": bool(ioc_truncated),
     }
-    sample_info = {
+    sample_info: dict[str, int] = {
         "sample_count": len(rows),
         "total_count": packet_count,
     }
@@ -2799,7 +2909,7 @@ def _fast_parse_pcap_path(
     return pd.DataFrame(rows), final_stats, sample_info
 
 
-def add_to_knowledge_base(label, stats, features, summary):
+def add_to_knowledge_base(label, stats, features, summary) -> None:
     kb = load_knowledge_base()
     entry = {
         "label": label,
@@ -2813,10 +2923,10 @@ def add_to_knowledge_base(label, stats, features, summary):
 
 
 def compute_flow_stats(df):
-    pd = _get_pandas()
+    pd: Any = _get_pandas()
     if df.empty:
         return pd.DataFrame(columns=["Flow", "Packets", "Bytes", "Duration"])
-    flow_cols = ["Src", "Dst", "Proto", "SPort", "DPort"]
+    flow_cols: list[str] = ["Src", "Dst", "Proto", "SPort", "DPort"]
     grouped = df.groupby(flow_cols, dropna=False)
     flow_df = grouped.agg(
         Packets=("Size", "count"),
@@ -2867,7 +2977,7 @@ def detect_suspicious_flows(df, kb, max_items=8, flow_df=None):
     # Flag flows with very high packet counts but low byte volume (possible beaconing)
     if not flow_df["Packets"].empty and len(flow_df) > 1:
         high_pkt_threshold = float(flow_df["Packets"].quantile(0.95))
-        median_bytes = float(flow_df["Bytes"].median()) if not flow_df["Bytes"].empty else 0.0
+        median_bytes: float = float(flow_df["Bytes"].median()) if not flow_df["Bytes"].empty else 0.0
         flow_df["beacon_like"] = (flow_df["Packets"] >= max(high_pkt_threshold, 6)) & (
             flow_df["Bytes"] < median_bytes * 2
         )
@@ -2889,7 +2999,7 @@ def detect_suspicious_flows(df, kb, max_items=8, flow_df=None):
         if bool(row["malware_port"]):
             dport_val = int(row["DPort"])
             sport_val = int(row["SPort"])
-            port_str = str(dport_val) if dport_val in MALWARE_PORTS else str(sport_val)
+            port_str: str = str(dport_val) if dport_val in MALWARE_PORTS else str(sport_val)
             reasons.append(f"Malware/C2 port ({port_str})")
         if bool(row.get("beacon_like", False)):
             reasons.append("Beacon-like pattern")
@@ -2957,11 +3067,11 @@ def detect_behavioral_anomalies(df, stats, flow_df=None):
         candidate_flows = flow_df[flow_df["Packets"] >= 8]
         beacons = []
         if not candidate_flows.empty:
-            flow_cols = ["Src", "Dst", "Proto", "SPort", "DPort"]
+            flow_cols: list[str] = ["Src", "Dst", "Proto", "SPort", "DPort"]
             # Only re-group the subset of flows that passed the packet threshold
             flow_keys_set = set()
             for _, row in candidate_flows.iterrows():
-                flow_keys_set.add(tuple(row[col] for col in flow_cols))
+                flow_keys_set.add(tuple(row[col] for col: str in flow_cols))
             # Filter df to only rows belonging to candidate flows before grouping
             if len(flow_keys_set) < len(df) * 0.5:  # Only filter when it saves work
                 mask = df.set_index(flow_cols).index.isin(flow_keys_set)
@@ -2976,13 +3086,13 @@ def detect_behavioral_anomalies(df, stats, flow_df=None):
                 gaps = [b - a for a, b in itertools.pairwise(times) if b - a > 0]
                 if len(gaps) < 6:
                     continue
-                avg_gap = sum(gaps) / len(gaps)
+                avg_gap: float = sum(gaps) / len(gaps)
                 if avg_gap <= 0 or avg_gap > 3600:
                     continue
                 std_gap = statistics.pstdev(gaps)
                 cv = std_gap / avg_gap
                 if cv < 0.25:  # very regular
-                    flow_str = f"{keys[0]}:{keys[3]} -> {keys[1]}:{keys[4]} ({keys[2]})"
+                    flow_str: str = f"{keys[0]}:{keys[3]} -> {keys[1]}:{keys[4]} ({keys[2]})"
                     beacons.append((flow_str, avg_gap, len(group)))
         if beacons:
             beacons.sort(key=lambda x: x[2], reverse=True)
@@ -3016,7 +3126,7 @@ def detect_behavioral_anomalies(df, stats, flow_df=None):
     top_ports = stats.get("top_ports", [])
     malware_hits = [(p, c) for p, c in top_ports if p in MALWARE_PORTS]
     if malware_hits:
-        port_str = ", ".join(f"{p} ({c} pkts)" for p, c in malware_hits)
+        port_str: str = ", ".join(f"{p} ({c} pkts)" for p, c in malware_hits)
         findings.append(
             {
                 "type": "malware_ports",
@@ -3062,23 +3172,23 @@ def detect_behavioral_anomalies(df, stats, flow_df=None):
     return findings
 
 
-def _empty_figure(message):
-    Figure = _get_figure()
-    fig = Figure(figsize=(6, 4), dpi=100)
-    ax = fig.add_subplot(111)
+def _empty_figure(message) -> Figure:
+    Figure: type[Figure] = _get_figure()
+    fig: Figure = Figure(figsize=(6, 4), dpi=100)
+    ax: Axes = fig.add_subplot(111)
     ax.text(0.5, 0.5, message, ha="center", va="center")
     ax.set_axis_off()
     return fig
 
 
-def _plot_scatter(df):
+def _plot_scatter(df) -> Figure:
     if df.empty:
         return _empty_figure("No data")
-    Figure = _get_figure()
-    fig = Figure(figsize=(7, 4), dpi=100)
-    ax = fig.add_subplot(111)
+    Figure: type[Figure] = _get_figure()
+    fig: Figure = Figure(figsize=(7, 4), dpi=100)
+    ax: Axes = fig.add_subplot(111)
     time_base = df["Time"].min()
-    colors = {"TCP": "tab:blue", "UDP": "tab:orange", "Other": "tab:green"}
+    colors: dict[str, str] = {"TCP": "tab:blue", "UDP": "tab:orange", "Other": "tab:green"}
     for proto, group in df.groupby("Proto"):
         ax.scatter(group["Time"] - time_base, group["Size"], s=6, alpha=0.6, label=proto, c=colors.get(proto))
     ax.set_title("Traffic Spikes")
@@ -3088,12 +3198,12 @@ def _plot_scatter(df):
     return fig
 
 
-def _plot_port_hist(df):
+def _plot_port_hist(df) -> Figure:
     if df.empty:
         return _empty_figure("No data")
-    Figure = _get_figure()
-    fig = Figure(figsize=(7, 4), dpi=100)
-    ax = fig.add_subplot(111)
+    Figure: type[Figure] = _get_figure()
+    fig: Figure = Figure(figsize=(7, 4), dpi=100)
+    ax: Axes = fig.add_subplot(111)
     for proto, group in df.groupby("Proto"):
         values = group["DPort"]
         values = values[values > 0]
@@ -3106,28 +3216,28 @@ def _plot_port_hist(df):
     return fig
 
 
-def _plot_proto_pie(df):
+def _plot_proto_pie(df) -> Figure:
     if df.empty:
         return _empty_figure("No data")
-    Figure = _get_figure()
-    fig = Figure(figsize=(6, 4), dpi=100)
-    ax = fig.add_subplot(111)
+    Figure: type[Figure] = _get_figure()
+    fig: Figure = Figure(figsize=(6, 4), dpi=100)
+    ax: Axes = fig.add_subplot(111)
     counts = df["Proto"].value_counts()
     ax.pie(counts.values, labels=counts.index, autopct="%1.1f%%")
     ax.set_title("Protocol Share")
     return fig
 
 
-def _plot_top_dns(df):
+def _plot_top_dns(df) -> Figure:
     dns_queries = [q for q in df["DnsQuery"] if q]
     if not dns_queries:
         return _empty_figure("No DNS queries")
-    Figure = _get_figure()
-    fig = Figure(figsize=(7, 4), dpi=100)
-    ax = fig.add_subplot(111)
+    Figure: type[Figure] = _get_figure()
+    fig: Figure = Figure(figsize=(7, 4), dpi=100)
+    ax: Axes = fig.add_subplot(111)
     top_dns = Counter(dns_queries).most_common(10)
     labels = [q for q, _ in top_dns]
-    values = [c for _, c in top_dns]
+    values: list[int] = [c for _, c in top_dns]
     ax.bar(labels, values)
     ax.set_title("DNS Query Frequency")
     ax.set_ylabel("Count")
@@ -3135,16 +3245,16 @@ def _plot_top_dns(df):
     return fig
 
 
-def _plot_top_http(df):
+def _plot_top_http(df) -> Figure:
     http_hosts = [h for h in df["HttpHost"] if h]
     if not http_hosts:
         return _empty_figure("No HTTP hosts")
-    Figure = _get_figure()
-    fig = Figure(figsize=(7, 4), dpi=100)
-    ax = fig.add_subplot(111)
+    Figure: type[Figure] = _get_figure()
+    fig: Figure = Figure(figsize=(7, 4), dpi=100)
+    ax: Axes = fig.add_subplot(111)
     top_hosts = Counter(http_hosts).most_common(10)
     labels = [h for h, _ in top_hosts]
-    values = [c for _, c in top_hosts]
+    values: list[int] = [c for _, c in top_hosts]
     ax.bar(labels, values)
     ax.set_title("HTTP Host Frequency")
     ax.set_ylabel("Count")
@@ -3152,16 +3262,16 @@ def _plot_top_http(df):
     return fig
 
 
-def _plot_top_tls_sni(df):
+def _plot_top_tls_sni(df) -> Figure:
     tls_sni = [s for s in df["TlsSni"] if s]
     if not tls_sni:
         return _empty_figure("No TLS SNI")
-    Figure = _get_figure()
-    fig = Figure(figsize=(7, 4), dpi=100)
-    ax = fig.add_subplot(111)
+    Figure: type[Figure] = _get_figure()
+    fig: Figure = Figure(figsize=(7, 4), dpi=100)
+    ax: Axes = fig.add_subplot(111)
     top_sni = Counter(tls_sni).most_common(10)
     labels = [s for s, _ in top_sni]
-    values = [c for _, c in top_sni]
+    values: list[int] = [c for _, c in top_sni]
     ax.bar(labels, values)
     ax.set_title("TLS SNI Frequency")
     ax.set_ylabel("Count")
@@ -3169,14 +3279,14 @@ def _plot_top_tls_sni(df):
     return fig
 
 
-def _plot_top_flows(df, flow_df=None):
+def _plot_top_flows(df, flow_df=None) -> Figure:
     if flow_df is None:
         flow_df = compute_flow_stats(df)
     if flow_df.empty:
         return _empty_figure("No flows")
-    Figure = _get_figure()
-    fig = Figure(figsize=(7, 4), dpi=100)
-    ax = fig.add_subplot(111)
+    Figure: type[Figure] = _get_figure()
+    fig: Figure = Figure(figsize=(7, 4), dpi=100)
+    ax: Axes = fig.add_subplot(111)
     top = flow_df.head(10)
     ax.bar(top["Flow"], top["Bytes"])
     ax.set_title("Flow Volume")
@@ -3185,11 +3295,11 @@ def _plot_top_flows(df, flow_df=None):
     return fig
 
 
-def _add_chart_tab(notebook, title, fig):
+def _add_chart_tab(notebook, title, fig) -> None:
     frame = ttk.Frame(notebook)
     notebook.add(frame, text=title)
-    FigureCanvasTkAgg = _get_figure_canvas()
-    canvas = FigureCanvasTkAgg(fig, master=frame)
+    FigureCanvasTkAgg: type[FigureCanvasTkAgg] = _get_figure_canvas()
+    canvas: FigureCanvasTkAgg = FigureCanvasTkAgg(fig, master=frame)
     canvas.draw()
     canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
@@ -3198,10 +3308,10 @@ def _add_chart_tab(notebook, title, fig):
 class _HelpTooltip:
     """Shows a tooltip popup when the user hovers over a widget."""
 
-    def __init__(self, widget, text, wrap_length=380, colors=None):
-        self.widget = widget
-        self.text = text
-        self.wrap_length = wrap_length
+    def __init__(self, widget, text, wrap_length=380, colors=None) -> None:
+        self.widget: Any = widget
+        self.text: Any = text
+        self.wrap_length: int = wrap_length
         self.colors = colors
         self.tip_window = None
         self._after_id = None
@@ -3209,17 +3319,17 @@ class _HelpTooltip:
         widget.bind("<Leave>", self._hide)
         widget.bind("<ButtonPress>", self._hide)
 
-    def _schedule_show(self, event=None):
+    def _schedule_show(self, event=None) -> None:
         """Show tooltip after a brief delay to avoid flicker."""
         self._cancel()
         self._after_id = self.widget.after(350, self._show)
 
-    def _cancel(self):
+    def _cancel(self) -> None:
         if self._after_id:
             self.widget.after_cancel(self._after_id)
             self._after_id = None
 
-    def _show(self, event=None):
+    def _show(self, event=None) -> None:
         if self.tip_window:
             return
         try:
@@ -3250,9 +3360,9 @@ class _HelpTooltip:
             pady=8,
         )
         label.pack()
-        self.tip_window = tw
+        self.tip_window: tk.Toplevel = tw
 
-    def _hide(self, event=None):
+    def _hide(self, event=None) -> None:
         self._cancel()
         if self.tip_window:
             self.tip_window.destroy()
@@ -3260,16 +3370,16 @@ class _HelpTooltip:
 
 
 class PCAPSentryApp:
-    def __init__(self, root):
-        self.root = root
-        self.base_title = f"PCAP Sentry v{APP_VERSION}"
+    def __init__(self, root) -> None:
+        self.root: Any = root
+        self.base_title: str = f"PCAP Sentry v{APP_VERSION}"
 
         self.settings = load_settings()
 
         # Initialize offline_mode_var early so _get_window_title() can use it
         self.offline_mode_var = tk.BooleanVar(value=self.settings.get("offline_mode", False))
 
-        self.root_title = self._get_window_title()
+        self.root_title: str = self._get_window_title()
         self.root.title(self.root_title)
 
         # Restore window geometry from last session
@@ -3289,6 +3399,9 @@ class PCAPSentryApp:
         self.use_local_model_var = tk.BooleanVar(value=self.settings.get("use_local_model", False))
         self.use_multithreading_var = tk.BooleanVar(value=self.settings.get("use_multithreading", True))
         self.turbo_parse_var = tk.BooleanVar(value=self.settings.get("turbo_parse", True))
+        self.llm_enabled = self.settings.get("llm_enabled", False)
+        self.last_llm_provider = self.settings.get("last_llm_provider", "openai_compatible")
+        self.last_llm_model = self.settings.get("last_llm_model", "gpt-4o")
         self.llm_provider_var = tk.StringVar(value=self.settings.get("llm_provider", "disabled"))
         self.llm_model_var = tk.StringVar(value=self.settings.get("llm_model", ""))
         self.llm_endpoint_var = tk.StringVar(value=self.settings.get("llm_endpoint", ""))
@@ -3328,7 +3441,7 @@ class PCAPSentryApp:
         self.current_sample_info = None
         self.current_verdict = None
         self.current_risk_score = None
-        self.last_analysis_stats = None  # For re-assessment with contextual questions
+        # self.last_analysis_stats removed (refine/contextual questions feature removed)
         self.packet_base_time = None
         self.busy_count = 0
         self.busy_widgets = []
@@ -3348,9 +3461,7 @@ class PCAPSentryApp:
         self.target_drop_area = None
         self.why_text = None
         self.education_text = None
-        self.education_questions_frame = None
-        self.contextual_questions = []  # List of {question, answer (True/False/None)}
-        self.reassess_button = None
+        # self.education_questions_frame, self.contextual_questions, self.reassess_button removed (refine/contextual questions feature removed)
         self.copy_filters_button = None
         self.wireshark_filters = []
         self.packet_table = None
@@ -3434,7 +3545,7 @@ class PCAPSentryApp:
         except Exception:
             pass  # Don't crash if Scapy preload can't be scheduled
 
-    def _on_close(self):
+    def _on_close(self) -> None:
         """Handle window close – cancel timers, backup KB, persist all state, then destroy."""
         self._shutting_down = True
 
@@ -3462,11 +3573,11 @@ class PCAPSentryApp:
             selected_tab_index = 0
             try:
                 if hasattr(self, "notebook") and self.notebook:
-                    tab_map = [self.analyze_tab, self.train_tab, self.kb_tab, self.chat_tab]
+                    tab_map: list[Frame] = [self.analyze_tab, self.train_tab, self.kb_tab, self.chat_tab]
                     current_tab = self.notebook.select()
                     for idx, tab in enumerate(tab_map):
                         if str(tab) == current_tab:
-                            selected_tab_index = idx
+                            selected_tab_index: int = idx
                             break
             except Exception:
                 pass
@@ -3475,9 +3586,9 @@ class PCAPSentryApp:
             chat_history_snapshot = self.chat_history[-100:] if len(self.chat_history) > 100 else self.chat_history
 
             # Capture last used file paths
-            last_safe_path = self.safe_path_var.get().strip() if self.safe_path_var else ""
-            last_mal_path = self.mal_path_var.get().strip() if self.mal_path_var else ""
-            last_target_path = self.target_path_var.get().strip() if self.target_path_var else ""
+            last_safe_path: str = self.safe_path_var.get().strip() if self.safe_path_var else ""
+            last_mal_path: str = self.mal_path_var.get().strip() if self.mal_path_var else ""
+            last_target_path: str = self.target_path_var.get().strip() if self.target_path_var else ""
 
             settings_snapshot = {
                 "max_rows": int(self.max_rows_var.get()),
@@ -3508,7 +3619,7 @@ class PCAPSentryApp:
 
         # Perform file I/O in a background thread but wait briefly so
         # settings and KB backup are actually written before the process exits.
-        def _cleanup_thread():
+        def _cleanup_thread() -> None:
             try:
                 _backup_knowledge_base()
                 save_settings(settings_snapshot)
@@ -3522,7 +3633,7 @@ class PCAPSentryApp:
         self.root.destroy()
 
     # ── Local-server process names keyed by display / provider id ──
-    _LOCAL_SERVER_PROCESS_MAP = {
+    _LOCAL_SERVER_PROCESS_MAP: dict[str, tuple[list[str], str]] = {
         "ollama": (["ollama.exe", "ollama app.exe"], "Ollama"),
         "lm studio": (["lms.exe", "LM Studio.exe"], "LM Studio"),
         "gpt4all": (["chat.exe"], "GPT4All"),
@@ -3536,17 +3647,17 @@ class PCAPSentryApp:
         "vllm": (["python.exe"], "vLLM"),
     }
 
-    def _resolve_active_local_server(self):
+    def _resolve_active_local_server(self) -> None | tuple[list[str], str]:
         """Return (process_names, display_name) for the currently configured
         local LLM server, or *None* if the provider is disabled / cloud."""
-        provider = self.llm_provider_var.get().strip().lower()
-        endpoint = self.llm_endpoint_var.get().strip().lower()
+        provider: str = self.llm_provider_var.get().strip().lower()
+        endpoint: str = self.llm_endpoint_var.get().strip().lower()
 
         if provider == "disabled" or not endpoint:
             return None
 
         # Cloud endpoints – nothing to stop
-        if not any(h in endpoint for h in ("localhost", "127.0.0.1", "0.0.0.0", "[::1]")):  # nosec B104 - comparing hostnames, not binding
+        if not any(h in endpoint for h: str in ("localhost", "127.0.0.1", "0.0.0.0", "[::1]")):  # nosec B104 - comparing hostnames, not binding
             return None
 
         # Match by provider id first
@@ -3554,7 +3665,7 @@ class PCAPSentryApp:
             return self._LOCAL_SERVER_PROCESS_MAP["ollama"]
 
         # Match by endpoint port for openai_compatible providers
-        _PORT_MAP = {
+        _PORT_MAP: dict[str, str] = {
             "1234": "lm studio",
             "4891": "gpt4all",
             "1337": "jan",
@@ -3567,19 +3678,19 @@ class PCAPSentryApp:
 
         return None
 
-    def _maybe_stop_llm_server(self):
+    def _maybe_stop_llm_server(self) -> None:
         """If a local LLM server is active, ask the user whether to stop it."""
-        info = self._resolve_active_local_server()
+        info: None | tuple[list[str], str] = self._resolve_active_local_server()
         if info is None:
             return
 
         process_names, display_name = info
 
         # Don't offer to kill generic processes like python.exe
-        if all(p.lower() == "python.exe" for p in process_names):
+        if all(p.lower() == "python.exe" for p: str in process_names):
             return
 
-        answer = messagebox.askyesno(
+        answer: bool = messagebox.askyesno(
             "Stop LLM Server?",
             f"{display_name} is configured as the active LLM server.\n\n"
             f"Would you like to stop the {display_name} server as well?",
@@ -3588,7 +3699,7 @@ class PCAPSentryApp:
         if not answer:
             return
 
-        for proc in process_names:
+        for proc: str in process_names:
             with contextlib.suppress(Exception):
                 subprocess.run(
                     ["taskkill", "/F", "/T", "/IM", proc],
@@ -3597,13 +3708,13 @@ class PCAPSentryApp:
                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                 )
 
-    def _get_window_title(self):
+    def _get_window_title(self) -> str:
         """Generate window title with mode indicator"""
         if self.offline_mode_var.get():
             return f"{self.base_title} [OFFLINE MODE]"
         return f"{self.base_title} [ONLINE]"
 
-    def _help_icon(self, parent, text, side=tk.LEFT, padx=(0, 6), **pack_kw):
+    def _help_icon(self, parent, text, side=tk.LEFT, padx=(0, 6), **pack_kw) -> tk.Label:
         """Create a small '?' label with a hover tooltip explaining a feature."""
         lbl = tk.Label(
             parent,
@@ -3619,7 +3730,7 @@ class PCAPSentryApp:
         _HelpTooltip(lbl, text, colors=self.colors)
         return lbl
 
-    def _help_icon_grid(self, parent, text, row, column, **grid_kw):
+    def _help_icon_grid(self, parent, text, row, column, **grid_kw) -> tk.Label:
         """Create a small '?' label placed via grid with a hover tooltip."""
         lbl = tk.Label(
             parent,
@@ -3635,7 +3746,7 @@ class PCAPSentryApp:
         _HelpTooltip(lbl, text, colors=self.colors)
         return lbl
 
-    def _show_app_data_notice(self):
+    def _show_app_data_notice(self) -> None:
         window = tk.Toplevel(self.root)
         window.title("App Data Location")
         window.resizable(False, False)
@@ -3649,7 +3760,7 @@ class PCAPSentryApp:
         dont_show_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(frame, text="Don't show this again", variable=dont_show_var).pack(anchor="w", pady=(10, 0))
 
-        def close_notice():
+        def close_notice() -> None:
             if dont_show_var.get():
                 self.settings["app_data_notice_shown"] = True
                 save_settings(self.settings)
@@ -3663,30 +3774,30 @@ class PCAPSentryApp:
         window.transient(self.root)
         window.grab_set()
 
-    def _open_app_data_dir(self):
+    def _open_app_data_dir(self) -> None:
         if not APP_DATA_DIR:
             messagebox.showerror("App Data Location", "App data folder is unavailable.")
             return
         try:
             os.startfile(APP_DATA_DIR)
-        except OSError as exc:
+        except OSError as exc: os.OSError:
             messagebox.showerror("App Data Location", f"Failed to open folder: {exc}")
 
-    def _copy_app_data_dir(self):
+    def _copy_app_data_dir(self) -> None:
         if not APP_DATA_DIR:
             messagebox.showerror("App Data Location", "App data folder is unavailable.")
             return
         self.root.clipboard_clear()
         self.root.clipboard_append(APP_DATA_DIR)
 
-    def _start_logo_spin(self):
+    def _start_logo_spin(self) -> None:
         """Begin spinning the header logo (called when processing starts)."""
         if self._logo_spinning or not self._spin_src_img:
             return
         self._logo_spinning = True
         self.root.after(50, self._animate_logo_spin)
 
-    def _stop_logo_spin(self):
+    def _stop_logo_spin(self) -> None:
         """Stop spinning and reset the logo to its static frame."""
         self._logo_spinning = False
         if self._brand_label and self._header_icon_image:
@@ -3697,7 +3808,7 @@ class PCAPSentryApp:
             else:
                 self._brand_label.configure(image=self._header_icon_image)
 
-    def _animate_logo_spin(self):
+    def _animate_logo_spin(self) -> None:
         """Advance one frame of the vertical-axis spin animation."""
         if self._shutting_down or not self._logo_spinning or not self._brand_label:
             return
@@ -3710,14 +3821,14 @@ class PCAPSentryApp:
             return
 
         try:
-            self._spin_index = (self._spin_index + 1) % len(self._spin_frames)
+            self._spin_index: int = (self._spin_index + 1) % len(self._spin_frames)
             self._brand_label.configure(image=self._spin_frames[self._spin_index])
             self.root.after(50, self._animate_logo_spin)
         except tk.TclError:
             # Widget destroyed during shutdown
             return
 
-    def _update_init_counter(self):
+    def _update_init_counter(self) -> None:
         """Update the initialization counter showing elapsed seconds."""
         if not self._initializing or self._shutting_down:
             return
@@ -3726,14 +3837,14 @@ class PCAPSentryApp:
         self.status_var.set(f"Initializing... {elapsed}s")
         self._init_counter_id = self.root.after(1000, self._update_init_counter)
 
-    def _stop_init_counter(self):
+    def _stop_init_counter(self) -> None:
         """Stop the initialization counter."""
         if self._init_counter_id is not None:
             self.root.after_cancel(self._init_counter_id)
             self._init_counter_id = None
         self._initializing = False
 
-    def _generate_spin_frames(self):
+    def _generate_spin_frames(self) -> None:
         """Generate logo spin animation frames on demand to avoid startup delay."""
         if self._spin_frames_generated or not self._spin_src_img:
             return
@@ -3742,19 +3853,19 @@ class PCAPSentryApp:
             from PIL import Image, ImageTk
             import math as _math
 
-            src = self._spin_src_img
+            src: Image = self._spin_src_img
             num_frames = 36
             self._spin_frames = []
 
-            for i in range(num_frames):
-                angle = 2 * _math.pi * i / num_frames
-                scale_x = abs(_math.cos(angle))
-                w = max(int(self._brand_icon_size * scale_x), 1)
-                h = self._brand_icon_size
-                squeezed = src.resize((w, h), Image.LANCZOS)
+            for i: int in range(num_frames):
+                angle: float = 2 * _math.pi * i / num_frames
+                scale_x: float = abs(_math.cos(angle))
+                w: int = max(int(self._brand_icon_size * scale_x), 1)
+                h: int = self._brand_icon_size
+                squeezed: Image = src.resize((w, h), Image.LANCZOS)
                 if _math.cos(angle) < 0:
-                    squeezed = squeezed.transpose(Image.FLIP_LEFT_RIGHT)
-                canvas = Image.new("RGBA", (self._brand_icon_size, self._brand_icon_size), (0, 0, 0, 0))
+                    squeezed: Image = squeezed.transpose(Image.FLIP_LEFT_RIGHT)
+                canvas: Image = Image.new("RGBA", (self._brand_icon_size, self._brand_icon_size), (0, 0, 0, 0))
                 canvas.paste(squeezed, ((self._brand_icon_size - w) // 2, 0))
                 self._spin_frames.append(ImageTk.PhotoImage(canvas))
 
@@ -3762,13 +3873,13 @@ class PCAPSentryApp:
         except Exception:
             pass
 
-    def _build_menu_bar(self):
+    def _build_menu_bar(self) -> None:
         """Create the application menu bar with File, Edit, and Help menus."""
         # Configure menu colors to match theme
-        menu_bg = self.colors.get("panel", "#161b22")
-        menu_fg = self.colors.get("text", "#e6edf3")
-        menu_active_bg = self.colors.get("accent", "#58a6ff")
-        menu_active_fg = self.colors.get("bg", "#0d1117")
+        menu_bg: str = self.colors.get("panel", "#161b22")
+        menu_fg: str = self.colors.get("text", "#e6edf3")
+        menu_active_bg: str = self.colors.get("accent", "#58a6ff")
+        menu_active_fg: str = self.colors.get("bg", "#0d1117")
 
         menubar = tk.Menu(
             self.root,
@@ -3858,7 +3969,7 @@ class PCAPSentryApp:
         self.root.bind("<Control-l>", lambda _: self._clear_input_fields())
         self.root.bind("<Control-comma>", lambda _: self._open_preferences())
 
-    def _build_header(self):
+    def _build_header(self) -> None:
         header = ttk.Frame(self.root)
         header.pack(fill=tk.X, padx=20, pady=(18, 10))
 
@@ -3885,10 +3996,10 @@ class PCAPSentryApp:
             try:
                 from PIL import Image, ImageTk
 
-                src = Image.open(icon_path).convert("RGBA")
+                src: Image = Image.open(icon_path).convert("RGBA")
                 self._brand_icon_size = 70
-                src = src.resize((self._brand_icon_size, self._brand_icon_size), Image.LANCZOS)
-                self._spin_src_img = src
+                src: Image = src.resize((self._brand_icon_size, self._brand_icon_size), Image.LANCZOS)
+                self._spin_src_img: Image = src
                 # Create initial static frame only - defer animation generation
                 self._header_icon_image = ImageTk.PhotoImage(src)
             except Exception:
@@ -3917,8 +4028,8 @@ class PCAPSentryApp:
         ).pack(anchor=tk.W)
 
         # Online/Offline status indicator pill
-        _llm_ind_bg = self.colors.get("panel", "#161b22")
-        _llm_ind_border = self.colors.get("border", "#21262d")
+        _llm_ind_bg: str = self.colors.get("panel", "#161b22")
+        _llm_ind_border: str = self.colors.get("border", "#21262d")
         self.online_header_indicator = tk.Frame(
             top_row,
             bg=_llm_ind_bg,
@@ -3999,7 +4110,7 @@ class PCAPSentryApp:
         accent = ttk.Separator(self.root, orient=tk.HORIZONTAL)
         accent.pack(fill=tk.X, padx=20, pady=(0, 4))
 
-    def _build_tabs(self):
+    def _build_tabs(self) -> None:
         notebook = ttk.Notebook(self.root)
         notebook.pack(fill=tk.BOTH, expand=True, padx=16, pady=(4, 6))
 
@@ -4020,18 +4131,18 @@ class PCAPSentryApp:
 
         # Restore last selected tab from settings
         saved_tab_index = self.settings.get("selected_tab", 0)
-        tab_map = [self.analyze_tab, self.train_tab, self.kb_tab, self.chat_tab]
+        tab_map: list[Frame] = [self.analyze_tab, self.train_tab, self.kb_tab, self.chat_tab]
         if 0 <= saved_tab_index < len(tab_map):
             notebook.select(tab_map[saved_tab_index])
         else:
             notebook.select(self.analyze_tab)
 
         # Store notebook reference for later use
-        self.notebook = notebook
+        self.notebook: ttk.Notebook = notebook
 
         notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
 
-    def _build_status(self):
+    def _build_status(self) -> None:
         # Separator above status
         ttk.Separator(self.root, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=16)
         status = ttk.Frame(self.root, padding=(16, 8))
@@ -4063,7 +4174,7 @@ class PCAPSentryApp:
         # Note: Bottom-right status label disabled per user request
         # ttk.Label(status, textvariable=self.sample_note_var, style="Hint.TLabel").pack(side=tk.RIGHT)
 
-    def _open_preferences(self):
+    def _open_preferences(self) -> None:
         window = tk.Toplevel(self.root)
         window.title("Preferences")
         window.resizable(True, True)
@@ -4085,16 +4196,16 @@ class PCAPSentryApp:
         scrollbar.pack(side="right", fill="y")
 
         # Enable mouse wheel scrolling (widget-scoped, not global)
-        def _on_mousewheel(event):
+        def _on_mousewheel(event) -> None:
             try:
                 canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
             except tk.TclError:
                 pass  # Widget destroyed, ignore scroll event
 
-        def _bind_mousewheel(_event):
+        def _bind_mousewheel(_event) -> None:
             canvas.bind("<MouseWheel>", _on_mousewheel)
 
-        def _unbind_mousewheel(_event):
+        def _unbind_mousewheel(_event) -> None:
             canvas.unbind("<MouseWheel>")
 
         canvas.bind("<Enter>", _bind_mousewheel)
@@ -4289,14 +4400,15 @@ class PCAPSentryApp:
 
         window.grab_set()
 
-    def _save_preferences(self, window):
+    def _save_preferences(self, window) -> None:
         self._save_settings_from_vars()
-        self.root_title = self._get_window_title()
+        self.root_title: str = self._get_window_title()
         self.root.title(self.root_title)
         window.destroy()
 
-    def _save_settings_from_vars(self):
+    def _save_settings_from_vars(self) -> None:
         # Preserve state data that shouldn't be overwritten by preferences dialog
+        # Save both current and last-used LLM provider/model
         settings = {
             "max_rows": int(self.max_rows_var.get()),
             "parse_http": bool(self.parse_http_var.get()),
@@ -4306,8 +4418,11 @@ class PCAPSentryApp:
             "turbo_parse": bool(self.turbo_parse_var.get()),
             "offline_mode": bool(self.offline_mode_var.get()),
             "backup_dir": self.backup_dir_var.get().strip(),
+            "llm_enabled": self.llm_provider_var.get().strip().lower() != "disabled",
             "llm_provider": self.llm_provider_var.get().strip().lower() or "disabled",
             "llm_model": self.llm_model_var.get().strip(),
+            "last_llm_provider": self.llm_provider_var.get().strip().lower() if self.llm_provider_var.get().strip().lower() != "disabled" else self.last_llm_provider,
+            "last_llm_model": self.llm_model_var.get().strip() if self.llm_provider_var.get().strip().lower() != "disabled" else self.last_llm_model,
             "llm_endpoint": self.llm_endpoint_var.get().strip(),
             "llm_api_key": self.llm_api_key_var.get().strip(),
             "otx_api_key": self.otx_api_key_var.get().strip(),
@@ -4324,11 +4439,15 @@ class PCAPSentryApp:
         }
         self.settings = settings
         save_settings(settings)
+        # Update in-memory last-used values
+        self.llm_enabled = settings["llm_enabled"]
+        self.last_llm_provider = settings["last_llm_provider"]
+        self.last_llm_model = settings["last_llm_model"]
         if hasattr(self, "_sync_chat_controls"):
             self._sync_chat_controls()
 
-    def _reset_preferences(self):
-        confirm = messagebox.askyesno(
+    def _reset_preferences(self) -> None:
+        confirm: bool = messagebox.askyesno(
             "Preferences",
             "Reset preferences to defaults?",
         )
@@ -4352,22 +4471,22 @@ class PCAPSentryApp:
         self.theme_var.set(defaults["theme"])
         self._save_settings_from_vars()
 
-    def _open_user_manual(self):
+    def _open_user_manual(self) -> None:
         """Open the user manual in the default web browser."""
         import webbrowser
 
         manual_url = "https://github.com/industrial-dave/PCAP-Sentry/blob/main/USER_MANUAL.md"
         webbrowser.open(manual_url)
 
-    def _open_logs_folder(self):
+    def _open_logs_folder(self) -> None:
         """Open the logs folder in Windows Explorer."""
-        app_data_dir = _get_app_data_dir()
+        app_data_dir: str = _get_app_data_dir()
         if os.path.exists(app_data_dir):
             os.startfile(app_data_dir)
         else:
             messagebox.showinfo("Logs", f"Logs folder not found:\n{app_data_dir}")
 
-    def _show_about(self):
+    def _show_about(self) -> None:
         """Show the About dialog."""
         about_window = tk.Toplevel(self.root)
         about_window.title("About PCAP Sentry")
@@ -4407,7 +4526,7 @@ class PCAPSentryApp:
         links_frame = ttk.Frame(frame)
         links_frame.pack(pady=10)
 
-        def open_link(url):
+        def open_link(url) -> None:
             import webbrowser
 
             webbrowser.open(url)
@@ -4438,13 +4557,13 @@ class PCAPSentryApp:
 
         about_window.grab_set()
 
-    def _check_for_updates_ui(self):
+    def _check_for_updates_ui(self) -> None:
         """Handle "Check for Updates" button click."""
         if not _update_checker_available:
             messagebox.showwarning("Updates", "Update checker is not available.")
             return
 
-        def show_result(result):
+        def show_result(result) -> None:
             """Callback after update check completes – called from background thread."""
             # Schedule on main thread so Tkinter calls are safe
             self.root.after(0, lambda: self._show_update_result(result))
@@ -4453,7 +4572,7 @@ class PCAPSentryApp:
         checker_thread = BackgroundUpdateChecker(APP_VERSION, callback=show_result)
         checker_thread.start()
 
-    def _show_update_result(self, result):
+    def _show_update_result(self, result) -> None:
         """Display update check result (always runs on the main thread)."""
         if not result.get("success"):
             error_msg = result.get("error", "Unknown error")
@@ -4519,7 +4638,7 @@ class PCAPSentryApp:
             button_frame = ttk.Frame(frame)
             button_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=(10, 0))
 
-            def on_download():
+            def on_download() -> None:
                 self._download_and_install_update(latest)
                 window.destroy()
 
@@ -4593,7 +4712,7 @@ class PCAPSentryApp:
                     f"You are running the latest version ({current}).",
                 )
 
-    def _download_and_install_update(self, version):
+    def _download_and_install_update(self, version) -> None:
         """Download and install the update."""
         # Back up the knowledge base before updating so user data is preserved
         with contextlib.suppress(Exception):
@@ -4620,7 +4739,7 @@ class PCAPSentryApp:
         # Smooth animation state for download progress
         _dl_anim = {"current": 0.0, "target": 0.0, "started": False, "anim_id": None}
 
-        def _cleanup_progress_window():
+        def _cleanup_progress_window() -> None:
             """Safely destroy progress window after canceling animation."""
             if _dl_anim["anim_id"] is not None:
                 try:
@@ -4633,7 +4752,7 @@ class PCAPSentryApp:
             except Exception:
                 pass
 
-        def _animate_dl():
+        def _animate_dl() -> None:
             """Ease-out interpolation for download progress bar."""
             # Check if progress window still exists
             try:
@@ -4652,12 +4771,12 @@ class PCAPSentryApp:
                 return
             step = diff * 0.15
             if abs(step) < 0.15:
-                step = 0.15 if diff > 0 else -0.15
+                step: float = 0.15 if diff > 0 else -0.15
             _dl_anim["current"] += step
             progress_bar["value"] = _dl_anim["current"]
             _dl_anim["anim_id"] = self.root.after(16, _animate_dl)
 
-        def download_in_background():
+        def download_in_background() -> None:
             try:
                 checker = UpdateChecker(APP_VERSION)
                 if not checker.fetch_latest_release():
@@ -4685,20 +4804,20 @@ class PCAPSentryApp:
                     )
                     return
 
-                update_dir = checker.get_update_dir()
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                is_installer = getattr(checker, "download_is_installer", False)
+                update_dir: str = checker.get_update_dir()
+                timestamp: str = datetime.now().strftime("%Y%m%d_%H%M%S")
+                is_installer: ctypes.Any | bool = getattr(checker, "download_is_installer", False)
                 if is_installer:
-                    exe_name = f"PCAP_Sentry_Setup_{version}_{timestamp}.exe"
+                    exe_name: str = f"PCAP_Sentry_Setup_{version}_{timestamp}.exe"
                 else:
-                    exe_name = f"PCAP_Sentry_{version}_{timestamp}.exe"
-                dest_path = os.path.join(update_dir, exe_name)
+                    exe_name: str = f"PCAP_Sentry_{version}_{timestamp}.exe"
+                dest_path: str = os.path.join(update_dir, exe_name)
 
-                def progress_callback(downloaded, total):
+                def progress_callback(downloaded, total) -> None:
                     if total > 0:
                         progress = int((downloaded / total) * 100)
 
-                        def _update_dl(p=progress, dl=downloaded, t=total):
+                        def _update_dl(p=progress, dl=downloaded, t=total) -> None:
                             if not _dl_anim["started"]:
                                 # Switch from indeterminate to determinate on first update
                                 progress_bar.stop()
@@ -4716,7 +4835,7 @@ class PCAPSentryApp:
                 if checker.download_update(dest_path, progress_callback=progress_callback):
                     _write_error_log(f"Update download successful: {dest_path}")
 
-                    def on_success():
+                    def on_success() -> None:
                         _cleanup_progress_window()
                         if is_installer:
                             # Installer handles placing files in the right
@@ -4732,7 +4851,7 @@ class PCAPSentryApp:
                             if checker.launch_installer(dest_path):
                                 self.root.after(100, self._on_close)
                             else:
-                                error_reason = getattr(checker, "_last_error", "Unknown error")
+                                error_reason: ctypes.Any | str = getattr(checker, "_last_error", "Unknown error")
                                 _write_error_log(f"Installer launch failed: {error_reason}")
                                 messagebox.showerror(
                                     "Installer Launch Failed",
@@ -4744,7 +4863,7 @@ class PCAPSentryApp:
                         else:
                             # Standalone EXE – replace the currently running
                             # executable after app exit, then relaunch.
-                            current_exe = sys.executable
+                            current_exe: str = sys.executable
                             if checker.replace_executable(dest_path, current_exe):
                                 messagebox.showinfo(
                                     "Update Ready",
@@ -4754,7 +4873,7 @@ class PCAPSentryApp:
                                 # Force quit immediately after user closes the messagebox
                                 self.root.after(100, self._on_close)
                             else:
-                                reason = getattr(checker, "_last_error", "Unknown error")
+                                reason: ctypes.Any | str = getattr(checker, "_last_error", "Unknown error")
                                 _write_error_log(f"Executable replacement failed: {reason}")
                                 messagebox.showerror(
                                     "Update Failed",
@@ -4766,7 +4885,7 @@ class PCAPSentryApp:
 
                     self.root.after(0, on_success)
                 else:
-                    download_error = getattr(checker, "_last_error", "Unknown error")
+                    download_error: ctypes.Any | str = getattr(checker, "_last_error", "Unknown error")
                     _write_error_log(f"Update download failed: {download_error}")
                     self.root.after(
                         0,
@@ -4778,7 +4897,7 @@ class PCAPSentryApp:
                         ),
                     )
 
-            except Exception as e:
+            except Exception as e: Exception:
                 _write_error_log("Update download exception", e, sys.exc_info()[2])
                 self.root.after(
                     0,
@@ -4791,12 +4910,12 @@ class PCAPSentryApp:
         download_thread = threading.Thread(target=download_in_background, daemon=True)
         download_thread.start()
 
-    def _browse_backup_dir(self):
-        path = filedialog.askdirectory()
+    def _browse_backup_dir(self) -> None:
+        path: str = filedialog.askdirectory()
         if path:
             self.backup_dir_var.set(path)
 
-    def _edit_undo(self):
+    def _edit_undo(self) -> None:
         """Undo last action in focused widget."""
         try:
             widget = self.root.focus_get()
@@ -4805,7 +4924,7 @@ class PCAPSentryApp:
         except Exception:
             pass
 
-    def _edit_redo(self):
+    def _edit_redo(self) -> None:
         """Redo last undone action in focused widget."""
         try:
             widget = self.root.focus_get()
@@ -4814,7 +4933,7 @@ class PCAPSentryApp:
         except Exception:
             pass
 
-    def _edit_cut(self):
+    def _edit_cut(self) -> None:
         """Cut selected text from focused widget."""
         try:
             widget = self.root.focus_get()
@@ -4823,7 +4942,7 @@ class PCAPSentryApp:
         except Exception:
             pass
 
-    def _edit_copy(self):
+    def _edit_copy(self) -> None:
         """Copy selected text from focused widget."""
         try:
             widget = self.root.focus_get()
@@ -4832,7 +4951,7 @@ class PCAPSentryApp:
         except Exception:
             pass
 
-    def _edit_paste(self):
+    def _edit_paste(self) -> None:
         """Paste text into focused widget."""
         try:
             widget = self.root.focus_get()
@@ -4841,7 +4960,7 @@ class PCAPSentryApp:
         except Exception:
             pass
 
-    def _edit_select_all(self):
+    def _edit_select_all(self) -> None:
         """Select all text in focused widget."""
         try:
             widget = self.root.focus_get()
@@ -4856,7 +4975,7 @@ class PCAPSentryApp:
         except Exception:
             pass
 
-    def _clear_input_fields(self):
+    def _clear_input_fields(self) -> None:
         if self.safe_path_var is not None:
             self.safe_path_var.set("")
         if self.mal_path_var is not None:
@@ -4866,7 +4985,7 @@ class PCAPSentryApp:
         if self.ioc_path_var is not None:
             self.ioc_path_var.set("")
 
-    def _build_chat_tab(self):
+    def _build_chat_tab(self) -> None:
         container = ttk.Frame(self.chat_tab, padding=14)
         container.pack(fill=tk.BOTH, expand=True)
 
@@ -4902,14 +5021,14 @@ class PCAPSentryApp:
         self.chat_entry.bind("<Return>", lambda _e: self._send_chat_message())
         self._sync_chat_controls()
 
-    def _sync_chat_controls(self):
-        enabled = self._llm_is_enabled()
+    def _sync_chat_controls(self) -> None:
+        enabled: bool = self._llm_is_enabled()
         if not enabled:
             self.chat_disabled_var.set("Chat is disabled. Configure an LLM provider in File → LLM Settings.")
         else:
             self.chat_disabled_var.set("")
 
-        state = "normal" if enabled else "disabled"
+        state: str = "normal" if enabled else "disabled"
         if self.chat_entry is not None:
             self.chat_entry.configure(state=state)
         if self.chat_send_button is not None:
@@ -4917,12 +5036,12 @@ class PCAPSentryApp:
         if self.chat_clear_button is not None:
             self.chat_clear_button.configure(state=state)
 
-    def _append_chat_message(self, role, text):
+    def _append_chat_message(self, role, text) -> None:
         if self.chat_text is None:
             return
         self.chat_text.configure(state=tk.NORMAL)
-        prefix = "User: " if role == "user" else "Assistant: "
-        tag = "user" if role == "user" else "assistant"
+        prefix: str = "User: " if role == "user" else "Assistant: "
+        tag: str = "user" if role == "user" else "assistant"
         if role == "system":
             prefix = "System: "
             tag = "system"
@@ -4930,7 +5049,7 @@ class PCAPSentryApp:
         self.chat_text.see(tk.END)
         self.chat_text.configure(state=tk.DISABLED)
 
-    def _clear_chat(self):
+    def _clear_chat(self) -> None:
         self.chat_history = []
         if self.chat_text is None:
             return
@@ -4938,7 +5057,7 @@ class PCAPSentryApp:
         self.chat_text.delete("1.0", tk.END)
         self.chat_text.configure(state=tk.DISABLED)
 
-    def _restore_chat_history(self):
+    def _restore_chat_history(self) -> None:
         """Restore chat history from saved settings on startup."""
         if self.chat_text is None or not self.chat_history:
             return
@@ -4971,7 +5090,7 @@ class PCAPSentryApp:
         }
 
     def _request_llm_chat(self, user_message):
-        provider = self.llm_provider_var.get().strip().lower()
+        provider: str = self.llm_provider_var.get().strip().lower()
         if provider == "ollama":
             return self._request_ollama_chat(user_message)
         if provider == "openai_compatible":
@@ -4984,12 +5103,12 @@ class PCAPSentryApp:
         raise ValueError(f"Unsupported LLM provider: {provider}")
 
     def _request_ollama_chat(self, user_message):
-        endpoint = self._normalize_ollama_endpoint(self.llm_endpoint_var.get() or "http://localhost:11434")
-        model = self.llm_model_var.get().strip() or "llama3"
-        url = endpoint.rstrip("/") + "/api/chat"
+        endpoint: str = self._normalize_ollama_endpoint(self.llm_endpoint_var.get() or "http://localhost:11434")
+        model: str = self.llm_model_var.get().strip() or "llama3"
+        url: str = endpoint.rstrip("/") + "/api/chat"
         context = self._build_chat_context()
 
-        messages = [
+        messages: list[dict[str, str]] = [
             {
                 "role": "system",
                 "content": (
@@ -5010,7 +5129,7 @@ class PCAPSentryApp:
             "messages": messages,
             "stream": False,
         }
-        data = json.dumps(payload).encode("utf-8")
+        data: bytes = json.dumps(payload).encode("utf-8")
         raw = self._llm_http_request(url, data, timeout=30)
 
         response = json.loads(raw)
@@ -5019,7 +5138,7 @@ class PCAPSentryApp:
             raise ValueError("LLM response was empty.")
         return content.strip()
 
-    def _build_openai_chat_prompt(self, user_message):
+    def _build_openai_chat_prompt(self, user_message) -> str:
         context = self._build_chat_context()
         history_lines = []
         for msg in self.chat_history[-6:]:
@@ -5030,7 +5149,7 @@ class PCAPSentryApp:
             elif role == "assistant":
                 history_lines.append(f"Assistant: {content}")
 
-        history_block = "\n".join(history_lines)
+        history_block: str = "\n".join(history_lines)
         return f"Context JSON:\n{json.dumps(context, indent=2)}\n\nConversation:\n{history_block}\nUser: {user_message}"
 
     def _normalize_openai_endpoint(self, endpoint):
@@ -5067,10 +5186,10 @@ class PCAPSentryApp:
                     f"Refusing to send data over unencrypted HTTP to remote host '{host}'.\n"
                     "Please use an https:// endpoint for remote LLM servers."
                 )
-        max_bytes = PCAPSentryApp._LLM_MAX_RESPONSE_BYTES
+        max_bytes: int = PCAPSentryApp._LLM_MAX_RESPONSE_BYTES
         last_exc = None
-        for attempt in range(1 + max_retries):
-            headers = {"Content-Type": "application/json"}
+        for attempt: int in range(1 + max_retries):
+            headers: dict[str, str] = {"Content-Type": "application/json"}
             if api_key:
                 headers["Authorization"] = f"Bearer {api_key}"
             req = urllib.request.Request(url, data=data, headers=headers)
@@ -5080,10 +5199,10 @@ class PCAPSentryApp:
                     if len(raw) > max_bytes:
                         raise RuntimeError(f"LLM response exceeded {max_bytes // (1024 * 1024)} MB limit.")
                     return raw.decode("utf-8")
-            except urllib.error.HTTPError as exc:
-                body = ""
+            except urllib.error.HTTPError as exc: urllib.error.HTTPError:
+                body: str = ""
                 with contextlib.suppress(Exception):
-                    body = exc.read().decode("utf-8", errors="replace")
+                    body: str = exc.read().decode("utf-8", errors="replace")
                 # Retry on 5xx server errors only
                 if exc.code >= 500 and attempt < max_retries:
                     time.sleep(1.0 * (attempt + 1))
@@ -5092,7 +5211,7 @@ class PCAPSentryApp:
                     )
                     continue
                 raise RuntimeError(f"LLM connection failed ({url}): HTTP {exc.code} {exc.reason}. {body}".strip())
-            except (urllib.error.URLError, OSError) as exc:
+            except (urllib.error.URLError, OSError) as exc: urllib.error.URLError | os.OSError:
                 if attempt < max_retries:
                     time.sleep(1.0 * (attempt + 1))
                     last_exc = RuntimeError(f"LLM connection failed ({url}): {exc}")
@@ -5101,17 +5220,17 @@ class PCAPSentryApp:
         raise last_exc  # should not reach here
 
     def _request_openai_compat_chat(self, messages, temperature=0.3):
-        endpoint = self._normalize_openai_endpoint(self.llm_endpoint_var.get() or "http://localhost:1234")
-        model = self.llm_model_var.get().strip() or "local-model"
-        api_key = self.llm_api_key_var.get().strip()
-        url = endpoint + "/v1/chat/completions"
+        endpoint: str = self._normalize_openai_endpoint(self.llm_endpoint_var.get() or "http://localhost:1234")
+        model: str = self.llm_model_var.get().strip() or "local-model"
+        api_key: str = self.llm_api_key_var.get().strip()
+        url: str = endpoint + "/v1/chat/completions"
         payload = {
             "model": model,
             "messages": messages,
             "temperature": temperature,
             "max_tokens": 400,
         }
-        data = json.dumps(payload).encode("utf-8")
+        data: bytes = json.dumps(payload).encode("utf-8")
         raw = self._llm_http_request(url, data, timeout=30, api_key=api_key)
 
         response = json.loads(raw)
@@ -5124,11 +5243,11 @@ class PCAPSentryApp:
             raise ValueError("LLM response was empty.")
         return content.strip()
 
-    def _send_chat_message(self):
+    def _send_chat_message(self) -> None:
         if not self._llm_is_enabled():
             messagebox.showwarning("Chat", "Chat is disabled. Configure an LLM provider in File → LLM Settings first.")
             return
-        message = self.chat_entry_var.get().strip()
+        message: str = self.chat_entry_var.get().strip()
         if not message:
             return
         self.chat_entry_var.set("")
@@ -5148,7 +5267,7 @@ class PCAPSentryApp:
         def task():
             return self._request_llm_chat(message)
 
-        def done(reply):
+        def done(reply) -> None:
             self.sample_note_var.set("")
             self.chat_history.append({"role": "assistant", "content": reply})
             self._append_chat_message("assistant", reply)
@@ -5157,7 +5276,7 @@ class PCAPSentryApp:
             if self.chat_send_button is not None:
                 self.chat_send_button.configure(state=tk.NORMAL)
 
-        def failed(err):
+        def failed(err) -> None:
             self.sample_note_var.set("")
             _write_error_log("Chat request failed", err)
             self._append_chat_message("system", f"Chat error: {err}")
@@ -5168,11 +5287,11 @@ class PCAPSentryApp:
 
         self._run_task(task, done, on_error=failed, message="Chatting...")
 
-    def _build_train_tab(self):
+    def _build_train_tab(self) -> None:
         container = ttk.Frame(self.train_tab, padding=14)
         container.pack(fill=tk.BOTH, expand=True)
 
-        safe_frame = ttk.LabelFrame(container, text="  Known Safe PCAP  ", padding=12)
+        safe_frame: ttk.Labelframe = ttk.LabelFrame(container, text="  Known Safe PCAP  ", padding=12)
         safe_frame.pack(fill=tk.X, pady=10)
         self._help_icon(
             safe_frame,
@@ -5205,7 +5324,7 @@ class PCAPSentryApp:
             anchor=tk.W, padx=16, pady=(0, 4)
         )
 
-        mal_frame = ttk.LabelFrame(container, text="  Known Malware PCAP  ", padding=12)
+        mal_frame: ttk.Labelframe = ttk.LabelFrame(container, text="  Known Malware PCAP  ", padding=12)
         mal_frame.pack(fill=tk.X, pady=10)
         self._help_icon(
             mal_frame,
@@ -5240,16 +5359,16 @@ class PCAPSentryApp:
             anchor=tk.W, padx=16, pady=(0, 4)
         )
 
-    def _build_analyze_tab(self):
+    def _build_analyze_tab(self) -> None:
         # Create a scrollable container using Canvas
         canvas = tk.Canvas(self.analyze_tab, bg=self.colors["bg"], highlightthickness=0)
         scrollbar = ttk.Scrollbar(self.analyze_tab, orient=tk.VERTICAL, command=canvas.yview)
         scrollable_frame = ttk.Frame(canvas)
 
-        def on_frame_configure(event):
+        def on_frame_configure(event) -> None:
             canvas.configure(scrollregion=canvas.bbox("all"))
 
-        def on_canvas_configure(event):
+        def on_canvas_configure(event) -> None:
             # Make the scrollable_frame width match the canvas width
             canvas_width = event.width
             scrollable_frame.configure(width=canvas_width)
@@ -5257,7 +5376,7 @@ class PCAPSentryApp:
 
         scrollable_frame.bind("<Configure>", on_frame_configure)
 
-        canvas_window_id = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas_window_id: int = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
         canvas.bind("<Configure>", on_canvas_configure)
 
@@ -5266,25 +5385,25 @@ class PCAPSentryApp:
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         # Bind mousewheel to canvas for scrolling (widget-scoped, not global)
-        def _on_mousewheel(event):
+        def _on_mousewheel(event) -> None:
             try:
                 canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
             except tk.TclError:
                 pass  # Widget destroyed, ignore scroll event
 
-        def _bind_mousewheel(_event):
+        def _bind_mousewheel(_event) -> None:
             canvas.bind("<MouseWheel>", _on_mousewheel)
 
-        def _unbind_mousewheel(_event):
+        def _unbind_mousewheel(_event) -> None:
             canvas.unbind("<MouseWheel>")
 
         canvas.bind("<Enter>", _bind_mousewheel)
         canvas.bind("<Leave>", _unbind_mousewheel)
 
         # Use scrollable_frame as container
-        container = scrollable_frame
+        container: ttk.Frame = scrollable_frame
 
-        file_frame = ttk.LabelFrame(container, text="  Target PCAP  ", padding=12)
+        file_frame: ttk.Labelframe = ttk.LabelFrame(container, text="  Target PCAP  ", padding=12)
         file_frame.pack(fill=tk.X, padx=16, pady=(8, 0))
         self.target_drop_area = file_frame
         self._help_icon(
@@ -5314,7 +5433,7 @@ class PCAPSentryApp:
         ).pack(anchor=tk.W, padx=20, pady=(4, 8))
 
         # Label buttons frame - for marking captures
-        label_frame = ttk.LabelFrame(container, text="  Label Current Capture  ", padding=12)
+        label_frame: ttk.Labelframe = ttk.LabelFrame(container, text="  Label Current Capture  ", padding=12)
         label_frame.pack(fill=tk.X, padx=16, pady=(8, 0))
         self._help_icon(
             label_frame,
@@ -5376,17 +5495,15 @@ class PCAPSentryApp:
         self.results_tab = ttk.Frame(self.results_notebook)
         self.why_tab = ttk.Frame(self.results_notebook)
         self.education_tab = ttk.Frame(self.results_notebook)
-        self.accuracy_tab = ttk.Frame(self.results_notebook)
         self.packets_tab = ttk.Frame(self.results_notebook)
         self.extracted_tab = ttk.Frame(self.results_notebook)
         self.results_notebook.add(self.results_tab, text="  Results  ")
         self.results_notebook.add(self.why_tab, text="  Why  ")
         self.results_notebook.add(self.education_tab, text="  Education  ")
-        self.results_notebook.add(self.accuracy_tab, text="  🔎 Refine  ")
         self.results_notebook.add(self.packets_tab, text="  Packets  ")
         self.results_notebook.add(self.extracted_tab, text="  \U0001f511  Extracted Info  ")
 
-        result_frame = ttk.LabelFrame(self.results_tab, text="  Results  ", padding=12)
+        result_frame: ttk.Labelframe = ttk.LabelFrame(self.results_tab, text="  Results  ", padding=12)
         result_frame.pack(fill=tk.BOTH, expand=True)
         self._help_icon(
             result_frame,
@@ -5402,7 +5519,7 @@ class PCAPSentryApp:
         self._style_text(self.result_text)
         self.result_text.pack(fill=tk.BOTH, expand=True)
 
-        flow_frame = ttk.LabelFrame(self.results_tab, text="  Flow Summary  ", padding=12)
+        flow_frame: ttk.Labelframe = ttk.LabelFrame(self.results_tab, text="  Flow Summary  ", padding=12)
         flow_frame.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
         self._help_icon(
             flow_frame,
@@ -5418,13 +5535,13 @@ class PCAPSentryApp:
 
         flow_cols = ("Flow", "Packets", "Bytes", "Duration")
         self.flow_table = ttk.Treeview(flow_frame, columns=flow_cols, show="headings", height=8)
-        for col in flow_cols:
+        for col: str in flow_cols:
             self.flow_table.heading(col, text=col)
             self.flow_table.column(col, width=220 if col == "Flow" else 90, anchor=tk.W)
         self._make_treeview_sortable(self.flow_table)
         self.flow_table.pack(fill=tk.BOTH, expand=True)
 
-        why_frame = ttk.LabelFrame(self.why_tab, text="  Why This Verdict Was Reached  ", padding=12)
+        why_frame: ttk.Labelframe = ttk.LabelFrame(self.why_tab, text="  Why This Verdict Was Reached  ", padding=12)
         why_frame.pack(fill=tk.BOTH, expand=True)
         self._help_icon(
             why_frame,
@@ -5461,7 +5578,7 @@ class PCAPSentryApp:
             side=tk.RIGHT,
         )
 
-        edu_frame = ttk.LabelFrame(
+        edu_frame: ttk.Labelframe = ttk.LabelFrame(
             self.education_tab, text="  Beginner's Guide: Why This Traffic Matters  ", padding=12
         )
         edu_frame.pack(fill=tk.BOTH, expand=True)
@@ -5491,82 +5608,11 @@ class PCAPSentryApp:
         edu_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         self.education_text.pack(fill=tk.BOTH, expand=True)
 
-        # ── Improve Accuracy Tab (Contextual Questions) ──
-        accuracy_header = ttk.Label(
-            self.accuracy_tab,
-            text="  Help Us Understand Your Network  ",
-            font=("Segoe UI", 12, "bold"),
-            padding=12,
-        )
-        accuracy_header.pack(fill=tk.X)
-        self._help_icon(
-            accuracy_header,
-            "After analysis, the AI asks contextual questions about unusual\n"
-            "traffic patterns to determine if they're expected in your network.\n\n"
-            "Each question points to specific traffic and explains why we're asking.\n\n"
-            "Your answers help reduce false positives and improve verdict accuracy.\n"
-            "Click 'Re-assess' after answering to recalculate the risk score.",
-            side=tk.RIGHT,
-        )
-
-        # Intro text
-        intro_frame = ttk.Frame(self.accuracy_tab)
-        intro_frame.pack(fill=tk.X, padx=12, pady=(0, 8))
-        intro_label = ttk.Label(
-            intro_frame,
-            text=(
-                "The analysis detected some traffic patterns that could be suspicious or legitimate. "
-                "Please answer the questions below to help us understand your network better."
-            ),
-            wraplength=800,
-        )
-        intro_label.pack(fill=tk.X)
-
-        # Scrollable questions frame
-        questions_outer = ttk.LabelFrame(self.accuracy_tab, text="  Contextual Questions  ", padding=12)
-        questions_outer.pack(fill=tk.BOTH, expand=True, padx=12, pady=(0, 12))
-
-        questions_canvas = tk.Canvas(questions_outer, bg=self.colors["bg"], highlightthickness=0, borderwidth=0)
-        questions_scroll = ttk.Scrollbar(questions_outer, orient=tk.VERTICAL, command=questions_canvas.yview)
-        self.education_questions_frame = ttk.Frame(questions_canvas)
-
-        self.education_questions_frame.bind(
-            "<Configure>", lambda _: questions_canvas.configure(scrollregion=questions_canvas.bbox("all"))
-        )
-
-        questions_canvas.create_window((0, 0), window=self.education_questions_frame, anchor="nw")
-        questions_canvas.configure(yscrollcommand=questions_scroll.set)
-
-        questions_scroll.pack(side=tk.RIGHT, fill=tk.Y)
-        questions_canvas.pack(fill=tk.BOTH, expand=True)
-
-        # Mouse wheel scrolling for questions canvas
-        def _on_mousewheel(event):
-            try:
-                questions_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-            except tk.TclError:
-                pass
-
-        def _bind_mousewheel(_event):
-            questions_canvas.bind("<MouseWheel>", _on_mousewheel)
-
-        def _unbind_mousewheel(_event):
-            questions_canvas.unbind("<MouseWheel>")
-
-        questions_canvas.bind("<Enter>", _bind_mousewheel)
-        questions_canvas.bind("<Leave>", _unbind_mousewheel)
-
-        # Placeholder text (shown when no questions available)
-        placeholder_label = ttk.Label(
-            self.education_questions_frame,
-            text="Run an analysis to see contextual questions about your network traffic.",
-            font=("Segoe UI", 10, "italic"),
-        )
-        placeholder_label.pack(pady=20)
+        # Refine/accuracy tab and contextual questions removed
 
         self._build_extracted_tab()
 
-        packet_filters = ttk.LabelFrame(self.packets_tab, text="  Packet Filters  ", padding=12)
+        packet_filters: ttk.Labelframe = ttk.LabelFrame(self.packets_tab, text="  Packet Filters  ", padding=12)
         packet_filters.pack(fill=tk.X, pady=8)
 
         self.packet_proto_var = tk.StringVar(value="Any")
@@ -5677,10 +5723,10 @@ class PCAPSentryApp:
             height=10,
             style="Packet.Treeview",
         )
-        self.packet_columns = list(packet_cols)
+        self.packet_columns: list[Literal['UTC Time', 'RelTime', 'Proto', 'Src', 'SPort', 'Dst', 'DPort', 'Size', 'DnsQuery', 'HttpMethod', 'HttpHost', 'HttpPath', 'TlsSni', 'TlsVersion', 'TlsAlpn']] = list(packet_cols)
         self.packet_table.configure(displaycolumns=self.packet_columns)
-        for col in packet_cols:
-            heading = self._packet_column_label(col)
+        for col: str in packet_cols:
+            heading: str | None = self._packet_column_label(col)
             self.packet_table.heading(col, text=heading)
             self.packet_table.column(col, width=90, anchor=tk.W, stretch=False)
         self._make_treeview_sortable(self.packet_table)
@@ -5697,7 +5743,7 @@ class PCAPSentryApp:
         self._init_packet_column_menu()
         self.packet_table.bind("<Button-3>", self._show_packet_column_menu)
 
-        hint_frame = ttk.LabelFrame(self.packets_tab, text="  C2 / Exfil Hints  ", padding=12)
+        hint_frame: ttk.Labelframe = ttk.LabelFrame(self.packets_tab, text="  C2 / Exfil Hints  ", padding=12)
         hint_frame.pack(fill=tk.BOTH, expand=False, pady=8)
         self._help_icon(
             hint_frame,
@@ -5742,7 +5788,7 @@ class PCAPSentryApp:
 
         self._setup_drag_drop()
 
-    def _make_treeview_sortable(self, tree):
+    def _make_treeview_sortable(self, tree) -> None:
         """Make all columns in a Treeview sortable by clicking the header,
         and add a right-click context menu with alignment options."""
         for col in tree["columns"]:
@@ -5750,7 +5796,7 @@ class PCAPSentryApp:
         # Attach right-click alignment menu
         tree.bind("<Button-3>", lambda event, t=tree: self._show_column_align_menu(event, t))
 
-    def _show_column_align_menu(self, event, tree):
+    def _show_column_align_menu(self, event, tree) -> None:
         """Show a right-click context menu on column headers with alignment options."""
         region = tree.identify_region(event.x, event.y)
         if region != "heading":
@@ -5759,7 +5805,7 @@ class PCAPSentryApp:
         if not col_id or col_id == "#0":
             return
         # Convert '#N' to column name
-        col_index = int(col_id.replace("#", "")) - 1
+        col_index: int = int(col_id.replace("#", "")) - 1
         columns = list(tree["columns"])
         if col_index < 0 or col_index >= len(columns):
             return
@@ -5786,16 +5832,16 @@ class PCAPSentryApp:
         finally:
             menu.grab_release()
 
-    def _set_column_align(self, tree, col_name, anchor):
+    def _set_column_align(self, tree, col_name, anchor) -> None:
         """Set the alignment of a single column."""
         tree.column(col_name, anchor=anchor)
 
-    def _set_all_columns_align(self, tree, anchor):
+    def _set_all_columns_align(self, tree, anchor) -> None:
         """Set the alignment of all columns in a Treeview."""
         for col in tree["columns"]:
             tree.column(col, anchor=anchor)
 
-    def _treeview_sort_column(self, tree, col, reverse):
+    def _treeview_sort_column(self, tree, col, reverse) -> None:
         """Sort a Treeview column. Detects numeric values automatically."""
         data = []
         for iid in tree.get_children(""):
@@ -5813,7 +5859,7 @@ class PCAPSentryApp:
             tree.move(iid, "", idx)
 
         # Toggle sort direction on next click; update header with arrow indicator
-        arrow = " \u25bc" if reverse else " \u25b2"
+        arrow: str = " \u25bc" if reverse else " \u25b2"
         # Reset all other column headings (remove arrows)
         for c in tree["columns"]:
             heading_text = tree.heading(c, "text")
@@ -5823,13 +5869,13 @@ class PCAPSentryApp:
         current_text = tree.heading(col, "text").rstrip(" \u25b2\u25bc")
         tree.heading(col, text=current_text + arrow, command=lambda: self._treeview_sort_column(tree, col, not reverse))
 
-    def _build_extracted_tab(self):
+    def _build_extracted_tab(self) -> None:
         """Build the Extracted Info tab for credentials, hosts, and MAC addresses."""
         container = ttk.Frame(self.extracted_tab, padding=12)
         container.pack(fill=tk.BOTH, expand=True)
 
         # -- Key Findings summary panel --
-        summary_frame = ttk.LabelFrame(container, text="  \U0001f6a8  Key Findings  ", padding=12)
+        summary_frame: ttk.Labelframe = ttk.LabelFrame(container, text="  \U0001f6a8  Key Findings  ", padding=12)
         summary_frame.pack(fill=tk.X, pady=(0, 12))
 
         summary_text_frame = ttk.Frame(summary_frame)
@@ -5860,7 +5906,7 @@ class PCAPSentryApp:
         summary_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         # -- Credentials table --
-        cred_frame = ttk.LabelFrame(container, text="  All Extracted Items  ", padding=12)
+        cred_frame: ttk.Labelframe = ttk.LabelFrame(container, text="  All Extracted Items  ", padding=12)
         cred_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 0))
         self._help_icon(
             cred_frame,
@@ -5883,8 +5929,8 @@ class PCAPSentryApp:
             show="headings",
             height=10,
         )
-        col_widths = {"Type": 105, "Protocol": 90, "Source": 130, "Destination": 130, "Value": 250, "Detail": 160}
-        for col in cred_cols:
+        col_widths: dict[str, int] = {"Type": 105, "Protocol": 90, "Source": 130, "Destination": 130, "Value": 250, "Detail": 160}
+        for col: str in cred_cols:
             self.cred_table.heading(col, text=col)
             self.cred_table.column(col, width=col_widths.get(col, 120), anchor=tk.W, stretch=True)
 
@@ -5915,7 +5961,7 @@ class PCAPSentryApp:
         )
 
         # -- Hosts / MAC / Hostname section --
-        host_frame = ttk.LabelFrame(container, text="  Hosts \u2014 IP / MAC / Computer Name  ", padding=8)
+        host_frame: ttk.Labelframe = ttk.LabelFrame(container, text="  Hosts \u2014 IP / MAC / Computer Name  ", padding=8)
         host_frame.pack(fill=tk.BOTH, expand=True, pady=(6, 0))
         self._help_icon(
             host_frame,
@@ -5936,8 +5982,8 @@ class PCAPSentryApp:
             show="headings",
             height=8,
         )
-        host_col_widths = {"IP Address": 150, "MAC Address(es)": 200, "Computer / Hostname": 350}
-        for col in host_cols:
+        host_col_widths: dict[str, int] = {"IP Address": 150, "MAC Address(es)": 200, "Computer / Hostname": 350}
+        for col: str in host_cols:
             self.host_table.heading(col, text=col)
             self.host_table.column(col, width=host_col_widths.get(col, 150), anchor=tk.W, stretch=True)
 
@@ -5964,16 +6010,16 @@ class PCAPSentryApp:
         )
 
     @staticmethod
-    def _classify_cred_field(field_str):
+    def _classify_cred_field(field_str) -> tuple[Literal['password'], Literal[' PASSWORD']] | tuple[Literal['username'], Literal[' USERNAME']] | tuple[Literal['hostname'], Literal[' COMPUTER']] | tuple[Literal['cookie'], Literal[' TOKEN']] | tuple[Literal['password'], Literal[' SECRET']] | tuple[Literal['other'], Literal['❓ PROMPT']] | tuple[Literal['other'], Literal['➖ OTHER']]:
         """Classify a credential field as username, password, hostname, cookie, or other."""
         f = field_str.lower()
-        if any(kw in f for kw in ("password", "pass ", "passwd", "secret", "pw")):
+        if any(kw in f for kw: str in ("password", "pass ", "passwd", "secret", "pw")):
             return "password", "\U0001f534 PASSWORD"
-        if any(kw in f for kw in ("username", "user", "login", "account", "email", "acct", "mail from", "principal")):
+        if any(kw in f for kw: str in ("username", "user", "login", "account", "email", "acct", "mail from", "principal")):
             return "username", "\U0001f535 USERNAME"
-        if any(kw in f for kw in ("ehlo", "helo", "hostname", "computer", "host")):
+        if any(kw in f for kw: str in ("ehlo", "helo", "hostname", "computer", "host")):
             return "hostname", "\U0001f7e2 COMPUTER"
-        if any(kw in f for kw in ("cookie", "set-cookie", "token", "ntlm", "auth-data")):
+        if any(kw in f for kw: str in ("cookie", "set-cookie", "token", "ntlm", "auth-data")):
             return "cookie", "\U0001f7e1 TOKEN"
         if "community" in f:
             return "password", "\U0001f534 SECRET"
@@ -5981,7 +6027,7 @@ class PCAPSentryApp:
             return "other", "\u2753 PROMPT"
         return "other", "\u2796 OTHER"
 
-    def _populate_extracted_tab(self, extracted_data):
+    def _populate_extracted_tab(self, extracted_data) -> None:
         """Populate the Extracted Info tab with results from extract_credentials_and_hosts()."""
         creds = extracted_data.get("credentials", [])
         hosts = extracted_data.get("hosts", {})
@@ -6009,7 +6055,7 @@ class PCAPSentryApp:
             for h in info.get("hostnames", []):
                 computernames.add(h)
 
-        t = self.extracted_summary_text
+        t: tk.Text = self.extracted_summary_text
         if not creds and not computernames:
             t.insert(tk.END, "No credentials or computer names found.\n\n", "label_dim")
             t.insert(
@@ -6035,7 +6081,7 @@ class PCAPSentryApp:
                 for p in passwords:
                     t.insert(tk.END, f"    {p['value']}", "password_tag")
                     detail = p.get("detail", "")
-                    extra = f"  {detail}" if detail else ""
+                    extra: str = f"  {detail}" if detail else ""
                     t.insert(tk.END, f"  ({p['protocol']}  {p['src']} \u2192 {p['dst']}{extra})\n", "label_dim")
             else:
                 t.insert(tk.END, "  \u2014 none \u2014\n", "label_dim")
@@ -6072,8 +6118,8 @@ class PCAPSentryApp:
             )
 
         if creds:
-            n_user = len([c for c in creds if self._classify_cred_field(c.get("field", ""))[0] == "username"])
-            n_pass = len([c for c in creds if self._classify_cred_field(c.get("field", ""))[0] == "password"])
+            n_user: int = len([c for c in creds if self._classify_cred_field(c.get("field", ""))[0] == "username"])
+            n_pass: int = len([c for c in creds if self._classify_cred_field(c.get("field", ""))[0] == "password"])
             self.cred_count_var.set(
                 f"{len(creds)} item(s)  |  {n_user} username(s)  |  {n_pass} password(s)  |  "
                 f"{len(computernames)} computer name(s)"
@@ -6092,9 +6138,9 @@ class PCAPSentryApp:
 
         for ip in sorted(hosts.keys(), key=_ip_sort_key):
             info = hosts[ip]
-            macs = ", ".join(info.get("mac", []))
-            hostnames = ", ".join(info.get("hostnames", []))
-            tag = "has_name" if hostnames else "no_name"
+            macs: str = ", ".join(info.get("mac", []))
+            hostnames: str = ", ".join(info.get("hostnames", []))
+            tag: str = "has_name" if hostnames else "no_name"
             self.host_table.insert("", tk.END, values=(ip, macs, hostnames), tags=(tag,))
 
         self.host_count_var.set(
@@ -6103,27 +6149,27 @@ class PCAPSentryApp:
             f"{sum(len(v.get('hostnames', [])) for v in hosts.values())} hostname(s)"
         )
 
-    def _copy_extracted_creds(self):
+    def _copy_extracted_creds(self) -> None:
         """Copy all extracted credentials to clipboard as tab-separated text."""
-        lines = ["Type\tProtocol\tSource\tDestination\tValue\tDetail"]
-        for item in self.cred_table.get_children():
-            vals = self.cred_table.item(item, "values")
-            lines.append("\t".join(str(v) for v in vals))
+        lines: list[str] = ["Type\tProtocol\tSource\tDestination\tValue\tDetail"]
+        for item: str in self.cred_table.get_children():
+            vals: tuple[Any, ...] | str = self.cred_table.item(item, "values")
+            lines.append("\t".join(str(v) for v: ctypes.Any | str in vals))
         self.root.clipboard_clear()
         self.root.clipboard_append("\n".join(lines))
         self.status_var.set(f"Copied {len(lines) - 1} credential row(s) to clipboard.")
 
-    def _copy_extracted_hosts(self):
+    def _copy_extracted_hosts(self) -> None:
         """Copy all extracted host info to clipboard as tab-separated text."""
-        lines = ["IP Address\tMAC Address(es)\tComputer / Hostname"]
-        for item in self.host_table.get_children():
-            vals = self.host_table.item(item, "values")
-            lines.append("\t".join(str(v) for v in vals))
+        lines: list[str] = ["IP Address\tMAC Address(es)\tComputer / Hostname"]
+        for item: str in self.host_table.get_children():
+            vals: tuple[Any, ...] | str = self.host_table.item(item, "values")
+            lines.append("\t".join(str(v) for v: ctypes.Any | str in vals))
         self.root.clipboard_clear()
         self.root.clipboard_append("\n".join(lines))
         self.status_var.set(f"Copied {len(lines) - 1} host row(s) to clipboard.")
 
-    def _build_kb_tab(self):
+    def _build_kb_tab(self) -> None:
         container = ttk.Frame(self.kb_tab, padding=14)
         container.pack(fill=tk.BOTH, expand=True)
 
@@ -6152,7 +6198,7 @@ class PCAPSentryApp:
         )
 
         # Unsure items review section
-        unsure_frame = ttk.LabelFrame(container, text="  Unsure Items  ", padding=12)
+        unsure_frame: ttk.Labelframe = ttk.LabelFrame(container, text="  Unsure Items  ", padding=12)
         unsure_frame.pack(fill=tk.X, pady=8)
         self._help_icon(
             unsure_frame,
@@ -6164,7 +6210,7 @@ class PCAPSentryApp:
         self.unsure_count_var = tk.StringVar(value="0 items")
         ttk.Label(unsure_frame, textvariable=self.unsure_count_var).pack(side=tk.LEFT, padx=(12, 0))
 
-        ioc_frame = ttk.LabelFrame(container, text="  IoC Feed  ", padding=12)
+        ioc_frame: ttk.Labelframe = ttk.LabelFrame(container, text="  IoC Feed  ", padding=12)
         ioc_frame.pack(fill=tk.X, pady=8)
         self._help_icon(
             ioc_frame,
@@ -6191,7 +6237,7 @@ class PCAPSentryApp:
             side=tk.LEFT, padx=6
         )
 
-    def _reset_packet_filters(self):
+    def _reset_packet_filters(self) -> None:
         if self.packet_proto_var is None:
             return
         self.packet_proto_var.set("Any")
@@ -6206,32 +6252,32 @@ class PCAPSentryApp:
         self.packet_dns_http_only_var.set(False)
         self._apply_packet_filters()
 
-    def _apply_packet_filters(self):
+    def _apply_packet_filters(self) -> None:
         if self.current_df is None or self.packet_table is None:
             return
 
-        df = self.current_df
+        df: ttk.Never = self.current_df
         if df.empty:
             self._update_packet_table(df)
             return
 
-        pd = _get_pandas()
-        mask = pd.Series(True, index=df.index)
+        pd: Any = _get_pandas()
+        mask: Series[bool] = pd.Series(True, index=df.index)
 
         # Apply packet filters using a combined mask (avoids full DataFrame copy)
-        proto_filter = self.packet_proto_var.get() if self.packet_proto_var else "Any"
+        proto_filter: str = self.packet_proto_var.get() if self.packet_proto_var else "Any"
         if proto_filter != "Any" and "Proto" in df.columns:
             mask &= df["Proto"] == proto_filter
 
-        src_filter = self.packet_src_var.get() if self.packet_src_var else ""
+        src_filter: str = self.packet_src_var.get() if self.packet_src_var else ""
         if src_filter and "Src" in df.columns:
             mask &= df["Src"].astype(str).str.contains(src_filter, na=False, regex=False)
 
-        dst_filter = self.packet_dst_var.get() if self.packet_dst_var else ""
+        dst_filter: str = self.packet_dst_var.get() if self.packet_dst_var else ""
         if dst_filter and "Dst" in df.columns:
             mask &= df["Dst"].astype(str).str.contains(dst_filter, na=False, regex=False)
 
-        sport_filter = self.packet_sport_var.get() if self.packet_sport_var else ""
+        sport_filter: str = self.packet_sport_var.get() if self.packet_sport_var else ""
         if sport_filter and "SPort" in df.columns:
             try:
                 sport_val = int(sport_filter)
@@ -6239,7 +6285,7 @@ class PCAPSentryApp:
             except ValueError:
                 pass
 
-        dport_filter = self.packet_dport_var.get() if self.packet_dport_var else ""
+        dport_filter: str = self.packet_dport_var.get() if self.packet_dport_var else ""
         if dport_filter and "DPort" in df.columns:
             try:
                 dport_val = int(dport_filter)
@@ -6247,9 +6293,9 @@ class PCAPSentryApp:
             except ValueError:
                 pass
 
-        base_time = self.packet_base_time if self.packet_base_time is not None else 0.0
+        base_time: float = self.packet_base_time if self.packet_base_time is not None else 0.0
 
-        time_min = self.packet_time_min_var.get() if self.packet_time_min_var else ""
+        time_min: str = self.packet_time_min_var.get() if self.packet_time_min_var else ""
         if time_min and "Time" in df.columns:
             try:
                 time_min_val = float(time_min)
@@ -6257,7 +6303,7 @@ class PCAPSentryApp:
             except ValueError:
                 pass
 
-        time_max = self.packet_time_max_var.get() if self.packet_time_max_var else ""
+        time_max: str = self.packet_time_max_var.get() if self.packet_time_max_var else ""
         if time_max and "Time" in df.columns:
             try:
                 time_max_val = float(time_max)
@@ -6265,7 +6311,7 @@ class PCAPSentryApp:
             except ValueError:
                 pass
 
-        size_min = self.packet_size_min_var.get() if self.packet_size_min_var else ""
+        size_min: str = self.packet_size_min_var.get() if self.packet_size_min_var else ""
         if size_min and "Size" in df.columns:
             try:
                 size_min_val = int(size_min)
@@ -6273,7 +6319,7 @@ class PCAPSentryApp:
             except ValueError:
                 pass
 
-        size_max = self.packet_size_max_var.get() if self.packet_size_max_var else ""
+        size_max: str = self.packet_size_max_var.get() if self.packet_size_max_var else ""
         if size_max and "Size" in df.columns:
             try:
                 size_max_val = int(size_max)
@@ -6281,12 +6327,12 @@ class PCAPSentryApp:
             except ValueError:
                 pass
 
-        dns_http_only = self.packet_dns_http_only_var.get() if self.packet_dns_http_only_var else False
+        dns_http_only: bool = self.packet_dns_http_only_var.get() if self.packet_dns_http_only_var else False
         if dns_http_only:
             mask &= (df["DnsQuery"].fillna("").astype(str) != "") | (df["HttpHost"].fillna("").astype(str) != "")
 
         # Copy only the filtered subset, not the entire DataFrame
-        result = df.loc[mask].copy()
+        result: ttk.Never = df.loc[mask].copy()
         if self.packet_base_time is not None and "Time" in result.columns:
             result["RelTime"] = result["Time"] - self.packet_base_time
         else:
@@ -6294,7 +6340,7 @@ class PCAPSentryApp:
 
         self._update_packet_table(result)
 
-    def _update_packet_table(self, df):
+    def _update_packet_table(self, df) -> None:
         if self.packet_table is None:
             return
         self.packet_table.delete(*self.packet_table.get_children())
@@ -6302,7 +6348,7 @@ class PCAPSentryApp:
         if df is None or df.empty:
             return
 
-        columns = [
+        columns: list[str] = [
             "UTC Time",
             "RelTime",
             "Proto",
@@ -6320,17 +6366,17 @@ class PCAPSentryApp:
             "TlsAlpn",
         ]
         # Ensure all expected columns exist in the DataFrame
-        for col in [c for c in columns if c not in ("UTC Time", "RelTime")]:
+        for col: str in [c for c: str in columns if c not in ("UTC Time", "RelTime")]:
             if col not in df.columns:
                 df[col] = ""
         # Limit to 500 rows and notify user if truncated (P5 fix)
-        total_rows = len(df)
+        total_rows: int = len(df)
         display_limit = 500
         display_df = df.head(display_limit)
         rows_for_size = []
         for row in display_df.itertuples(index=False):
             row_dict = row._asdict()
-            values = [self._format_packet_table_value(row_dict, col) for col in columns]
+            values: list[str] = [self._format_packet_table_value(row_dict, col) for col: str in columns]
             self.packet_table.insert("", tk.END, values=values)
             rows_for_size.append(values)
         self._autosize_packet_table(columns, rows_for_size)
@@ -6340,13 +6386,13 @@ class PCAPSentryApp:
         else:
             self.sample_note_var.set("")
 
-    def _format_packet_table_value(self, row, col):
+    def _format_packet_table_value(self, row, col) -> str:
         # Always use 'Time' for 'UTC Time' display
         if col == "UTC Time":
             try:
                 time_val = row.get("Time", None)
                 if time_val is not None:
-                    value = datetime.fromtimestamp(float(time_val), timezone.utc)
+                    value: datetime = datetime.fromtimestamp(float(time_val), timezone.utc)
                     return value.strftime("%Y-%m-%d %H:%M:%SZ")
                 return ""
             except Exception:
@@ -6359,18 +6405,18 @@ class PCAPSentryApp:
                 return ""
         return "" if value is None else str(value)
 
-    def _autosize_packet_table(self, columns, rows):
+    def _autosize_packet_table(self, columns, rows) -> None:
         if self.packet_table is None:
             return
 
         try:
-            font = tkfont.nametofont(self.packet_table.cget("font"))
+            font: tkfont.Font = tkfont.nametofont(self.packet_table.cget("font"))
         except Exception:
             return
 
         padding = 14
         min_width = 70
-        max_widths = {
+        max_widths: dict[str, int] = {
             "UTC Time": 170,
             "RelTime": 90,
             "Src": 200,
@@ -6385,46 +6431,46 @@ class PCAPSentryApp:
         }
 
         for index, col in enumerate(columns):
-            width = font.measure(col) + padding
+            width: int = font.measure(col) + padding
             for row in rows:
                 if index >= len(row):
                     continue
-                candidate = font.measure(str(row[index])) + padding
-                width = max(width, candidate)
-            width = max(width, min_width)
-            width = min(width, max_widths.get(col, 220))
+                candidate: int = font.measure(str(row[index])) + padding
+                width: int = max(width, candidate)
+            width: int = max(width, min_width)
+            width: int = min(width, max_widths.get(col, 220))
             self.packet_table.column(col, width=width, anchor=tk.W, stretch=False)
 
-    def _init_packet_column_menu(self):
+    def _init_packet_column_menu(self) -> None:
         if self.packet_table is None:
             return
         self.packet_column_menu = tk.Menu(self.root, tearoff=0)
         self.packet_column_vars = {}
-        for col in self.packet_columns or []:
+        for col: str in self.packet_columns or []:
             self.packet_column_vars[col] = tk.BooleanVar(value=True)
 
-    def _rebuild_packet_column_menu(self):
+    def _rebuild_packet_column_menu(self) -> None:
         if self.packet_column_menu is None or self.packet_column_vars is None:
             return
         self.packet_column_menu.delete(0, tk.END)
-        for col in self.packet_columns or []:
-            label = self._packet_column_label(col)
+        for col: str in self.packet_columns or []:
+            label: str | None = self._packet_column_label(col)
             self.packet_column_menu.add_checkbutton(
                 label=label,
                 variable=self.packet_column_vars[col],
                 command=lambda name=col: self._toggle_packet_column(name),
             )
 
-    def _toggle_packet_column(self, column):
+    def _toggle_packet_column(self, column) -> None:
         if self.packet_table is None or self.packet_column_vars is None:
             return
-        visible = [col for col in self.packet_columns or [] if self.packet_column_vars[col].get()]
+        visible: list[str] = [col for col: str in self.packet_columns or [] if self.packet_column_vars[col].get()]
         if not visible:
             self.packet_column_vars[column].set(True)
             return
         self.packet_table.configure(displaycolumns=visible)
 
-    def _show_packet_column_menu(self, event):
+    def _show_packet_column_menu(self, event) -> None:
         if self.packet_table is None or self.packet_column_menu is None:
             return
         if self.packet_table.identify_region(event.x, event.y) != "heading":
@@ -6432,14 +6478,14 @@ class PCAPSentryApp:
         self._rebuild_packet_column_menu()
 
         # Add alignment options for the clicked column
-        col_id = self.packet_table.identify_column(event.x)
+        col_id: str = self.packet_table.identify_column(event.x)
         if col_id and col_id != "#0":
-            col_index = int(col_id.replace("#", "")) - 1
-            columns = list(self.packet_table["columns"])
+            col_index: int = int(col_id.replace("#", "")) - 1
+            columns: list[Any] = list(self.packet_table["columns"])
             if 0 <= col_index < len(columns):
                 col_name = columns[col_index]
                 self.packet_column_menu.add_separator()
-                heading_text = self.packet_table.heading(col_name, "text").rstrip(" \u25b2\u25bc")
+                heading_text: str = self.packet_table.heading(col_name, "text").rstrip(" \u25b2\u25bc")
                 self.packet_column_menu.add_command(label=f"\u2550  Align: {heading_text}", state=tk.DISABLED)
                 self.packet_column_menu.add_command(
                     label="\u25c0  Align Left",
@@ -6471,8 +6517,8 @@ class PCAPSentryApp:
         finally:
             self.packet_column_menu.grab_release()
 
-    def _packet_column_label(self, column):
-        labels = {
+    def _packet_column_label(self, column) -> str | None:
+        labels: dict[str, str] = {
             "Proto": "Protocol",
             "DnsQuery": "DNS Query",
             "HttpMethod": "HTTP Method",
@@ -6484,11 +6530,11 @@ class PCAPSentryApp:
         }
         return labels.get(column, column)
 
-    def _update_packet_hints(self, df, stats, flow_df=None):
+    def _update_packet_hints(self, df, stats, flow_df=None) -> None:
         if self.packet_hint_text is None:
             return
 
-        hint_lines = ["Focus areas for C2 / exfil review:"]
+        hint_lines: list[str] = ["Focus areas for C2 / exfil review:"]
 
         if flow_df is None:
             flow_df = compute_flow_stats(df)
@@ -6511,7 +6557,7 @@ class PCAPSentryApp:
 
         beacon_flow = None
         if not df.empty:
-            flow_cols = ["Src", "Dst", "Proto", "SPort", "DPort"]
+            flow_cols: list[str] = ["Src", "Dst", "Proto", "SPort", "DPort"]
             grouped = df.groupby(flow_cols, dropna=False)
             for keys, group in grouped:
                 if len(group) < 6:
@@ -6520,14 +6566,14 @@ class PCAPSentryApp:
                 gaps = [b - a for a, b in itertools.pairwise(times) if b - a > 0]
                 if len(gaps) < 5:
                     continue
-                avg_gap = sum(gaps) / len(gaps)
+                avg_gap: float = sum(gaps) / len(gaps)
                 if avg_gap <= 0:
                     continue
                 std_gap = statistics.pstdev(gaps)
                 cv = std_gap / avg_gap if avg_gap else 0.0
                 if cv < 0.35:
-                    flow_str = f"{keys[0]}:{keys[3]} -> {keys[1]}:{keys[4]} ({keys[2]})"
-                    beacon_flow = (flow_str, avg_gap)
+                    flow_str: str = f"{keys[0]}:{keys[3]} -> {keys[1]}:{keys[4]} ({keys[2]})"
+                    beacon_flow: tuple[str, float] = (flow_str, avg_gap)
                     break
 
         if beacon_flow:
@@ -6537,8 +6583,8 @@ class PCAPSentryApp:
 
         top_ports = stats.get("top_ports", [])
         if top_ports:
-            unusual_ports = [str(port) for port, _ in top_ports if port not in COMMON_PORTS]
-            malware_flagged = [str(port) for port, _ in top_ports if port in MALWARE_PORTS]
+            unusual_ports: list[str] = [str(port) for port, _ in top_ports if port not in COMMON_PORTS]
+            malware_flagged: list[str] = [str(port) for port, _ in top_ports if port in MALWARE_PORTS]
             if malware_flagged:
                 hint_lines.append(f"- ⚠ Known malware/C2 ports: {', '.join(malware_flagged)}")
             if unusual_ports:
@@ -6551,7 +6597,7 @@ class PCAPSentryApp:
         if tls_count:
             top_sni = stats.get("top_tls_sni", [])
             if top_sni:
-                sni_text = ", ".join(f"{host} ({count})" for host, count in top_sni)
+                sni_text: str = ", ".join(f"{host} ({count})" for host, count in top_sni)
                 hint_lines.append(f"- TLS SNI observed: {sni_text}")
             else:
                 hint_lines.append(f"- TLS packets observed: {tls_count}")
@@ -6578,10 +6624,10 @@ class PCAPSentryApp:
         # Add filters for known malware ports found in traffic
         malware_port_hits = [p for p, _ in top_ports if p in MALWARE_PORTS]
         if malware_port_hits:
-            port_str = ", ".join(str(p) for p in malware_port_hits[:5])
+            port_str: str = ", ".join(str(p) for p in malware_port_hits[:5])
             filters.append(f"tcp.port in {{{port_str}}} or udp.port in {{{port_str}}}")
         elif top_ports:
-            port_values = [str(port) for port, _ in top_ports[:3]]
+            port_values: list[str] = [str(port) for port, _ in top_ports[:3]]
             if port_values:
                 filters.append(f"tcp.port in {{{', '.join(port_values)}}} or udp.port in {{{', '.join(port_values)}}}")
 
@@ -6593,13 +6639,13 @@ class PCAPSentryApp:
         for item in (suspicious_flows or [])[:3]:
             src = item.get("src")
             dst = item.get("dst")
-            proto = str(item.get("proto", "")).lower()
+            proto: str = str(item.get("proto", "")).lower()
             sport = item.get("sport")
             dport = item.get("dport")
             if not src or not dst:
                 continue
             if proto in ("tcp", "udp"):
-                parts = [f"ip.src == {src}", f"ip.dst == {dst}"]
+                parts: list[str] = [f"ip.src == {src}", f"ip.dst == {dst}"]
                 if isinstance(sport, int) and sport > 0:
                     parts.append(f"{proto}.srcport == {sport}")
                 if isinstance(dport, int) and dport > 0:
@@ -6610,32 +6656,32 @@ class PCAPSentryApp:
 
         return filters
 
-    def _copy_wireshark_filters(self):
+    def _copy_wireshark_filters(self) -> None:
         if not self.wireshark_filters:
             messagebox.showinfo("Wireshark Filters", "No filters available for this capture.")
             return
-        text = "\n".join(self.wireshark_filters)
+        text: str = "\n".join(self.wireshark_filters)
         self.root.clipboard_clear()
         self.root.clipboard_append(text)
         messagebox.showinfo("Wireshark Filters", "Filters copied to clipboard.")
 
-    def _browse_file(self, var):
-        path = filedialog.askopenfilename(filetypes=[("PCAP files", "*.pcap *.pcapng"), ("All files", "*.*")])
+    def _browse_file(self, var) -> None:
+        path: str = filedialog.askopenfilename(filetypes=[("PCAP files", "*.pcap *.pcapng"), ("All files", "*.*")])
         if path:
             var.set(path)
 
-    def _browse_ioc(self):
-        path = filedialog.askopenfilename(filetypes=[("IoC files", "*.json;*.txt"), ("All files", "*.*")])
+    def _browse_ioc(self) -> None:
+        path: str = filedialog.askopenfilename(filetypes=[("IoC files", "*.json;*.txt"), ("All files", "*.*")])
         if path:
             self.ioc_path_var.set(path)
 
-    def _request_cancel(self):
+    def _request_cancel(self) -> None:
         """Called when the user clicks the cancel (X) button."""
         self._cancel_event.set()
         self.status_var.set("Cancelling...")
         self.cancel_button.configure(state=tk.DISABLED)
 
-    def _set_busy(self, busy=True, message="Working..."):
+    def _set_busy(self, busy=True, message="Working...") -> None:
         if busy:
             self.busy_count += 1
             if self.busy_count == 1:
@@ -6650,7 +6696,7 @@ class PCAPSentryApp:
                 self.root.title(f"{self.root_title} - Working...")
                 # Start initialization counter instead of animations
                 self._initializing = True
-                self._init_start_time = time.time()
+                self._init_start_time: float = time.time()
                 self._update_init_counter()
                 # Don't start logo spin yet - will start when progress arrives
                 # Batch widget state changes for better performance
@@ -6666,17 +6712,17 @@ class PCAPSentryApp:
             else:
                 pass  # self.status_var.set(message)  # Disabled automatic status messages
         else:
-            self.busy_count = max(0, self.busy_count - 1)
+            self.busy_count: int = max(0, self.busy_count - 1)
             if self.busy_count == 0:
                 self._stop_init_counter()
                 self._stop_logo_spin()
                 self._reset_progress()
                 self.root.configure(cursor="")
-                self.root_title = self._get_window_title()
+                self.root_title: str = self._get_window_title()
                 self.root.title(self.root_title)
                 # Batch widget state restoration
                 for widget in self.busy_widgets:
-                    prior = self.widget_states.get(widget, "normal")
+                    prior: str = self.widget_states.get(widget, "normal")
                     try:
                         widget.configure(state=prior)
                     except tk.TclError:
@@ -6684,7 +6730,7 @@ class PCAPSentryApp:
                 # Hide cancel button
                 self.cancel_button.pack_forget()
 
-    def _reset_progress(self):
+    def _reset_progress(self) -> None:
         self.progress.stop()
         self.progress.configure(mode="determinate", maximum=100)
         self.progress["value"] = 0
@@ -6697,7 +6743,7 @@ class PCAPSentryApp:
             self.root.after_cancel(self._progress_anim_id)
             self._progress_anim_id = None
 
-    def _set_progress(self, percent, eta_seconds=None, label=None, processed=None, total=None):
+    def _set_progress(self, percent, eta_seconds=None, label=None, processed=None, total=None) -> None:
         if percent is None:
             # No percentage — stay at current position
             if label:
@@ -6720,11 +6766,11 @@ class PCAPSentryApp:
             self._progress_indeterminate = False
             self._progress_current = 0.0
 
-        percent_value = min(max(percent, 0.0), 100.0)
+        percent_value: float = min(max(percent, 0.0), 100.0)
 
         # Set target and kick off smooth animation
         # Ensure progress only moves forward (never backwards)
-        self._progress_target = max(percent_value, self._progress_target)
+        self._progress_target: float = max(percent_value, self._progress_target)
         # Update displayed percentage text immediately for responsiveness
         self.progress_percent_var.set(f"{self._progress_target:.0f}%")
 
@@ -6733,9 +6779,9 @@ class PCAPSentryApp:
             self._animate_progress()
 
         if label:
-            status_text = f"{label} {self._progress_target:.0f}%"
+            status_text: str = f"{label} {self._progress_target:.0f}%"
             if processed is not None and total:
-                status_text = (
+                status_text: str = (
                     f"{label} {self._progress_target:.0f}% ({_format_bytes(processed)} / {_format_bytes(total)})"
                 )
             if eta_seconds is not None and eta_seconds > 0:
@@ -6749,19 +6795,19 @@ class PCAPSentryApp:
                 short_label = label.split(" \u2014 ")[0] if " \u2014 " in label else label
                 self.root.title(f"{self.root_title} - {self._progress_target:.0f}% {short_label}")
 
-    def _animate_progress(self):
+    def _animate_progress(self) -> None:
         """Smoothly interpolate the progress bar toward _progress_target."""
         if self._shutting_down:
             self._progress_animating = False
             self._progress_anim_id = None
             return
-        target = self._progress_target
-        current = self._progress_current
-        diff = target - current
+        target: float = self._progress_target
+        current: float = self._progress_current
+        diff: float = target - current
 
         if abs(diff) < 0.2:
             # Close enough – snap to target
-            self._progress_current = target
+            self._progress_current: float = target
             self.progress["value"] = target
             self._progress_animating = False
             self._progress_anim_id = None
@@ -6769,22 +6815,22 @@ class PCAPSentryApp:
 
         # Ease-out interpolation: move 15% of remaining distance per tick
         # This gives a smooth deceleration as the bar approaches its target
-        step = diff * 0.15
+        step: float = diff * 0.15
         # Ensure minimum movement to avoid stalling
         if abs(step) < 0.15:
-            step = 0.15 if diff > 0 else -0.15
+            step: float = 0.15 if diff > 0 else -0.15
 
-        new_val = current + step
-        self._progress_current = new_val
+        new_val: float = current + step
+        self._progress_current: float = new_val
         self.progress["value"] = new_val
 
         self._progress_animating = True
         self._progress_anim_id = self.root.after(16, self._animate_progress)  # ~60fps
 
-    def _apply_theme(self):
-        theme = self._resolve_theme()
+    def _apply_theme(self) -> None:
+        theme: str = self._resolve_theme()
         if theme == "light":
-            self.colors = {
+            self.colors: dict[str, str] = {
                 "bg": "#f0f2f5",
                 "panel": "#ffffff",
                 "panel_alt": "#f7f8fa",
@@ -6815,7 +6861,7 @@ class PCAPSentryApp:
                 "tooltip_border": "#4b5563",
             }
         else:
-            self.colors = {
+            self.colors: dict[str, str] = {
                 "bg": "#0d1117",
                 "panel": "#161b22",
                 "panel_alt": "#1c2333",
@@ -6852,18 +6898,18 @@ class PCAPSentryApp:
         with contextlib.suppress(tk.TclError):
             style.theme_use("clam")
 
-        bg = self.colors["bg"]
-        panel = self.colors["panel"]
-        panel_alt = self.colors["panel_alt"]
-        text = self.colors["text"]
-        muted = self.colors["muted"]
-        accent = self.colors["accent"]
-        accent_alt = self.colors["accent_alt"]
-        accent_hover = self.colors["accent_hover"]
-        accent_subtle = self.colors["accent_subtle"]
-        border = self.colors["border"]
-        border_light = self.colors["border_light"]
-        tab_selected_fg = self.colors["tab_selected_fg"]
+        bg: str = self.colors["bg"]
+        panel: str = self.colors["panel"]
+        panel_alt: str = self.colors["panel_alt"]
+        text: str = self.colors["text"]
+        muted: str = self.colors["muted"]
+        accent: str = self.colors["accent"]
+        accent_alt: str = self.colors["accent_alt"]
+        accent_hover: str = self.colors["accent_hover"]
+        accent_subtle: str = self.colors["accent_subtle"]
+        border: str = self.colors["border"]
+        border_light: str = self.colors["border_light"]
+        tab_selected_fg: str = self.colors["tab_selected_fg"]
 
         style.configure("TFrame", background=bg)
         style.configure("TLabel", background=bg, foreground=text, font=("Segoe UI", 11))
@@ -7168,7 +7214,7 @@ class PCAPSentryApp:
 
         style.configure("TSeparator", background=border)
 
-    def _set_dark_titlebar(self, window=None):
+    def _set_dark_titlebar(self, window=None) -> None:
         """Force the Windows title bar to use dark mode via DWM."""
         if not sys.platform.startswith("win"):
             return
@@ -7185,10 +7231,10 @@ class PCAPSentryApp:
         except Exception:
             pass
 
-    def _resolve_theme(self):
+    def _resolve_theme(self) -> str:
         theme = "system"
         if hasattr(self, "theme_var"):
-            theme = self.theme_var.get().strip().lower() or "system"
+            theme: str = self.theme_var.get().strip().lower() or "system"
         else:
             theme = self.settings.get("theme", "system")
 
@@ -7198,28 +7244,28 @@ class PCAPSentryApp:
             return theme
         return "dark"
 
-    def _detect_system_theme(self):
+    def _detect_system_theme(self) -> str:
         if sys.platform.startswith("win"):
             try:
                 import winreg
 
                 key_path = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
-                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path) as key:
+                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path) as key: HKEYType:
                     value, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
                 return "light" if value else "dark"
             except Exception:
                 return "dark"
         return "dark"
 
-    def _build_background(self):
+    def _build_background(self) -> None:
         canvas = tk.Canvas(self.root, highlightthickness=0, bd=0, bg=self.colors["bg"])
         canvas.place(x=0, y=0, relwidth=1, relheight=1)
         canvas.tk.call("lower", canvas._w)
         canvas.bind("<Configure>", self._schedule_draw_background)
-        self.bg_canvas = canvas
+        self.bg_canvas: tk.Canvas = canvas
         self._bg_draw_pending = None
 
-    def _schedule_draw_background(self, event=None):
+    def _schedule_draw_background(self, event=None) -> None:
         if self._shutting_down:
             return
         if self._bg_draw_pending is not None:
@@ -7227,82 +7273,82 @@ class PCAPSentryApp:
         # Increased delay to reduce redraw frequency during resizing
         self._bg_draw_pending = self.root.after(150, self._draw_background)
 
-    def _draw_background(self, _event=None):
+    def _draw_background(self, _event=None) -> None:
         self._bg_draw_pending = None
         if self._shutting_down or self.bg_canvas is None:
             return
-        w = self.bg_canvas.winfo_width()
-        h = self.bg_canvas.winfo_height()
+        w: int = self.bg_canvas.winfo_width()
+        h: int = self.bg_canvas.winfo_height()
         if w <= 1 or h <= 1:
             return
 
         self.bg_canvas.delete("all")
 
-        theme = self._resolve_theme()
+        theme: str = self._resolve_theme()
 
         if theme == "dark":
             # Optimized gradient with fewer rectangles (8 instead of 32)
             steps = 8
-            for i in range(steps):
-                ratio = i / max(steps - 1, 1)
+            for i: int in range(steps):
+                ratio: float = i / max(steps - 1, 1)
                 r = int(13 + (18 - 13) * ratio)
                 g = int(17 + (23 - 17) * ratio)
                 b = int(23 + (33 - 23) * ratio)
-                color = f"#{r:02x}{g:02x}{b:02x}"
+                color: str = f"#{r:02x}{g:02x}{b:02x}"
                 y0 = int(h * i / steps)
                 y1 = int(h * (i + 1) / steps)
                 self.bg_canvas.create_rectangle(0, y0, w, y1, fill=color, outline="")
 
             # Reduced dot grid density for better performance
             dot_color = "#161d28"
-            for x in range(60, w, 80):
-                for y in range(60, h, 80):
+            for x: int in range(60, w, 80):
+                for y: int in range(60, h, 80):
                     self.bg_canvas.create_oval(x, y, x + 1, y + 1, fill=dot_color, outline="")
         else:
             # Light theme: optimized gradient (8 instead of 16 steps)
             steps = 8
-            for i in range(steps):
-                ratio = i / max(steps - 1, 1)
+            for i: int in range(steps):
+                ratio: float = i / max(steps - 1, 1)
                 r = int(240 + (235 - 240) * ratio)
                 g = int(242 + (238 - 242) * ratio)
                 b = int(245 + (242 - 245) * ratio)
-                color = f"#{r:02x}{g:02x}{b:02x}"
+                color: str = f"#{r:02x}{g:02x}{b:02x}"
                 y0 = int(h * i / steps)
                 y1 = int(h * (i + 1) / steps)
                 self.bg_canvas.create_rectangle(0, y0, w, y1, fill=color, outline=color)
 
             # Very subtle dot pattern
             dot_color = "#d8dce3"
-            for x in range(40, w, 60):
-                for y in range(40, h, 60):
+            for x: int in range(40, w, 60):
+                for y: int in range(40, h, 60):
                     self.bg_canvas.create_oval(x, y, x + 2, y + 2, fill=dot_color, outline=dot_color)
 
-    def _setup_drag_drop(self):
+    def _setup_drag_drop(self) -> None:
         if not _check_tkinterdnd2():
             print("WARNING: tkinterdnd2 not available - drag/drop disabled")
             return
 
         DND_FILES, _TkinterDnD = _get_tkinterdnd2()
 
-        def bind_drop(widget, setter, widget_name="unknown"):
+        def bind_drop(widget, setter, widget_name="unknown") -> None:
             if widget is None:
                 return
             try:
                 widget.drop_target_register(DND_FILES)
 
-                def on_drop(event):
+                def on_drop(event) -> str:
                     try:
                         path = self._extract_drop_path(event.data)
                         if path:
                             setter(path)
                             return "copy"
                         return "none"
-                    except Exception as e:
+                    except Exception as e: Exception:
                         print(f"Drop error: {e}")
                         return "none"
 
                 widget.dnd_bind("<<Drop>>", on_drop)
-            except (tk.TclError, AttributeError) as e:
+            except (tk.TclError, AttributeError) as e: TclError | AttributeError:
                 print(f"Drag/drop setup failed for {widget_name}: {e}")
                 return
 
@@ -7314,7 +7360,7 @@ class PCAPSentryApp:
         bind_drop(self.analyze_tab, self.target_path_var.set, "analyze_tab")
         bind_drop(self.result_text, self.target_path_var.set, "result_text")
 
-    _ALLOWED_DROP_EXTENSIONS = {
+    _ALLOWED_DROP_EXTENSIONS: set[str] = {
         ".pcap",
         ".pcapng",
         ".cap",
@@ -7336,9 +7382,9 @@ class PCAPSentryApp:
                 from urllib.parse import unquote, urlparse
 
                 parsed = urlparse(text)
-                path = unquote(parsed.path or "")
+                path: str = unquote(parsed.path or "")
                 if sys.platform.startswith("win") and path.startswith("/"):
-                    path = path[1:]
+                    path: str = path[1:]
                 text = path or text
             # Canonicalize to prevent traversal and validate extension
             try:
@@ -7346,7 +7392,7 @@ class PCAPSentryApp:
             except Exception:
                 return ""
             lower = text.lower()
-            if not any(lower.endswith(ext) for ext in self._ALLOWED_DROP_EXTENSIONS):
+            if not any(lower.endswith(ext) for ext: str in self._ALLOWED_DROP_EXTENSIONS):
                 return ""
             return text
 
@@ -7360,7 +7406,7 @@ class PCAPSentryApp:
             pass
         return normalize(data)
 
-    def _add_clear_x(self, entry, var):
+    def _add_clear_x(self, entry, var) -> tk.Label:
         """Place a small red ✕ inside the right edge of an Entry widget."""
         x_label = tk.Label(
             entry,
@@ -7380,7 +7426,7 @@ class PCAPSentryApp:
         x_label.bind("<Leave>", lambda _: x_label.configure(fg=self.colors["danger"]))
         return x_label
 
-    def _style_text(self, widget):
+    def _style_text(self, widget) -> None:
         widget.configure(
             background=self.colors["panel"],
             foreground=self.colors["text"],
@@ -7400,22 +7446,22 @@ class PCAPSentryApp:
         )
 
         # Add mouse wheel scrolling support
-        def _on_mousewheel(event):
+        def _on_mousewheel(event) -> None:
             try:
                 widget.yview_scroll(int(-1 * (event.delta / 120)), "units")
             except tk.TclError:
                 pass  # Widget destroyed, ignore scroll event
 
-        def _bind_mousewheel(_event):
+        def _bind_mousewheel(_event) -> None:
             widget.bind("<MouseWheel>", _on_mousewheel)
 
-        def _unbind_mousewheel(_event):
+        def _unbind_mousewheel(_event) -> None:
             widget.unbind("<MouseWheel>")
 
         widget.bind("<Enter>", _bind_mousewheel)
         widget.bind("<Leave>", _unbind_mousewheel)
 
-    def _populate_contextual_questions(self, questions):
+    def _populate_contextual_questions(self, questions) -> None:
         """Display contextual questions in the Improve Accuracy tab with Yes/No buttons."""
         # Clear existing questions
         for widget in self.education_questions_frame.winfo_children():
@@ -7531,7 +7577,7 @@ class PCAPSentryApp:
         self.reassess_button.pack()
         self._style_question_button(self.reassess_button, "reassess")
 
-    def _style_question_button(self, button, btn_type):
+    def _style_question_button(self, button, btn_type) -> None:
         """Style Yes/No/Re-assess buttons."""
         if btn_type == "yes":
             bg_color = "#2d5016"  # Dark green
@@ -7542,13 +7588,13 @@ class PCAPSentryApp:
             fg_color = "#ffffff"
             hover_bg = "#7a2a2a"
         elif btn_type == "reassess":
-            bg_color = self.colors["accent"]
+            bg_color: str = self.colors["accent"]
             fg_color = "#ffffff"
             hover_bg = "#4a7ba0"
         else:
-            bg_color = self.colors["panel"]
-            fg_color = self.colors["text"]
-            hover_bg = self.colors["accent_subtle"]
+            bg_color: str = self.colors["panel"]
+            fg_color: str = self.colors["text"]
+            hover_bg: str = self.colors["accent_subtle"]
 
         button.configure(
             background=bg_color,
@@ -7563,7 +7609,7 @@ class PCAPSentryApp:
             pady=5,
         )
 
-    def _answer_question(self, index, answer):
+    def _answer_question(self, index, answer) -> None:
         """Handle Yes/No button click for a question."""
         if index >= len(self.contextual_questions):
             return
@@ -7586,7 +7632,7 @@ class PCAPSentryApp:
         if all(q["answer"] is not None for q in self.contextual_questions):
             self.reassess_button.configure(state="normal")
 
-    def _reassess_analysis(self):
+    def _reassess_analysis(self) -> None:
         """Re-run analysis considering user's question answers."""
         # Get current analysis context
         if not hasattr(self, "last_analysis_stats") or not self.last_analysis_stats:
@@ -7597,11 +7643,11 @@ class PCAPSentryApp:
         answers_context = []
         for q_data in self.contextual_questions:
             question = q_data["question"]
-            answer = "Yes" if q_data["answer"] else "No"
+            answer: str = "Yes" if q_data["answer"] else "No"
             answers_context.append(f"{question} → {answer}")
 
         # Show user their answers
-        answers_summary = "\n".join(answers_context)
+        answers_summary: str = "\n".join(answers_context)
         messagebox.showinfo(
             "Re-assessing Analysis",
             f"Re-assessing with your answers:\n\n{answers_summary}\n\n"
@@ -7616,29 +7662,29 @@ class PCAPSentryApp:
 
         self.status_var.set("Re-assessment complete (answers recorded)")
 
-    def _show_overlay(self, message):
+    def _show_overlay(self, message) -> None:
         pass
 
-    def _update_overlay_message(self, message):
+    def _update_overlay_message(self, message) -> None:
         pass
 
-    def _hide_overlay(self):
+    def _hide_overlay(self) -> None:
         pass
 
-    def _run_task(self, func, on_success, on_error=None, message="Working...", progress_label=None):
+    def _run_task(self, func, on_success, on_error=None, message="Working...", progress_label=None) -> None:
         self._set_busy(True, message)
         q = queue.Queue()
-        last_progress_time = [0.0]  # Mutable to allow closure modification
-        last_progress_value = [0.0]
+        last_progress_time: list[float] = [0.0]  # Mutable to allow closure modification
+        last_progress_value: list[float] = [0.0]
 
-        def progress_cb(percent, eta_seconds=None, processed=None, total=None, label=None):
+        def progress_cb(percent, eta_seconds=None, processed=None, total=None, label=None) -> None:
             # Check for cancellation on every progress update
             if self._cancel_event.is_set():
                 raise AnalysisCancelledError("Analysis cancelled by user.")
 
             # Light throttling to prevent excessive updates while maintaining responsiveness
-            current_time = time.time()
-            time_delta = current_time - last_progress_time[0]
+            current_time: float = time.time()
+            time_delta: float = current_time - last_progress_time[0]
             progress_delta = abs(percent - last_progress_value[0])
 
             # Send update if: significant change (>1%), enough time passed (>150ms), or final (100%)
@@ -7660,7 +7706,7 @@ class PCAPSentryApp:
                     )
                 )
 
-        def worker():
+        def worker() -> None:
             try:
                 if progress_label:
                     result = func(progress_cb)
@@ -7673,7 +7719,7 @@ class PCAPSentryApp:
                     q.put(("ok", result))
             except AnalysisCancelledError:
                 q.put(("cancelled",))
-            except Exception as exc:
+            except Exception as exc: Exception:
                 import traceback as _tb
 
                 # If cancelled, don't report the error
@@ -7684,7 +7730,7 @@ class PCAPSentryApp:
 
         threading.Thread(target=worker, daemon=True).start()
 
-        def check():
+        def check() -> None:
             if self._shutting_down:
                 return
             done = False
@@ -7694,7 +7740,7 @@ class PCAPSentryApp:
             error_tb = None
             latest_progress = None
             try:
-                for _ in range(10):  # Process batch of messages without blocking
+                for _: int in range(10):  # Process batch of messages without blocking
                     msg = q.get_nowait()
                     status = msg[0]
                     if status == "progress":
@@ -7736,12 +7782,12 @@ class PCAPSentryApp:
                     self.root.after(800, lambda: self._finish_task(error, payload, error_tb, on_success, on_error))
             else:
                 # Poll at 100ms for smooth progress updates, 1ms when cancelling for instant response
-                interval = 1 if self._cancel_event.is_set() else 100
+                interval: int = 1 if self._cancel_event.is_set() else 100
                 self.root.after(interval, check)
 
         self.root.after(100, check)
 
-    def _finish_task(self, error, payload, error_tb, on_success, on_error):
+    def _finish_task(self, error, payload, error_tb, on_success, on_error) -> None:
         """Called after the 100% progress hold to clean up and deliver results."""
         if self._shutting_down:
             return
@@ -7751,19 +7797,19 @@ class PCAPSentryApp:
         elif on_error:
             on_error(error)
         else:
-            detail = f"{error}\n\n{error_tb}" if error_tb else str(error)
+            detail: str = f"{error}\n\n{error_tb}" if error_tb else str(error)
             messagebox.showerror("Error", detail)
 
-    def _reset_kb(self):
+    def _reset_kb(self) -> None:
         if os.path.exists(KNOWLEDGE_BASE_FILE):
-            wants_backup = messagebox.askyesno(
+            wants_backup: bool = messagebox.askyesno(
                 "Knowledge Base",
                 "Would you like to back up the knowledge base before resetting?",
             )
             if wants_backup and not self._backup_kb():
                 return
 
-        confirm = messagebox.askyesno(
+        confirm: bool = messagebox.askyesno(
             "Knowledge Base",
             "Are you sure you want to reset the knowledge base?",
         )
@@ -7775,11 +7821,11 @@ class PCAPSentryApp:
         self._refresh_kb()
         messagebox.showinfo("Knowledge Base", "Knowledge base reset.")
 
-    def _backup_kb(self):
+    def _backup_kb(self) -> bool:
         kb = load_knowledge_base()
-        default_name = f"pcap_knowledge_base_backup_{_utcnow().strftime('%Y%m%d_%H%M%S')}.json"
-        initial_dir = self.backup_dir_var.get().strip() or os.path.dirname(KNOWLEDGE_BASE_FILE)
-        path = filedialog.asksaveasfilename(
+        default_name: str = f"pcap_knowledge_base_backup_{_utcnow().strftime('%Y%m%d_%H%M%S')}.json"
+        initial_dir: str = self.backup_dir_var.get().strip() or os.path.dirname(KNOWLEDGE_BASE_FILE)
+        path: str = filedialog.asksaveasfilename(
             title="Backup Knowledge Base",
             defaultextension=".json",
             initialfile=default_name,
@@ -7789,9 +7835,9 @@ class PCAPSentryApp:
         if not path:
             return False
         try:
-            with open(path, "w", encoding="utf-8") as f:
+            with open(path, "w", encoding="utf-8") as f: io.TextIOWrapper[io._WrappedBuffer]:
                 json.dump(kb, f, indent=2)
-        except Exception as exc:
+        except Exception as exc: Exception:
             messagebox.showerror("Knowledge Base", f"Backup failed: {exc}")
             return False
         self.backup_dir_var.set(os.path.dirname(path))
@@ -7799,9 +7845,9 @@ class PCAPSentryApp:
         messagebox.showinfo("Knowledge Base", "Backup saved.")
         return True
 
-    def _restore_kb(self):
-        initial_dir = self.backup_dir_var.get().strip() or os.path.dirname(KNOWLEDGE_BASE_FILE)
-        path = filedialog.askopenfilename(
+    def _restore_kb(self) -> None:
+        initial_dir: str = self.backup_dir_var.get().strip() or os.path.dirname(KNOWLEDGE_BASE_FILE)
+        path: str = filedialog.askopenfilename(
             title="Restore Knowledge Base",
             initialdir=initial_dir,
             filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
@@ -7809,7 +7855,7 @@ class PCAPSentryApp:
         if not path:
             return
         try:
-            with open(path, encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f: io.TextIOWrapper[io._WrappedBuffer]:
                 data = json.load(f)
             if not isinstance(data, dict):
                 raise ValueError("Backup format is invalid.")
@@ -7817,7 +7863,7 @@ class PCAPSentryApp:
             data.setdefault("malicious", [])
             data.setdefault("ioc", {"ips": [], "domains": [], "hashes": []})
             save_knowledge_base(data)
-        except Exception as exc:
+        except Exception as exc: Exception:
             messagebox.showerror("Knowledge Base", f"Restore failed: {exc}")
             return
         self.backup_dir_var.set(os.path.dirname(path))
@@ -7825,8 +7871,8 @@ class PCAPSentryApp:
         self._refresh_kb()
         messagebox.showinfo("Knowledge Base", "Knowledge base restored.")
 
-    def _load_ioc_file(self):
-        path = self.ioc_path_var.get().strip()
+    def _load_ioc_file(self) -> None:
+        path: str = self.ioc_path_var.get().strip()
         if not path:
             messagebox.showwarning("Missing file", "Please select an IoC file.")
             return
@@ -7837,7 +7883,7 @@ class PCAPSentryApp:
         def task():
             return load_iocs_from_file(path)
 
-        def done(iocs):
+        def done(iocs) -> None:
             try:
                 kb = load_knowledge_base()
                 merge_iocs_into_kb(kb, iocs)
@@ -7845,24 +7891,24 @@ class PCAPSentryApp:
                 self._refresh_kb()
                 self.ioc_path_var.set("")
                 messagebox.showinfo("IoC Feed", "IoCs imported successfully.")
-            except Exception as e:
+            except Exception as e: Exception:
                 _write_error_log("Error importing IoCs", e, sys.exc_info()[2])
                 messagebox.showerror("Error", f"Failed to import IoCs: {e!s}")
 
         self._run_task(task, done, message="Importing IoCs...")
 
-    def _clear_iocs(self):
+    def _clear_iocs(self) -> None:
         try:
             kb = load_knowledge_base()
             kb["ioc"] = {"ips": [], "domains": [], "hashes": []}
             save_knowledge_base(kb)
             self._refresh_kb()
             messagebox.showinfo("IoC Feed", "IoCs cleared.")
-        except Exception as e:
+        except Exception as e: Exception:
             _write_error_log("Error clearing IoCs", e, sys.exc_info()[2])
             messagebox.showerror("Error", f"Failed to clear IoCs: {e!s}")
 
-    def _review_unsure_items(self):
+    def _review_unsure_items(self) -> None:
         """Open a window to review and reclassify unsure items."""
         kb = load_knowledge_base()
         unsure_items = kb.get("unsure", [])
@@ -7903,18 +7949,18 @@ class PCAPSentryApp:
         # Track items to remove/reclassify
         items_to_process = []
 
-        def reclassify(index, new_label):
+        def reclassify(index, new_label) -> None:
             """Reclassify an unsure item to safe or malicious."""
             item = unsure_items[index]
             items_to_process.append(("reclassify", index, new_label, item))
 
-        def delete_item(index):
+        def delete_item(index) -> None:
             """Remove an unsure item without reclassifying."""
             items_to_process.append(("delete", index, None, None))
 
         # Create review cards for each unsure item
         for idx, item in enumerate(unsure_items):
-            card = ttk.LabelFrame(scrollable_frame, text=f"  Item {idx + 1}  ", padding=12)
+            card: ttk.Labelframe = ttk.LabelFrame(scrollable_frame, text=f"  Item {idx + 1}  ", padding=12)
             card.pack(fill=tk.X, pady=8, padx=4)
 
             # Display summary info
@@ -7945,7 +7991,7 @@ class PCAPSentryApp:
         bottom_frame = ttk.Frame(review_window, padding=10)
         bottom_frame.pack(fill=tk.X, side=tk.BOTTOM)
 
-        def apply_changes():
+        def apply_changes() -> None:
             """Apply all reclassifications and close the window."""
             if not items_to_process:
                 review_window.destroy()
@@ -7971,7 +8017,7 @@ class PCAPSentryApp:
                 self._refresh_kb()
                 messagebox.showinfo("Review Complete", f"Processed {len(items_to_process)} item(s).")
                 review_window.destroy()
-            except Exception as e:
+            except Exception as e: Exception:
                 _write_error_log("Error applying unsure item changes", e, sys.exc_info()[2])
                 messagebox.showerror("Error", f"Failed to apply changes: {e!s}")
 
@@ -7980,12 +8026,12 @@ class PCAPSentryApp:
             side=tk.RIGHT
         )
 
-    def _llm_is_enabled(self):
-        provider = self.llm_provider_var.get().strip().lower()
+    def _llm_is_enabled(self) -> bool:
+        provider: str = self.llm_provider_var.get().strip().lower()
         return provider not in ("", "disabled")
 
     def _request_llm_label(self, stats, summary):
-        provider = self.llm_provider_var.get().strip().lower()
+        provider: str = self.llm_provider_var.get().strip().lower()
         if provider == "ollama":
             return self._request_ollama_label(stats, summary)
         if provider == "openai_compatible":
@@ -8015,13 +8061,13 @@ class PCAPSentryApp:
         """Parse and validate LLM label JSON response (shared by Ollama & OpenAI paths)."""
         try:
             parsed = json.loads(content)
-        except json.JSONDecodeError as exc:
+        except json.JSONDecodeError as exc: json.JSONDecodeError:
             raise ValueError(f"LLM response was not valid JSON: {exc}")
 
         if not isinstance(parsed, dict):
             raise ValueError("LLM response was not a JSON object.")
 
-        label = str(parsed.get("label", "")).strip().lower()
+        label: str = str(parsed.get("label", "")).strip().lower()
         if label not in ("safe", "malicious"):
             raise ValueError("LLM label must be 'safe' or 'malicious'.")
 
@@ -8032,15 +8078,15 @@ class PCAPSentryApp:
             except (TypeError, ValueError):
                 confidence = None
 
-        rationale = str(parsed.get("rationale", "")).strip()
+        rationale: str = str(parsed.get("rationale", "")).strip()
         return {"label": label, "confidence": confidence, "rationale": rationale}
 
     def _request_ollama_label(self, stats, summary):
-        endpoint = self._normalize_ollama_endpoint(self.llm_endpoint_var.get() or "http://localhost:11434")
-        model = self.llm_model_var.get().strip() or "llama3"
-        url = endpoint.rstrip("/") + "/api/generate"
+        endpoint: str = self._normalize_ollama_endpoint(self.llm_endpoint_var.get() or "http://localhost:11434")
+        model: str = self.llm_model_var.get().strip() or "llama3"
+        url: str = endpoint.rstrip("/") + "/api/generate"
         summary_stats = self._build_llm_summary_stats(stats)
-        prompt = (
+        prompt: str = (
             "You are a cybersecurity assistant. Decide whether the capture should be labeled "
             "'safe' or 'malicious' for a training knowledge base. "
             "Return ONLY JSON with keys: label (safe/malicious), confidence (0-1), rationale (1-2 sentences).\n\n"
@@ -8053,7 +8099,7 @@ class PCAPSentryApp:
             "stream": False,
             "format": "json",
         }
-        data = json.dumps(payload).encode("utf-8")
+        data: bytes = json.dumps(payload).encode("utf-8")
         raw = self._llm_http_request(url, data, timeout=20)
 
         response = json.loads(raw)
@@ -8065,7 +8111,7 @@ class PCAPSentryApp:
 
     def _request_openai_compat_label(self, stats, summary):
         summary_stats = self._build_llm_summary_stats(stats)
-        messages = [
+        messages: list[dict[str, str]] = [
             {
                 "role": "system",
                 "content": "You are a cybersecurity assistant. Return ONLY JSON with keys: label (safe/malicious), "
@@ -8079,7 +8125,7 @@ class PCAPSentryApp:
         content = self._request_openai_compat_chat(messages, temperature=0.2)
         return self._parse_llm_label_response(content)
 
-    def _llm_is_ready(self):
+    def _llm_is_ready(self) -> bool:
         """Return True only if LLM is enabled AND connection was verified."""
         if not self._llm_is_enabled():
             return False
@@ -8093,7 +8139,7 @@ class PCAPSentryApp:
         if not self._llm_is_ready():
             return []
 
-        provider = self.llm_provider_var.get().strip().lower()
+        provider: str = self.llm_provider_var.get().strip().lower()
 
         # Build context for LLM
         top_ports = stats.get("top_ports", [])
@@ -8112,7 +8158,7 @@ class PCAPSentryApp:
             "tls_packets": tls_packet_count,
         }
 
-        prompt = (
+        prompt: str = (
             "You are a network security assistant. Based on the network traffic analysis below, "
             "generate 2-5 contextual yes/no questions to ask the user that would help determine "
             "if unusual traffic patterns are actually expected/legitimate.\n\n"
@@ -8153,15 +8199,15 @@ class PCAPSentryApp:
                 return result
             return []
 
-        except Exception as e:
+        except Exception as e: Exception:
             print(f"[WARN] Failed to generate contextual questions: {e}")
             return []
 
     def _request_ollama_questions(self, prompt):
         """Request questions from Ollama LLM."""
-        endpoint = self._normalize_ollama_endpoint(self.llm_endpoint_var.get() or "http://localhost:11434")
-        model = self.llm_model_var.get().strip() or "llama3"
-        url = endpoint.rstrip("/") + "/api/generate"
+        endpoint: str = self._normalize_ollama_endpoint(self.llm_endpoint_var.get() or "http://localhost:11434")
+        model: str = self.llm_model_var.get().strip() or "llama3"
+        url: str = endpoint.rstrip("/") + "/api/generate"
 
         payload = {
             "model": model,
@@ -8169,7 +8215,7 @@ class PCAPSentryApp:
             "stream": False,
             "format": "json",
         }
-        data = json.dumps(payload).encode("utf-8")
+        data: bytes = json.dumps(payload).encode("utf-8")
         raw = self._llm_http_request(url, data, timeout=15)
         response = json.loads(raw)
         content = response.get("response", "")
@@ -8191,7 +8237,7 @@ class PCAPSentryApp:
         ]
         return self._request_openai_compat_chat(messages, temperature=0.3)
 
-    def _confirm_llm_label(self, intended_label, stats, summary, on_apply):
+    def _confirm_llm_label(self, intended_label, stats, summary, on_apply) -> None:
         if not self._llm_is_ready():
             on_apply(intended_label)
             return
@@ -8201,7 +8247,7 @@ class PCAPSentryApp:
         def task():
             return self._request_llm_label(stats, summary)
 
-        def done(suggestion):
+        def done(suggestion) -> None:
             self.sample_note_var.set("")
             suggested_label = suggestion.get("label") if suggestion else None
             if suggested_label not in ("safe", "malicious"):
@@ -8210,35 +8256,35 @@ class PCAPSentryApp:
                 return
 
             confidence = suggestion.get("confidence")
-            conf_text = f"{confidence:.2f}" if isinstance(confidence, (int, float)) else "n/a"
+            conf_text: str = f"{confidence:.2f}" if isinstance(confidence, (int, float)) else "n/a"
             rationale = suggestion.get("rationale", "").strip()
             if suggested_label == intended_label:
-                detail = f"LLM agrees with your label: {suggested_label}\nConfidence: {conf_text}\n"
+                detail: str = f"LLM agrees with your label: {suggested_label}\nConfidence: {conf_text}\n"
                 if rationale:
                     detail += f"Rationale: {rationale}\n"
                 messagebox.showinfo("LLM Suggestion", detail)
                 on_apply(intended_label)
                 return
 
-            prompt = f"LLM suggests: {suggested_label}\nConfidence: {conf_text}\n"
+            prompt: str = f"LLM suggests: {suggested_label}\nConfidence: {conf_text}\n"
             if rationale:
                 prompt += f"Rationale: {rationale}\n"
             prompt += f"\nUse suggested label instead of '{intended_label}'?"
-            choice = messagebox.askyesnocancel("LLM Suggestion", prompt)
+            choice: bool | None = messagebox.askyesnocancel("LLM Suggestion", prompt)
             if choice is None:
                 return
             on_apply(suggested_label if choice else intended_label)
 
-        def failed(err):
+        def failed(err) -> None:
             self.sample_note_var.set("")
-            prompt = f"LLM suggestion failed: {err}\n\nDo you still want to mark this capture as '{intended_label}'?"
-            choice = messagebox.askyesno("LLM Suggestion Failed", prompt)
+            prompt: str = f"LLM suggestion failed: {err}\n\nDo you still want to mark this capture as '{intended_label}'?"
+            choice: bool = messagebox.askyesno("LLM Suggestion Failed", prompt)
             if choice:
                 on_apply(intended_label)
 
         self._run_task(task, done, on_error=failed, message="Contacting LLM...")
 
-    def _set_llm_test_status(self, text, color):
+    def _set_llm_test_status(self, text, color) -> None:
         try:
             self.llm_test_status_var.set(text)
             if self.llm_test_status_label is not None:
@@ -8247,66 +8293,66 @@ class PCAPSentryApp:
         except Exception:
             pass  # Don't crash if LLM status update fails
 
-    def _update_llm_header_indicator(self):
+    def _update_llm_header_indicator(self) -> None:
         try:
             if self.llm_header_label is None:
                 return
-            provider = self.llm_provider_var.get().strip().lower()
-            status = self.llm_test_status_var.get().strip()
-            bg = self.colors.get("panel", "#161b22")
+            provider: str = self.llm_provider_var.get().strip().lower()
+            status: str = self.llm_test_status_var.get().strip()
+            bg: str = self.colors.get("panel", "#161b22")
             if provider in ("", "disabled"):
                 text = "LLM: off"
-                fg = self.colors.get("muted", "#8b949e")
-                border = self.colors.get("border", "#21262d")
+                fg: str = self.colors.get("muted", "#8b949e")
+                border: str = self.colors.get("border", "#21262d")
             elif status == "OK":
                 text = "\u2714 LLM"
-                fg = self.colors.get("success", "#3fb950")
-                border = self.colors.get("success", "#3fb950")
+                fg: str = self.colors.get("success", "#3fb950")
+                border: str = self.colors.get("success", "#3fb950")
             elif status == "FAIL":
                 text = "\u2718 LLM"
-                fg = self.colors.get("danger", "#f85149")
-                border = self.colors.get("danger", "#f85149")
+                fg: str = self.colors.get("danger", "#f85149")
+                border: str = self.colors.get("danger", "#f85149")
             elif status == "Auto":
                 text = "\u2714 LLM"
-                fg = self.colors.get("accent", "#58a6ff")
-                border = self.colors.get("accent", "#58a6ff")
+                fg: str = self.colors.get("accent", "#58a6ff")
+                border: str = self.colors.get("accent", "#58a6ff")
             elif "Testing" in status or "testing" in status:
                 text = "\u25cf LLM"
-                fg = self.colors.get("warning", "#d29922")
-                border = self.colors.get("warning", "#d29922")
+                fg: str = self.colors.get("warning", "#d29922")
+                border: str = self.colors.get("warning", "#d29922")
             else:
                 text = "\u25cb LLM"
-                fg = self.colors.get("muted", "#8b949e")
-                border = self.colors.get("border", "#21262d")
+                fg: str = self.colors.get("muted", "#8b949e")
+                border: str = self.colors.get("border", "#21262d")
             self.llm_header_label.configure(text=text, fg=fg, bg=bg)
             self.llm_header_indicator.configure(bg=bg, highlightbackground=border)
         except Exception:
             pass  # Don't crash if LLM header update fails
 
-    def _update_online_header_indicator(self):
+    def _update_online_header_indicator(self) -> None:
         """Update the online/offline indicator in the header."""
         if self.online_header_label is None:
             return
-        is_offline = self.offline_mode_var.get()
-        bg = self.colors.get("panel", "#161b22")
+        is_offline: bool = self.offline_mode_var.get()
+        bg: str = self.colors.get("panel", "#161b22")
         if is_offline:
             text = "Offline"
-            fg = self.colors.get("warning", "#d29922")
-            border = self.colors.get("warning", "#d29922")
+            fg: str = self.colors.get("warning", "#d29922")
+            border: str = self.colors.get("warning", "#d29922")
         else:
             text = "\u2714 Online"
-            fg = self.colors.get("success", "#3fb950")
-            border = self.colors.get("success", "#3fb950")
+            fg: str = self.colors.get("success", "#3fb950")
+            border: str = self.colors.get("success", "#3fb950")
         self.online_header_label.configure(text=text, fg=fg, bg=bg)
         self.online_header_indicator.configure(bg=bg, highlightbackground=border)
 
-    def _toggle_llm(self):
+    def _toggle_llm(self) -> None:
         """Toggle LLM on/off using the header button."""
-        current_provider = self.llm_provider_var.get().strip().lower()
+        current_provider: str = self.llm_provider_var.get().strip().lower()
 
         if current_provider in ("", "disabled"):
             # Turn LLM on - restore last used provider or default to "disabled"
-            last_provider = getattr(self, "_last_llm_provider", None)
+            last_provider: ctypes.Any | None = getattr(self, "_last_llm_provider", None)
             if last_provider and last_provider not in ("", "disabled"):
                 self.llm_provider_var.set(last_provider)
             else:
@@ -8319,16 +8365,16 @@ class PCAPSentryApp:
                 return
         else:
             # Turn LLM off - save current provider and set to disabled
-            self._last_llm_provider = current_provider
+            self._last_llm_provider: str = current_provider
             self.llm_provider_var.set("disabled")
 
         # Save settings and update indicator
         self._save_settings_from_vars()
         self._update_llm_header_indicator()
 
-    def _toggle_online_mode(self):
+    def _toggle_online_mode(self) -> None:
         """Toggle online/offline mode using the header button."""
-        current_offline = self.offline_mode_var.get()
+        current_offline: bool = self.offline_mode_var.get()
         self.offline_mode_var.set(not current_offline)
 
         # Save settings and update indicators
@@ -8337,17 +8383,17 @@ class PCAPSentryApp:
         self._update_llm_header_indicator()  # LLM status may depend on offline mode
 
         # Update window title to reflect offline status
-        self.root_title = self._get_window_title()
+        self.root_title: str = self._get_window_title()
         self.root.title(self.root_title)
 
-    def _on_offline_mode_changed(self):
+    def _on_offline_mode_changed(self) -> None:
         """Called when offline mode checkbox is toggled in preferences."""
         # Update indicators to reflect current state
         self._update_online_header_indicator()
         self._update_llm_header_indicator()  # LLM status may depend on offline mode
 
         # Update window title to reflect offline status
-        self.root_title = self._get_window_title()
+        self.root_title: str = self._get_window_title()
         self.root.title(self.root_title)
 
     _PROBE_MAX_BYTES = 5 * 1024 * 1024  # 5 MB safety cap for probe responses
@@ -8383,7 +8429,7 @@ class PCAPSentryApp:
 
     def _probe_openai_compat(self, endpoint, api_key=""):
         url = endpoint.rstrip("/") + "/v1/models"
-        headers = {"Content-Type": "application/json"}
+        headers: dict[str, str] = {"Content-Type": "application/json"}
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
         req = urllib.request.Request(url, headers=headers)
@@ -8402,7 +8448,7 @@ class PCAPSentryApp:
     def _list_openai_compat_models(self, endpoint, api_key=""):
         base = self._normalize_openai_endpoint(endpoint)
         url = base.rstrip("/") + "/v1/models"
-        headers = {"Content-Type": "application/json"}
+        headers: dict[str, str] = {"Content-Type": "application/json"}
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
         req = urllib.request.Request(url, headers=headers)
@@ -8422,7 +8468,7 @@ class PCAPSentryApp:
 
         # Define recommended models by priority for each provider type
         # Patterns to match against (case-insensitive, partial matches)
-        ollama_preferences = [
+        ollama_preferences: list[str] = [
             # Reasoning models (best for analysis)
             "deepseek-r1",
             "qwq",
@@ -8438,7 +8484,7 @@ class PCAPSentryApp:
             # Fallback to any available
         ]
 
-        cloud_preferences = {
+        cloud_preferences: dict[str, list[str]] = {
             # OpenAI
             "openai": ["gpt-4o", "gpt-4-turbo", "gpt-4", "gpt-3.5-turbo"],
             # Claude via OpenRouter
@@ -8460,19 +8506,19 @@ class PCAPSentryApp:
         }
 
         # Determine which preference list to use
-        endpoint = self.llm_endpoint_var.get().strip().lower()
-        preferences = ollama_preferences
+        endpoint: str = self.llm_endpoint_var.get().strip().lower()
+        preferences: list[str] = ollama_preferences
 
         if provider == "openai_compatible" and endpoint:
             # Try to detect cloud provider from endpoint
             for key, prefs in cloud_preferences.items():
                 if key in endpoint:
-                    preferences = prefs
+                    preferences: list[str] = prefs
                     break
 
         # Try to match preferences in order
-        for pref in preferences:
-            pref_lower = pref.lower()
+        for pref: str in preferences:
+            pref_lower: str = pref.lower()
             for model in available_models:
                 model_lower = model.lower()
                 if pref_lower in model_lower:
@@ -8481,9 +8527,9 @@ class PCAPSentryApp:
         # If no preference matched, return the first model
         return available_models[0]
 
-    def _refresh_llm_models(self, combo=None):
-        provider = self.llm_provider_var.get().strip().lower()
-        endpoint = self.llm_endpoint_var.get().strip()
+    def _refresh_llm_models(self, combo=None) -> None:
+        provider: str = self.llm_provider_var.get().strip().lower()
+        endpoint: str = self.llm_endpoint_var.get().strip()
         if provider == "ollama" and not endpoint:
             endpoint = "http://localhost:11434"
             self.llm_endpoint_var.set(endpoint)
@@ -8506,7 +8552,7 @@ class PCAPSentryApp:
             unique = []
             seen = set()
             for name in names:
-                key = str(name).strip()
+                key: str = str(name).strip()
                 if not key:
                     continue
                 if key in seen:
@@ -8534,12 +8580,12 @@ class PCAPSentryApp:
                     except Exception:
                         return []
                 if provider == "openai_compatible":
-                    api_key = self.llm_api_key_var.get().strip()
+                    api_key: str = self.llm_api_key_var.get().strip()
 
                     # If no API key, provide default model lists for known cloud providers
                     # This allows users to select models before configuring API keys
                     if not api_key and endpoint:
-                        endpoint_lower = endpoint.lower()
+                        endpoint_lower: str = endpoint.lower()
                         if "openai" in endpoint_lower:
                             return ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4", "gpt-3.5-turbo"]
                         if "gemini" in endpoint_lower or "generativelanguage.googleapis" in endpoint_lower:
@@ -8571,7 +8617,7 @@ class PCAPSentryApp:
                 pass
             return []
 
-        def apply_with_best_model(names):
+        def apply_with_best_model(names) -> None:
             """Apply model list and select the best model for the provider."""
             names = _dedupe_names(names)
             if combo is not None:
@@ -8581,7 +8627,7 @@ class PCAPSentryApp:
                     combo["values"] = names
                     combo.configure(state="normal")  # Re-enable after loading
 
-                    current_model = self.llm_model_var.get().strip()
+                    current_model: str = self.llm_model_var.get().strip()
                     # Select best model if:
                     # 1. Model field is empty or showing "Loading models..."
                     # 2. Server was just changed
@@ -8606,7 +8652,7 @@ class PCAPSentryApp:
                 except tk.TclError:
                     return
 
-        def run():
+        def run() -> None:
             names = worker()
             # Clear server change flag if it was set
             if getattr(self, "_llm_server_just_changed", False):
@@ -8615,9 +8661,9 @@ class PCAPSentryApp:
 
         threading.Thread(target=run, daemon=True).start()
 
-    def _detect_llm_server(self, server_var, servers, model_combo):
+    def _detect_llm_server(self, server_var, servers, model_combo) -> None:
         """Scan local LLM server ports for running instances (skip cloud providers)."""
-        hint = getattr(self, "_detect_hint_label", None)
+        hint: ctypes.Any | None = getattr(self, "_detect_hint_label", None)
 
         if hint:
             hint.configure(
@@ -8628,7 +8674,7 @@ class PCAPSentryApp:
         def _scan():
             found = []
             # Cloud providers set (skip during local port scan)
-            _CLOUD_NAMES = {
+            _CLOUD_NAMES: set[str] = {
                 "OpenAI",
                 "Google Gemini",
                 "Mistral AI",
@@ -8654,7 +8700,7 @@ class PCAPSentryApp:
                     pass
             return found
 
-        def _apply(found):
+        def _apply(found) -> None:
             if not found:
                 if hint:
                     hint.configure(
@@ -8670,8 +8716,8 @@ class PCAPSentryApp:
             self.llm_model_var.set(model_id)
             self._refresh_llm_models(model_combo)
             if hint:
-                others = ", ".join(n for n, _, _, _ in found[1:])
-                msg = f"Found {name}"
+                others: str = ", ".join(n for n, _, _, _ in found[1:])
+                msg: str = f"Found {name}"
                 if others:
                     msg += f" (also: {others})"
                 hint.configure(
@@ -8679,26 +8725,26 @@ class PCAPSentryApp:
                     fg=self.colors.get("success", "#3fb950"),
                 )
 
-        def _run():
+        def _run() -> None:
             results = _scan()
             self.root.after(0, lambda: _apply(results))
 
         threading.Thread(target=_run, daemon=True).start()
 
-    def _verify_otx_key(self):
+    def _verify_otx_key(self) -> None:
         """Verify the OTX API key by making a test request."""
-        label = getattr(self, "_otx_verify_label", None)
+        label: ctypes.Any | None = getattr(self, "_otx_verify_label", None)
         if not label:
             return
 
-        key = self.otx_api_key_var.get().strip()
+        key: str = self.otx_api_key_var.get().strip()
         if not key:
             label.configure(text="No key provided", fg=self.colors.get("warning", "#d29922"))
             return
 
         label.configure(text="Verifying...", fg=self.colors.get("accent", "#58a6ff"))
 
-        def _test():
+        def _test() -> tuple[Literal[False], Literal['requests library not available']] | tuple[Literal[True], Any] | tuple[Literal[False], Literal['Invalid API key']] | tuple[Literal[False], str] | tuple[Literal[False], Literal['Connection timeout']] | tuple[Literal[False], Literal['Connection failed']]:
             try:
                 # Check if requests is available
                 try:
@@ -8707,8 +8753,8 @@ class PCAPSentryApp:
                     return False, "requests library not available"
 
                 url = "https://otx.alienvault.com/api/v1/user/me"
-                headers = {"X-OTX-API-KEY": key}
-                response = requests.get(url, headers=headers, timeout=5)
+                headers: dict[str, str] = {"X-OTX-API-KEY": key}
+                response: Response = requests.get(url, headers=headers, timeout=5)
 
                 if response.status_code == 200:
                     data = response.json()
@@ -8721,42 +8767,42 @@ class PCAPSentryApp:
                 return False, "Connection timeout"
             except requests.exceptions.ConnectionError:
                 return False, "Connection failed"
-            except Exception as e:
-                error_msg = str(e).split("\n")[0][:40]  # First line, max 40 chars
+            except Exception as e: Exception:
+                error_msg: str = str(e).split("\n")[0][:40]  # First line, max 40 chars
                 return False, error_msg
 
-        def _apply(result):
+        def _apply(result) -> None:
             success, message = result
             if success:
                 label.configure(text=f"✓ Valid ({message})", fg=self.colors.get("success", "#3fb950"))
             else:
                 label.configure(text=f"✗ {message}", fg=self.colors.get("danger", "#f85149"))
 
-        def _run():
-            result = _test()
+        def _run() -> None:
+            result: tuple[Literal[False], Literal['requests library not available']] | tuple[Literal[True], Any] | tuple[Literal[False], Literal['Invalid API key']] | tuple[Literal[False], str] | tuple[Literal[False], Literal['Connection timeout']] | tuple[Literal[False], Literal['Connection failed']] = _test()
             self.root.after(0, lambda: _apply(result))
 
         threading.Thread(target=_run, daemon=True).start()
 
-    def _verify_llm_api_key(self):
+    def _verify_llm_api_key(self) -> None:
         """Verify the LLM API key by making a test request."""
-        label = getattr(self, "_llm_verify_label", None)
+        label: ctypes.Any | None = getattr(self, "_llm_verify_label", None)
         if not label:
             return
 
-        key = self.llm_api_key_var.get().strip()
+        key: str = self.llm_api_key_var.get().strip()
         if not key:
             label.configure(text="No key provided", fg=self.colors.get("warning", "#d29922"))
             return
 
-        provider = self.llm_provider_var.get().strip().lower()
+        provider: str = self.llm_provider_var.get().strip().lower()
         if provider in ("disabled", "ollama", ""):
             label.configure(text="Verification not needed for local providers", fg=self.colors.get("muted", "#8b949e"))
             return
 
         label.configure(text="Verifying...", fg=self.colors.get("accent", "#58a6ff"))
 
-        def _test():
+        def _test() -> tuple[Literal[False], Literal['requests library not available']] | tuple[Literal[True], Literal['OpenAI API key valid']] | tuple[Literal[False], Literal['Invalid API key']] | tuple[Literal[False], str] | tuple[Literal[True], Literal['Google API key valid']] | tuple[Literal[True], Literal['Anthropic API key valid']] | tuple[Literal[False], Literal['No endpoint configured']] | tuple[Literal[True], str] | tuple[Literal[False], Literal['Connection timeout']] | tuple[Literal[False], Literal['Connection failed']]:
             try:
                 # Check if requests is available
                 try:
@@ -8768,8 +8814,8 @@ class PCAPSentryApp:
                 if provider == "openai":
                     # Test OpenAI API
                     url = "https://api.openai.com/v1/models"
-                    headers = {"Authorization": f"Bearer {key}"}
-                    response = requests.get(url, headers=headers, timeout=10)
+                    headers: dict[str, str] = {"Authorization": f"Bearer {key}"}
+                    response: Response = requests.get(url, headers=headers, timeout=10)
                     if response.status_code == 200:
                         return True, "OpenAI API key valid"
                     if response.status_code == 401:
@@ -8778,8 +8824,8 @@ class PCAPSentryApp:
 
                 if provider == "google":
                     # Test Google Gemini API
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models?key={key}"
-                    response = requests.get(url, timeout=10)
+                    url: str = f"https://generativelanguage.googleapis.com/v1beta/models?key={key}"
+                    response: Response = requests.get(url, timeout=10)
                     if response.status_code == 200:
                         return True, "Google API key valid"
                     if response.status_code == 400:
@@ -8789,7 +8835,7 @@ class PCAPSentryApp:
                 if provider == "anthropic":
                     # Test Anthropic API
                     url = "https://api.anthropic.com/v1/messages"
-                    headers = {
+                    headers: dict[str, str] = {
                         "x-api-key": key,
                         "anthropic-version": "2023-06-01",
                         "content-type": "application/json",
@@ -8800,7 +8846,7 @@ class PCAPSentryApp:
                         "max_tokens": 1,
                         "messages": [{"role": "user", "content": "Hi"}],
                     }
-                    response = requests.post(url, headers=headers, json=data, timeout=10)
+                    response: Response = requests.post(url, headers=headers, json=data, timeout=10)
                     if response.status_code == 200:
                         return True, "Anthropic API key valid"
                     if response.status_code == 401:
@@ -8808,12 +8854,12 @@ class PCAPSentryApp:
                     return False, f"HTTP {response.status_code}"
 
                 # Generic OpenAI-compatible test
-                endpoint = self.llm_endpoint_var.get().strip()
+                endpoint: str = self.llm_endpoint_var.get().strip()
                 if not endpoint:
                     return False, "No endpoint configured"
-                url = f"{endpoint}/v1/models" if not endpoint.endswith("/v1/models") else endpoint
-                headers = {"Authorization": f"Bearer {key}"}
-                response = requests.get(url, headers=headers, timeout=10)
+                url: str = f"{endpoint}/v1/models" if not endpoint.endswith("/v1/models") else endpoint
+                headers: dict[str, str] = {"Authorization": f"Bearer {key}"}
+                response: Response = requests.get(url, headers=headers, timeout=10)
                 if response.status_code == 200:
                     return True, f"{provider.title()} API key valid"
                 if response.status_code == 401:
@@ -8824,26 +8870,26 @@ class PCAPSentryApp:
                 return False, "Connection timeout"
             except requests.exceptions.ConnectionError:
                 return False, "Connection failed"
-            except Exception as e:
-                error_msg = str(e).split("\n")[0][:40]  # First line, max 40 chars
+            except Exception as e: Exception:
+                error_msg: str = str(e).split("\n")[0][:40]  # First line, max 40 chars
                 return False, error_msg
 
-        def _apply(result):
+        def _apply(result) -> None:
             success, message = result
             if success:
                 label.configure(text=f"✓ {message}", fg=self.colors.get("success", "#3fb950"))
             else:
                 label.configure(text=f"✗ {message}", fg=self.colors.get("danger", "#f85149"))
 
-        def _run():
-            result = _test()
+        def _run() -> None:
+            result: tuple[Literal[False], Literal['requests library not available']] | tuple[Literal[True], Literal['OpenAI API key valid']] | tuple[Literal[False], Literal['Invalid API key']] | tuple[Literal[False], str] | tuple[Literal[True], Literal['Google API key valid']] | tuple[Literal[True], Literal['Anthropic API key valid']] | tuple[Literal[False], Literal['No endpoint configured']] | tuple[Literal[True], str] | tuple[Literal[False], Literal['Connection timeout']] | tuple[Literal[False], Literal['Connection failed']] = _test()
             self.root.after(0, lambda: _apply(result))
 
         threading.Thread(target=_run, daemon=True).start()
 
-    def _open_model_manager(self):
+    def _open_model_manager(self) -> None:
         """Open a window to add/remove Ollama models."""
-        provider = self.llm_provider_var.get().strip().lower()
+        provider: str = self.llm_provider_var.get().strip().lower()
         if provider != "ollama":
             messagebox.showwarning(
                 "Model Manager", "Model management is only available when LLM provider is set to Ollama."
@@ -8868,7 +8914,7 @@ class PCAPSentryApp:
         ).pack(anchor="w", pady=(0, 12))
 
         # ── Installed Models Section ──
-        installed_frame = ttk.LabelFrame(frame, text=" Installed Models ", padding=12)
+        installed_frame: ttk.Labelframe = ttk.LabelFrame(frame, text=" Installed Models ", padding=12)
         installed_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 12))
 
         # Listbox with scrollbar
@@ -8897,7 +8943,7 @@ class PCAPSentryApp:
         status_label = ttk.Label(installed_frame, text="Loading...", style="Hint.TLabel")
         status_label.pack(pady=(8, 0))
 
-        def refresh_models():
+        def refresh_models() -> None:
             """Load installed models into the listbox."""
             model_listbox.delete(0, tk.END)
             status_label.config(text="Loading...")
@@ -8918,10 +8964,10 @@ class PCAPSentryApp:
 
                     models = self._list_ollama_models("http://localhost:11434")
                     return models if models else []
-                except Exception as e:
+                except Exception as e: Exception:
                     return str(e)
 
-            def apply(result):
+            def apply(result) -> None:
                 if isinstance(result, str):
                     status_label.config(text=f"Error: {result[:60]}")
                     return
@@ -8932,7 +8978,7 @@ class PCAPSentryApp:
                     for model in sorted(result):
                         model_listbox.insert(tk.END, model)
 
-            def run():
+            def run() -> None:
                 result = worker()
                 window.after(0, lambda: apply(result))
 
@@ -8942,7 +8988,7 @@ class PCAPSentryApp:
         remove_btn_frame = ttk.Frame(installed_frame)
         remove_btn_frame.pack(pady=(8, 0))
 
-        def remove_selected():
+        def remove_selected() -> None:
             selection = model_listbox.curselection()
             if not selection:
                 messagebox.showwarning("Remove Model", "Select a model to remove.")
@@ -8953,14 +8999,14 @@ class PCAPSentryApp:
                 messagebox.showwarning("Remove Model", "Invalid model name.")
                 return
 
-            confirm = messagebox.askyesno(
+            confirm: bool = messagebox.askyesno(
                 "Remove Model",
                 f"Remove model '{model_name}'?\n\nThis will free up disk space but the model will need to be re-downloaded if you want to use it again.",
             )
             if not confirm:
                 return
 
-            def task():
+            def task() -> bool:
                 with contextlib.suppress(Exception):
                     subprocess.Popen(
                         ["ollama", "serve"],
@@ -8968,7 +9014,7 @@ class PCAPSentryApp:
                         stderr=subprocess.DEVNULL,
                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                     )
-                result = subprocess.run(
+                result: subprocess.CompletedProcess[str] = subprocess.run(
                     ["ollama", "rm", model_name],
                     capture_output=True,
                     text=True,
@@ -8976,15 +9022,15 @@ class PCAPSentryApp:
                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                 )
                 if result.returncode != 0:
-                    detail = (result.stderr or result.stdout or "Unknown error").strip()
+                    detail: str = (result.stderr or result.stdout or "Unknown error").strip()
                     raise RuntimeError(detail)
                 return True
 
-            def done(_):
+            def done(_) -> None:
                 refresh_models()
                 messagebox.showinfo("Remove Model", f"Removed model '{model_name}'.")
 
-            def failed(err):
+            def failed(err) -> None:
                 messagebox.showerror(
                     "Remove Model",
                     f"Failed to remove model. Ensure Ollama is installed and running.\n\nDetails: {err}",
@@ -9000,7 +9046,7 @@ class PCAPSentryApp:
         )
 
         # ── Add Model Section ──
-        add_frame = ttk.LabelFrame(frame, text=" Add Model ", padding=12)
+        add_frame: ttk.Labelframe = ttk.LabelFrame(frame, text=" Add Model ", padding=12)
         add_frame.pack(fill=tk.BOTH, pady=(0, 12))
 
         ttk.Label(
@@ -9023,14 +9069,14 @@ class PCAPSentryApp:
         custom_entry = ttk.Entry(custom_frame, width=35)
         custom_entry.pack(side=tk.LEFT, padx=(8, 0))
 
-        def add_model():
-            custom_text = custom_entry.get().strip()
+        def add_model() -> None:
+            custom_text: str = custom_entry.get().strip()
             if custom_text:
-                model_to_add = custom_text
+                model_to_add: str = custom_text
             else:
-                selected = model_combo.get()
+                selected: str = model_combo.get()
                 # Extract model name (before " — ")
-                model_to_add = selected.split(" — ")[0] if " — " in selected else selected
+                model_to_add: str = selected.split(" — ")[0] if " — " in selected else selected
 
             if not model_to_add:
                 messagebox.showwarning("Add Model", "Enter or select a model name.")
@@ -9043,14 +9089,14 @@ class PCAPSentryApp:
                 )
                 return
 
-            confirm = messagebox.askyesno(
+            confirm: bool = messagebox.askyesno(
                 "Add Model",
                 f"Download and install model '{model_to_add}'?\n\nThis may take several minutes and use significant bandwidth.",
             )
             if not confirm:
                 return
 
-            def task(progress_cb):
+            def task(progress_cb) -> bool:
                 # Ensure ollama serve is running
                 with contextlib.suppress(Exception):
                     subprocess.Popen(
@@ -9064,9 +9110,9 @@ class PCAPSentryApp:
                 progress_cb(0, label=f"Pulling {model_to_add}...")
 
                 # Use the Ollama REST API to pull with streaming progress
-                endpoint = self._normalize_ollama_endpoint("http://localhost:11434")
-                url = endpoint.rstrip("/") + "/api/pull"
-                body = json.dumps({"name": model_to_add, "stream": True}).encode("utf-8")
+                endpoint: str = self._normalize_ollama_endpoint("http://localhost:11434")
+                url: str = endpoint.rstrip("/") + "/api/pull"
+                body: bytes = json.dumps({"name": model_to_add, "stream": True}).encode("utf-8")
                 req = urllib.request.Request(
                     url,
                     data=body,
@@ -9075,7 +9121,7 @@ class PCAPSentryApp:
                 )
                 try:
                     resp = _safe_urlopen(req, timeout=1800)
-                except Exception as exc:
+                except Exception as exc: Exception:
                     raise RuntimeError(
                         f"Could not connect to Ollama.\nEnsure 'ollama serve' is running.\n\nDetails: {exc}"
                     )
@@ -9097,12 +9143,12 @@ class PCAPSentryApp:
 
                 return True
 
-            def done(_):
+            def done(_) -> None:
                 refresh_models()
                 messagebox.showinfo("Add Model", f"Successfully installed model '{model_to_add}'.")
                 custom_entry.delete(0, tk.END)
 
-            def failed(err):
+            def failed(err) -> None:
                 messagebox.showerror(
                     "Add Model",
                     f"Failed to download model.\n\nDetails: {err}",
@@ -9123,7 +9169,7 @@ class PCAPSentryApp:
 
     # -- Ollama model download after install --------------------------------
 
-    _OLLAMA_SUGGESTED_MODELS = [
+    _OLLAMA_SUGGESTED_MODELS: list[tuple[str, str]] = [
         ("llama3.2:3b", "3B — fast, good for most tasks (~2 GB)"),
         ("llama3.2:1b", "1B — ultra-light, minimal RAM (~1 GB)"),
         ("llama3.1:8b", "8B — higher quality, needs ~5 GB RAM (~4.7 GB)"),
@@ -9136,7 +9182,7 @@ class PCAPSentryApp:
         ("gemma3:4b", "4B — Google, fast & capable (~3.3 GB)"),
     ]
 
-    def _offer_ollama_model_download(self):
+    def _offer_ollama_model_download(self) -> None:
         """Show a dialog to pick and download an Ollama model right after install."""
         window = tk.Toplevel(self.root)
         window.title("Download Ollama Model")
@@ -9213,10 +9259,10 @@ class PCAPSentryApp:
         btn_frame = ttk.Frame(frame)
         btn_frame.pack(fill=tk.X, pady=(16, 0))
 
-        def _do_download():
-            choice = selected_var.get()
+        def _do_download() -> None:
+            choice: str = selected_var.get()
             if choice == "__custom__":
-                choice = custom_entry.get().strip()
+                choice: str = custom_entry.get().strip()
             if not choice:
                 messagebox.showwarning("Ollama", "Enter or select a model name.")
                 return
@@ -9228,7 +9274,7 @@ class PCAPSentryApp:
             window.destroy()
             self._pull_ollama_model(choice)
 
-        def _skip():
+        def _skip() -> None:
             window.destroy()
             messagebox.showinfo(
                 "Ollama",
@@ -9242,7 +9288,7 @@ class PCAPSentryApp:
         window.transient(self.root)
         window.grab_set()
 
-    def _pull_ollama_model(self, model_name):
+    def _pull_ollama_model(self, model_name) -> None:
         """Pull (download) an Ollama model with progress feedback."""
 
         def task(progress_cb):
@@ -9259,9 +9305,9 @@ class PCAPSentryApp:
             progress_cb(0, label=f"Pulling {model_name}...")
 
             # Use the Ollama REST API to pull with streaming progress
-            endpoint = self._normalize_ollama_endpoint("http://localhost:11434")
-            url = endpoint.rstrip("/") + "/api/pull"
-            body = json.dumps({"name": model_name, "stream": True}).encode("utf-8")
+            endpoint: str = self._normalize_ollama_endpoint("http://localhost:11434")
+            url: str = endpoint.rstrip("/") + "/api/pull"
+            body: bytes = json.dumps({"name": model_name, "stream": True}).encode("utf-8")
             req = urllib.request.Request(
                 url,
                 data=body,
@@ -9270,12 +9316,12 @@ class PCAPSentryApp:
             )
             try:
                 resp = _safe_urlopen(req, timeout=1800)  # 30 min timeout
-            except Exception as exc:
+            except Exception as exc: Exception:
                 raise RuntimeError(
                     f"Could not connect to Ollama at {endpoint}.\nEnsure 'ollama serve' is running.\n\nDetails: {exc}"
                 )
 
-            last_status = ""
+            last_status: str = ""
             try:
                 for raw_line in resp:
                     line = raw_line.decode("utf-8", errors="replace").strip()
@@ -9318,7 +9364,7 @@ class PCAPSentryApp:
 
             return model_name
 
-        def done(result_name):
+        def done(result_name) -> None:
             self.status_var.set(f"\u2714 Downloaded Ollama model: {result_name}")
             # Auto-configure the LLM settings
             self.llm_provider_var.set("ollama")
@@ -9329,7 +9375,7 @@ class PCAPSentryApp:
                 f"Model '{result_name}' downloaded successfully!\n\nLLM settings have been configured automatically.",
             )
 
-        def failed(err):
+        def failed(err) -> None:
             self.status_var.set("Model download failed")
             messagebox.showerror(
                 "Ollama",
@@ -9343,7 +9389,7 @@ class PCAPSentryApp:
         )
         self.cancel_button.pack_forget()
 
-    def _open_install_llm_dialog(self):
+    def _open_install_llm_dialog(self) -> None:
         """Open a dialog to install a local LLM server."""
         _SERVERS = [
             {
@@ -9474,7 +9520,7 @@ class PCAPSentryApp:
                 results.append(installed)
             return results
 
-        def _apply_checks(results):
+        def _apply_checks(results) -> None:
             for i, installed in enumerate(results):
                 if installed:
                     status_vars[i].set("\u2714 Installed")
@@ -9490,7 +9536,7 @@ class PCAPSentryApp:
                     uninstall_buttons[i].pack_forget()
                     install_buttons[i].pack(side=tk.LEFT)
 
-        def _run_checks():
+        def _run_checks() -> None:
             results = _check_all()
             self.root.after(0, lambda: _apply_checks(results))
 
@@ -9501,10 +9547,10 @@ class PCAPSentryApp:
         window.grab_set()
 
     @staticmethod
-    def _is_program_installed(cmd, args):
+    def _is_program_installed(cmd, args) -> bool:
         """Check if a CLI program is available."""
         try:
-            result = subprocess.run(
+            result: subprocess.CompletedProcess[str] = subprocess.run(
                 [cmd, *args],
                 capture_output=True,
                 text=True,
@@ -9516,11 +9562,11 @@ class PCAPSentryApp:
             return False
 
     @staticmethod
-    def _is_path_installed(paths):
+    def _is_path_installed(paths) -> bool:
         """Check if any of the given file paths exist."""
         return any(os.path.isfile(p) for p in paths)
 
-    def _install_llm_server(self, server_info):
+    def _install_llm_server(self, server_info) -> None:
         """Install a local LLM server via winget or direct download with progress in main window."""
         name = server_info["name"]
         winget_id = server_info["winget"]
@@ -9528,13 +9574,13 @@ class PCAPSentryApp:
         homepage = server_info["homepage"]
         silent_flag = server_info["silent_flag"]
 
-        def task(progress_cb):
+        def task(progress_cb) -> None | str:
             # Prefer direct download (shows real progress bar) over winget
             if download_url and silent_flag:
                 tmp_dir = None
                 try:
-                    tmp_dir = tempfile.mkdtemp(prefix=f"{name.lower().replace(' ', '_')}_")
-                    installer_path = os.path.join(tmp_dir, f"{name}_setup.exe")
+                    tmp_dir: str = tempfile.mkdtemp(prefix=f"{name.lower().replace(' ', '_')}_")
+                    installer_path: str = os.path.join(tmp_dir, f"{name}_setup.exe")
 
                     progress_cb(0, label=f"Downloading {name}...")
 
@@ -9549,11 +9595,11 @@ class PCAPSentryApp:
                         if total_size > _MAX_INSTALLER_BYTES:
                             raise RuntimeError(f"Installer too large ({total_size} bytes).")
                         downloaded = 0
-                        dl_start_time = time.time()
-                        last_speed_time = dl_start_time
+                        dl_start_time: float = time.time()
+                        last_speed_time: float = dl_start_time
                         last_speed_bytes = 0
                         current_speed = 0.0
-                        with open(installer_path, "wb") as f:
+                        with open(installer_path, "wb") as f: io.BufferedWriter:
                             while True:
                                 chunk = resp.read(65536)
                                 if not chunk:
@@ -9563,34 +9609,34 @@ class PCAPSentryApp:
                                 if downloaded > _MAX_INSTALLER_BYTES:
                                     raise RuntimeError("Installer download exceeded 500 MB limit.")
                                 # Calculate download speed (update every 0.5s)
-                                now = time.time()
-                                speed_interval = now - last_speed_time
+                                now: float = time.time()
+                                speed_interval: float = now - last_speed_time
                                 if speed_interval >= 0.5:
-                                    current_speed = (downloaded - last_speed_bytes) / speed_interval
-                                    last_speed_bytes = downloaded
-                                    last_speed_time = now
-                                speed_mb = current_speed / (1024 * 1024)
+                                    current_speed: float = (downloaded - last_speed_bytes) / speed_interval
+                                    last_speed_bytes: int = downloaded
+                                    last_speed_time: float = now
+                                speed_mb: float = current_speed / (1024 * 1024)
                                 if total_size > 0:
-                                    pct = (downloaded / total_size) * 100
-                                    dl_mb = downloaded / (1024 * 1024)
-                                    total_mb = total_size / (1024 * 1024)
+                                    pct: float = (downloaded / total_size) * 100
+                                    dl_mb: float = downloaded / (1024 * 1024)
+                                    total_mb: float = total_size / (1024 * 1024)
                                     # Calculate ETA
-                                    eta_str = ""
+                                    eta_str: str = ""
                                     if current_speed > 0:
-                                        remaining = total_size - downloaded
-                                        eta_secs = remaining / current_speed
+                                        remaining: int = total_size - downloaded
+                                        eta_secs: float = remaining / current_speed
                                         if eta_secs < 60:
-                                            eta_str = f" — {eta_secs:.0f}s left"
+                                            eta_str: str = f" — {eta_secs:.0f}s left"
                                         else:
-                                            eta_str = f" — {eta_secs / 60:.1f}m left"
-                                    speed_str = f" ({speed_mb:.1f} MB/s)" if current_speed > 0 else ""
+                                            eta_str: str = f" — {eta_secs / 60:.1f}m left"
+                                    speed_str: str = f" ({speed_mb:.1f} MB/s)" if current_speed > 0 else ""
                                     progress_cb(
                                         pct,
                                         label=f"Downloading {name} — {dl_mb:.1f} / {total_mb:.1f} MB{speed_str}{eta_str}",
                                     )
                                 else:
-                                    dl_mb = downloaded / (1024 * 1024)
-                                    speed_str = f" ({speed_mb:.1f} MB/s)" if current_speed > 0 else ""
+                                    dl_mb: float = downloaded / (1024 * 1024)
+                                    speed_str: str = f" ({speed_mb:.1f} MB/s)" if current_speed > 0 else ""
                                     progress_cb(None, label=f"Downloading {name} — {dl_mb:.1f} MB{speed_str}")
                     finally:
                         resp.close()
@@ -9598,7 +9644,7 @@ class PCAPSentryApp:
                     progress_cb(None, label=f"Installing {name}...")
                     # Run installer elevated via ShellExecuteExW so UAC
                     # grants admin rights and the installer runs truly silent
-                    rc = self._run_elevated(
+                    rc: int = self._run_elevated(
                         installer_path,
                         silent_flag,
                         progress_cb,
@@ -9607,7 +9653,7 @@ class PCAPSentryApp:
                     if rc == 0:
                         # Kill Ollama desktop app if it auto-launched
                         if "ollama" in name.lower():
-                            for pn in ["ollama app.exe", "Ollama.exe"]:
+                            for pn: str in ["ollama app.exe", "Ollama.exe"]:
                                 with contextlib.suppress(Exception):
                                     subprocess.run(
                                         ["taskkill", "/F", "/IM", pn],
@@ -9626,7 +9672,7 @@ class PCAPSentryApp:
             # Fallback: winget (no real progress but shows elapsed time)
             progress_cb(None, label=f"Installing {name} via winget...")
             try:
-                proc = subprocess.Popen(
+                proc: os.Popen[str] = subprocess.Popen(
                     [
                         "winget",
                         "install",
@@ -9645,9 +9691,9 @@ class PCAPSentryApp:
                 )
                 line_q = queue.Queue()
 
-                def _reader():
+                def _reader() -> None:
                     try:
-                        for ln in proc.stdout:
+                        for ln: str in proc.stdout:
                             line_q.put(ln)
                     except Exception:
                         pass
@@ -9655,7 +9701,7 @@ class PCAPSentryApp:
 
                 threading.Thread(target=_reader, daemon=True).start()
 
-                winget_start = time.time()
+                winget_start: float = time.time()
                 while True:
                     try:
                         line = line_q.get(timeout=0.5)
@@ -9670,7 +9716,7 @@ class PCAPSentryApp:
                         part = raw_part.strip()
                         if not part:
                             continue
-                        pct = self._extract_percent(part)
+                        pct: int | None = self._extract_percent(part)
                         if pct is not None:
                             progress_cb(pct, label=f"Installing {name}")
                         else:
@@ -9679,7 +9725,7 @@ class PCAPSentryApp:
                 if proc.returncode == 0:
                     # Kill Ollama desktop app if it auto-launched
                     if "ollama" in name.lower():
-                        for pn in ["ollama app.exe", "Ollama.exe"]:
+                        for pn: str in ["ollama app.exe", "Ollama.exe"]:
                             with contextlib.suppress(Exception):
                                 subprocess.run(
                                     ["taskkill", "/F", "/IM", pn],
@@ -9695,7 +9741,7 @@ class PCAPSentryApp:
 
             return None
 
-        def _on_done(method):
+        def _on_done(method) -> None:
             try:
                 installed = server_info["check"]()
             except Exception:
@@ -9705,7 +9751,7 @@ class PCAPSentryApp:
                 self.status_var.set(f"\u2714 {name} installed")
                 # Kill the Ollama desktop app if it auto-launched during install
                 if "ollama" in name.lower():
-                    for proc_name in ["ollama app.exe", "Ollama.exe"]:
+                    for proc_name: str in ["ollama app.exe", "Ollama.exe"]:
                         with contextlib.suppress(Exception):
                             subprocess.run(
                                 ["taskkill", "/F", "/IM", proc_name],
@@ -9715,7 +9761,7 @@ class PCAPSentryApp:
                             )
                 # Remove auto-start shortcut that some servers (e.g. Ollama) add
                 try:
-                    startup_lnk = os.path.join(
+                    startup_lnk: str = os.path.join(
                         os.environ.get("APPDATA", ""),
                         "Microsoft",
                         "Windows",
@@ -9731,7 +9777,7 @@ class PCAPSentryApp:
                 # Also check for Ollama-specific startup entry
                 if "ollama" in name.lower():
                     try:
-                        ollama_lnk = os.path.join(
+                        ollama_lnk: str = os.path.join(
                             os.environ.get("APPDATA", ""),
                             "Microsoft",
                             "Windows",
@@ -9748,7 +9794,7 @@ class PCAPSentryApp:
                     try:
                         import winreg
 
-                        key = winreg.OpenKey(
+                        key: HKEYType = winreg.OpenKey(
                             winreg.HKEY_CURRENT_USER,
                             r"Software\Microsoft\Windows\CurrentVersion\Run",
                             0,
@@ -9793,7 +9839,7 @@ class PCAPSentryApp:
                     f"After installing, select it from the LLM server dropdown.",
                 )
 
-        def _on_failed(err):
+        def _on_failed(err) -> None:
             self.status_var.set(f"{name} install failed")
             messagebox.showerror(
                 name,
@@ -9806,7 +9852,7 @@ class PCAPSentryApp:
         # Hide cancel button — LLM install cannot be cleanly cancelled
         self.cancel_button.pack_forget()
 
-    def _uninstall_llm_server(self, server_info):
+    def _uninstall_llm_server(self, server_info) -> None:
         """Uninstall an LLM server via winget."""
         name = server_info["name"]
         winget_id = server_info["winget"]
@@ -9819,10 +9865,10 @@ class PCAPSentryApp:
         ):
             return
 
-        def task(progress_cb):
+        def task(progress_cb) -> bool | ctypes.Any:
             # Kill running processes first (Ollama specifically)
             if "ollama" in name.lower():
-                for proc_name in ["ollama.exe", "ollama app.exe"]:
+                for proc_name: str in ["ollama.exe", "ollama app.exe"]:
                     with contextlib.suppress(Exception):
                         subprocess.run(
                             ["taskkill", "/F", "/IM", proc_name],
@@ -9834,7 +9880,7 @@ class PCAPSentryApp:
 
             progress_cb(None, label=f"Uninstalling {name} via winget...")
             try:
-                proc = subprocess.Popen(
+                proc: os.Popen[str] = subprocess.Popen(
                     ["winget", "uninstall", "--id", winget_id, "-e", "--silent", "--accept-source-agreements"],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
@@ -9844,9 +9890,9 @@ class PCAPSentryApp:
                 )
                 line_q = queue.Queue()
 
-                def _reader():
+                def _reader() -> None:
                     try:
-                        for ln in proc.stdout:
+                        for ln: str in proc.stdout:
                             line_q.put(ln)
                     except Exception:
                         pass
@@ -9854,7 +9900,7 @@ class PCAPSentryApp:
 
                 threading.Thread(target=_reader, daemon=True).start()
 
-                start_t = time.time()
+                start_t: float = time.time()
                 while True:
                     try:
                         line = line_q.get(timeout=0.5)
@@ -9874,7 +9920,7 @@ class PCAPSentryApp:
             except Exception:
                 return False
 
-        def _on_done(success):
+        def _on_done(success) -> None:
             # Re-check if still installed
             try:
                 still_installed = server_info["check"]()
@@ -9885,7 +9931,7 @@ class PCAPSentryApp:
                 self.status_var.set(f"{name} uninstalled")
                 # Remove auto-start shortcut if it exists
                 try:
-                    startup_lnk = os.path.join(
+                    startup_lnk: str = os.path.join(
                         os.environ.get("APPDATA", ""),
                         "Microsoft",
                         "Windows",
@@ -9913,7 +9959,7 @@ class PCAPSentryApp:
                     f"Windows Settings > Apps.",
                 )
 
-        def _on_failed(err):
+        def _on_failed(err) -> None:
             self.status_var.set(f"{name} uninstall failed")
             messagebox.showerror(
                 name,
@@ -9930,16 +9976,16 @@ class PCAPSentryApp:
         self.cancel_button.pack_forget()
 
     @staticmethod
-    def _extract_percent(text):
+    def _extract_percent(text) -> int | None:
         """Extract a percentage value from a line of text (e.g. '45%' or 'Progress: 72%')."""
-        m = re.search(r"(\d{1,3})%", text)
+        m: re.Match[str] | None = re.search(r"(\d{1,3})%", text)
         if m:
             val = int(m.group(1))
             if 0 <= val <= 100:
                 return val
         return None
 
-    def _run_elevated(self, exe_path, params, progress_cb=None, name=""):
+    def _run_elevated(self, exe_path, params, progress_cb=None, name="") -> int:
         """Run an installer elevated (UAC) and wait for it to finish.
 
         Uses ShellExecuteExW with the 'runas' verb so Windows shows a single
@@ -9949,7 +9995,7 @@ class PCAPSentryApp:
         from ctypes import wintypes
 
         class SHELLEXECUTEINFO(ctypes.Structure):
-            _fields_ = [
+            _fields_: list[tuple[Literal['cbSize'], type[c_ulong]] | tuple[Literal['fMask'], type[c_ulong]] | tuple[Literal['hwnd'], type[c_void_p]] | tuple[Literal['lpVerb'], type[c_wchar_p]] | tuple[Literal['lpFile'], type[c_wchar_p]] | tuple[Literal['lpParameters'], type[c_wchar_p]] | tuple[Literal['lpDirectory'], type[c_wchar_p]] | tuple[Literal['nShow'], type[c_int]] | tuple[Literal['hInstApp'], type[c_void_p]] | tuple[Literal['lpIDList'], type[c_void_p]] | tuple[Literal['lpClass'], type[c_wchar_p]] | tuple[Literal['hkeyClass'], type[c_void_p]] | tuple[Literal['dwHotKey'], type[c_ulong]] | tuple[Literal['hIconOrMonitor'], type[c_void_p]] | tuple[Literal['hProcess'], type[c_void_p]]] = [
                 ("cbSize", wintypes.DWORD),
                 ("fMask", ctypes.c_ulong),
                 ("hwnd", wintypes.HANDLE),
@@ -9988,7 +10034,7 @@ class PCAPSentryApp:
             return -1
 
         # Poll until the elevated process finishes, updating progress
-        inst_start = time.time()
+        inst_start: float = time.time()
         while True:
             wait_result = ctypes.windll.kernel32.WaitForSingleObject(
                 sei.hProcess,
@@ -10000,7 +10046,7 @@ class PCAPSentryApp:
             if progress_cb:
                 progress_cb(None, label=f"Installing {name} ({elapsed}s)")
 
-        exit_code = wintypes.DWORD()
+        exit_code: ctypes.c_ulong = wintypes.DWORD()
         ctypes.windll.kernel32.GetExitCodeProcess(
             sei.hProcess,
             ctypes.byref(exit_code),
@@ -10008,21 +10054,21 @@ class PCAPSentryApp:
         ctypes.windll.kernel32.CloseHandle(sei.hProcess)
         return exit_code.value
 
-    def _check_internet_and_set_offline(self):
+    def _check_internet_and_set_offline(self) -> None:
         """Check internet connectivity at startup; auto-enable offline mode if unreachable."""
         try:
             if self.offline_mode_var.get():
                 return  # Already offline, skip check
 
-            def _probe():
+            def _probe() -> bool:
                 # Test endpoints sequentially from fastest to slowest
                 # If any succeed, return True immediately
-                endpoints = [
+                endpoints: list[str] = [
                     "https://www.cloudflare.com",  # Fastest (global CDN)
                     "https://www.google.com",  # Very fast
                     "https://www.microsoft.com",  # Slightly slower
                 ]
-                for url in endpoints:
+                for url: str in endpoints:
                     try:
                         req = urllib.request.Request(
                             url,
@@ -10035,7 +10081,7 @@ class PCAPSentryApp:
                         continue  # Try next endpoint
                 return False  # All 3 endpoints failed - truly offline
 
-            def _apply(online):
+            def _apply(online) -> None:
                 try:
                     if self._shutting_down:
                         return
@@ -10052,9 +10098,9 @@ class PCAPSentryApp:
                 except Exception:
                     pass  # Don't crash startup if we can't set offline mode
 
-            def _run():
+            def _run() -> None:
                 try:
-                    online = _probe()
+                    online: bool = _probe()
                     if not self._shutting_down:
                         self.root.after(0, lambda: _apply(online))
                 except Exception:
@@ -10064,7 +10110,7 @@ class PCAPSentryApp:
         except Exception:
             pass  # Don't crash startup if internet check fails to initialize
 
-    def _validate_llm_model_on_startup(self):
+    def _validate_llm_model_on_startup(self) -> None:
         """Validate that saved model name makes sense for the saved provider.
         Auto-corrects incompatible endpoint/model combinations and enables LLM if valid.
         """
@@ -10073,12 +10119,19 @@ class PCAPSentryApp:
         try:
             import sys
 
-            provider = self.llm_provider_var.get().strip().lower()
-            current_model = self.llm_model_var.get().strip()
-            endpoint = self.llm_endpoint_var.get().strip().lower()
+            provider: str = self.llm_provider_var.get().strip().lower()
+            current_model: str = self.llm_model_var.get().strip()
+            endpoint: str = self.llm_endpoint_var.get().strip().lower()
+            # Restore enabled state and last-used provider/model if needed
+            if provider == "disabled" and self.settings.get("llm_enabled", False):
+                # Restore last-used provider/model
+                self.llm_provider_var.set(self.settings.get("last_llm_provider", "openai_compatible"))
+                self.llm_model_var.set(self.settings.get("last_llm_model", "gpt-4o"))
+                provider: str = self.llm_provider_var.get().strip().lower()
+                current_model: str = self.llm_model_var.get().strip()
 
             # Define expected model patterns for each provider type
-            provider_patterns = {
+            provider_patterns: dict[str, list[str]] = {
                 "ollama": ["deepseek", "qwq", "qwen", "llama", "mistral", "gemma", "phi", "codellama"],
                 "openai": ["gpt", "text-davinci", "text-curie"],
                 "gemini": ["gemini"],
@@ -10092,7 +10145,7 @@ class PCAPSentryApp:
             }
 
             # Default models for each provider
-            default_models = {
+            default_models: dict[str, str] = {
                 "ollama": "deepseek-r1:latest",
                 "openai": "gpt-4o",
                 "gemini": "gemini-2.0-flash-exp",
@@ -10106,7 +10159,7 @@ class PCAPSentryApp:
             }
 
             # Determine provider type from endpoint for openai_compatible
-            detected_provider = provider
+            detected_provider: str = provider
             if provider in ("openai_compatible", "disabled") and endpoint:
                 # More aggressive endpoint detection
                 if "api.openai.com" in endpoint:
@@ -10139,6 +10192,11 @@ class PCAPSentryApp:
                 print(f"[LLM] Found {detected_provider} endpoint while disabled, attempting to enable")
                 if sys.stdout:
                     sys.stdout.flush()
+                # Restore last-used provider/model if available
+                self.llm_provider_var.set(self.settings.get("last_llm_provider", detected_provider))
+                self.llm_model_var.set(self.settings.get("last_llm_model", default_models.get(detected_provider, "")))
+                provider: str = self.llm_provider_var.get().strip().lower()
+                current_model: str = self.llm_model_var.get().strip()
 
             # If no model set or model doesn't match provider, use default
             needs_fix = False
@@ -10149,9 +10207,9 @@ class PCAPSentryApp:
                     sys.stdout.flush()
             else:
                 # Check if current model matches expected patterns
-                expected_patterns = provider_patterns.get(detected_provider, [])
-                model_lower = current_model.lower()
-                model_valid = any(pattern in model_lower for pattern in expected_patterns)
+                expected_patterns: list[str] = provider_patterns.get(detected_provider, [])
+                model_lower: str = current_model.lower()
+                model_valid: bool = any(pattern in model_lower for pattern: str in expected_patterns)
 
                 if not model_valid:
                     needs_fix = True
@@ -10161,7 +10219,7 @@ class PCAPSentryApp:
 
             # Apply fix if needed
             if needs_fix or should_enable:
-                default_model = default_models.get(detected_provider, "")
+                default_model: str = default_models.get(detected_provider, "")
                 if default_model and needs_fix:
                     print(f"[LLM] Auto-correcting to '{default_model}' for {detected_provider}")
                     if sys.stdout:
@@ -10170,9 +10228,10 @@ class PCAPSentryApp:
 
                 # Enable LLM if it was disabled but has valid endpoint
                 if should_enable:
-                    self.llm_provider_var.set("openai_compatible")
-                    if not current_model or needs_fix:
-                        self.llm_model_var.set(default_model)
+                    # Mark as enabled and save last-used provider/model
+                    self.llm_enabled = True
+                    self.last_llm_provider: str = provider
+                    self.last_llm_model: str = self.llm_model_var.get().strip()
                     print(f"[LLM] Enabled {detected_provider} with model {self.llm_model_var.get()}")
                     if sys.stdout:
                         sys.stdout.flush()
@@ -10181,7 +10240,7 @@ class PCAPSentryApp:
                 # Update status to show it's ready
                 self.root.after(100, lambda: self._set_llm_test_status("Ready", self.colors.get("accent", "#58a6ff")))
 
-        except Exception as e:
+        except Exception as e: Exception:
             import sys
 
             print(f"[LLM] Validation error: {e}")
@@ -10189,10 +10248,10 @@ class PCAPSentryApp:
                 sys.stdout.flush()
             pass  # Don't crash if validation fails
 
-    def _auto_detect_llm(self):
+    def _auto_detect_llm(self) -> None:
         try:
-            provider = self.llm_provider_var.get().strip().lower()
-            endpoint = self.llm_endpoint_var.get().strip()
+            provider: str = self.llm_provider_var.get().strip().lower()
+            endpoint: str = self.llm_endpoint_var.get().strip()
 
             # Only auto-detect for local LLM providers (not disabled or cloud services)
             if provider in ("disabled", ""):
@@ -10203,9 +10262,9 @@ class PCAPSentryApp:
                 # Parse endpoint to check if it's local
                 from urllib.parse import urlparse
 
-                parsed = urlparse(endpoint)
-                hostname = parsed.hostname or ""
-                is_local = (
+                parsed: ParseResult = urlparse(endpoint)
+                hostname: str = parsed.hostname or ""
+                is_local: bool = (
                     hostname in ("localhost", "127.0.0.1", "")
                     or hostname.startswith("192.168.")
                     or hostname.startswith("10.")
@@ -10222,7 +10281,7 @@ class PCAPSentryApp:
             if not self.settings.get("llm_auto_detect", True):
                 return
 
-            ports = [1234, 8000, 8080, 5000, 5001]
+            ports: list[int] = [1234, 8000, 8080, 5000, 5001]
 
             def worker():
                 try:
@@ -10232,8 +10291,8 @@ class PCAPSentryApp:
                         return {"provider": "ollama", "endpoint": ollama_base, "model": model_name}
                 except Exception:
                     pass
-                for port in ports:
-                    base = f"http://localhost:{port}"
+                for port: int in ports:
+                    base: str = f"http://localhost:{port}"
                     try:
                         model_id = self._probe_openai_compat(base)
                     except Exception:
@@ -10242,7 +10301,7 @@ class PCAPSentryApp:
                         return {"provider": "openai_compatible", "endpoint": base, "model": model_id}
                 return None
 
-            def apply_result(result):
+            def apply_result(result) -> None:
                 try:
                     if self._shutting_down or not result:
                         return
@@ -10254,7 +10313,7 @@ class PCAPSentryApp:
                 except Exception:
                     pass  # Don't crash if we can't apply auto-detected LLM settings
 
-            def run():
+            def run() -> None:
                 try:
                     result = worker()
                     if result and not self._shutting_down:
@@ -10266,14 +10325,14 @@ class PCAPSentryApp:
         except Exception:
             pass  # Don't crash startup if LLM auto-detect fails to initialize
 
-    def _verify_and_update_llm_at_startup(self):
+    def _verify_and_update_llm_at_startup(self) -> None:
         """Verify that a configured LLM is reachable at startup and update model name if needed."""
         try:
 
             def worker():
                 try:
-                    provider = self.llm_provider_var.get().strip().lower()
-                    endpoint = self.llm_endpoint_var.get().strip()
+                    provider: str = self.llm_provider_var.get().strip().lower()
+                    endpoint: str = self.llm_endpoint_var.get().strip()
 
                     if provider == "ollama":
                         if not endpoint:
@@ -10285,7 +10344,7 @@ class PCAPSentryApp:
                         return {"success": False}
                     if provider == "openai_compatible" and endpoint:
                         # Try to probe OpenAI-compatible endpoint and get model
-                        api_key = self.llm_api_key_var.get().strip()
+                        api_key: str = self.llm_api_key_var.get().strip()
                         model_id = self._probe_openai_compat(endpoint, api_key=api_key)
                         if model_id:
                             return {"success": True, "model": model_id}
@@ -10294,7 +10353,7 @@ class PCAPSentryApp:
                     pass
                 return {"success": False}
 
-            def apply_result(result):
+            def apply_result(result) -> None:
                 try:
                     # Check if shutting down or root still exists before updating UI
                     if self._shutting_down or not self.root or not self.root.winfo_exists():
@@ -10310,7 +10369,7 @@ class PCAPSentryApp:
                 except Exception:
                     pass
 
-            def run():
+            def run() -> None:
                 try:
                     result = worker()
                     if not self._shutting_down:
@@ -10322,14 +10381,14 @@ class PCAPSentryApp:
         except Exception:
             pass  # Don't crash startup if LLM verification fails
 
-    def _verify_llm_at_startup(self):
+    def _verify_llm_at_startup(self) -> None:
         """Verify that a configured LLM is reachable at startup."""
         try:
 
-            def worker():
+            def worker() -> bool:
                 try:
-                    provider = self.llm_provider_var.get().strip().lower()
-                    endpoint = self.llm_endpoint_var.get().strip()
+                    provider: str = self.llm_provider_var.get().strip().lower()
+                    endpoint: str = self.llm_endpoint_var.get().strip()
 
                     if provider == "ollama":
                         if not endpoint:
@@ -10339,14 +10398,14 @@ class PCAPSentryApp:
                         return True
                     if provider == "openai_compatible" and endpoint:
                         # Try to probe OpenAI-compatible endpoint
-                        api_key = self.llm_api_key_var.get().strip()
+                        api_key: str = self.llm_api_key_var.get().strip()
                         self._probe_openai_compat(endpoint, api_key=api_key)
                         return True
                 except Exception:
                     pass
                 return False
 
-            def apply_result(success):
+            def apply_result(success) -> None:
                 try:
                     # Check if shutting down or root still exists before updating UI
                     if self._shutting_down or not self.root or not self.root.winfo_exists():
@@ -10358,9 +10417,9 @@ class PCAPSentryApp:
                 except Exception:
                     pass
 
-            def run():
+            def run() -> None:
                 try:
-                    success = worker()
+                    success: bool = worker()
                     if not self._shutting_down:
                         self.root.after(0, lambda: apply_result(success))
                 except Exception:
@@ -10370,7 +10429,7 @@ class PCAPSentryApp:
         except Exception:
             pass  # Don't crash startup
 
-    def _open_llm_settings(self):
+    def _open_llm_settings(self) -> None:
         """Open LLM configuration dialog."""
         window = tk.Toplevel(self.root)
         window.title("LLM Settings")
@@ -10393,16 +10452,16 @@ class PCAPSentryApp:
         scrollbar.pack(side="right", fill="y")
 
         # Enable mouse wheel scrolling (widget-scoped, not global)
-        def _on_mousewheel(event):
+        def _on_mousewheel(event) -> None:
             try:
                 canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
             except tk.TclError:
                 pass  # Widget destroyed, ignore scroll event
 
-        def _bind_mousewheel(_event):
+        def _bind_mousewheel(_event) -> None:
             canvas.bind("<MouseWheel>", _on_mousewheel)
 
-        def _unbind_mousewheel(_event):
+        def _unbind_mousewheel(_event) -> None:
             canvas.unbind("<MouseWheel>")
 
         canvas.bind("<Enter>", _bind_mousewheel)
@@ -10435,7 +10494,7 @@ class PCAPSentryApp:
 
         # --- Unified LLM server dropdown ---
         # Cloud providers that need an API key
-        _CLOUD_PROVIDERS = {
+        _CLOUD_PROVIDERS: set[str] = {
             "OpenAI",
             "Google Gemini",
             "Mistral AI",
@@ -10453,7 +10512,7 @@ class PCAPSentryApp:
         def _strip_cloud(name):
             return name.replace(_CLOUD_ICON, "") if name.endswith(_CLOUD_ICON) else name
 
-        _LLM_SERVERS = {
+        _LLM_SERVERS: dict[str, tuple[str, str]] = {
             "Disabled": ("disabled", ""),
             # --- Local servers ---
             "Ollama": ("ollama", "http://localhost:11434"),
@@ -10477,9 +10536,9 @@ class PCAPSentryApp:
         }
 
         # Reverse-map saved settings to display name
-        def _resolve_display_name():
-            prov = self.llm_provider_var.get().strip().lower()
-            ep = self.llm_endpoint_var.get().strip().rstrip("/")
+        def _resolve_display_name() -> str:
+            prov: str = self.llm_provider_var.get().strip().lower()
+            ep: str = self.llm_endpoint_var.get().strip().rstrip("/")
             if prov == "disabled":
                 return "Disabled"
             if prov == "ollama":
@@ -10492,11 +10551,11 @@ class PCAPSentryApp:
 
         _llm_server_var = tk.StringVar(value=_resolve_display_name())
 
-        def _get_server_values():
+        def _get_server_values() -> list[str]:
             """Return LLM server names, filtering out cloud providers when offline."""
             if self.offline_mode_var.get():
-                return [n for n in _LLM_SERVERS if n not in _CLOUD_PROVIDERS]
-            return [_cloud(n) for n in _LLM_SERVERS]
+                return [n for n: str in _LLM_SERVERS if n not in _CLOUD_PROVIDERS]
+            return [_cloud(n) for n: str in _LLM_SERVERS]
 
         ttk.Label(frame, text="LLM server:").grid(row=2, column=0, sticky="w", pady=6)
         provider_frame = ttk.Frame(frame)
@@ -10544,7 +10603,7 @@ class PCAPSentryApp:
         api_key_entry.pack(side=tk.LEFT)
         api_key_show_var = tk.BooleanVar(value=False)
 
-        def _toggle_key_visibility():
+        def _toggle_key_visibility() -> None:
             api_key_entry.configure(show="" if api_key_show_var.get() else "\u2022")
 
         api_key_show_btn = ttk.Checkbutton(
@@ -10574,7 +10633,7 @@ class PCAPSentryApp:
         )
 
         # API key signup links per provider
-        _API_KEY_URLS = {
+        _API_KEY_URLS: dict[str, str] = {
             "OpenAI": "https://platform.openai.com/api-keys",
             "Google Gemini": "https://aistudio.google.com/apikey",
             "Mistral AI": "https://console.mistral.ai/api-keys",
@@ -10585,8 +10644,8 @@ class PCAPSentryApp:
             "DeepSeek": "https://platform.deepseek.com/api_keys",
         }
 
-        def _update_api_key_hint(name):
-            url = _API_KEY_URLS.get(name, "")
+        def _update_api_key_hint(name) -> None:
+            url: str = _API_KEY_URLS.get(name, "")
             if url:
                 api_key_hint.configure(text=f"Get key: {url}", cursor="hand2")
                 api_key_hint.bind("<Button-1>", lambda _: __import__("webbrowser").open(url))
@@ -10605,7 +10664,7 @@ class PCAPSentryApp:
             fg=self.colors.get("muted", "#8b949e"),
         )
 
-        def _show_api_key_row(visible):
+        def _show_api_key_row(visible) -> None:
             if visible:
                 api_key_label.grid(row=3, column=0, sticky="w", pady=6)
                 api_key_frame.grid(row=3, column=1, sticky="w", pady=6)
@@ -10625,14 +10684,14 @@ class PCAPSentryApp:
                 api_key_show_btn.configure(state="disabled")
                 verify_api_btn.configure(state="disabled")
 
-        def _on_server_selected(*_):
-            raw = _llm_server_var.get()
-            name = _strip_cloud(raw)
+        def _on_server_selected(*_) -> None:
+            raw: str = _llm_server_var.get()
+            name: str = _strip_cloud(raw)
             prov, ep = _LLM_SERVERS.get(name, ("disabled", ""))
             self.llm_provider_var.set(prov)
             if ep:
                 self.llm_endpoint_var.set(ep)
-            is_cloud = name in _CLOUD_PROVIDERS
+            is_cloud: bool = name in _CLOUD_PROVIDERS
             _show_api_key_row(is_cloud)
             _update_api_key_hint(name)
             # Clear verification status when switching servers
@@ -10719,15 +10778,15 @@ class PCAPSentryApp:
             frame, "Sends a small test request to verify the current LLM settings.", row=9, column=2, sticky="w"
         )
 
-        def _set_llm_fields_state(skip_refresh=False, *_):
-            provider = self.llm_provider_var.get().strip().lower()
-            state = "normal" if provider != "disabled" else "disabled"
+        def _set_llm_fields_state(skip_refresh=False, *_) -> None:
+            provider: str = self.llm_provider_var.get().strip().lower()
+            state: str = "normal" if provider != "disabled" else "disabled"
             llm_model_combo.configure(state=state)
             llm_endpoint_entry.configure(state=state)
             refresh_btn.configure(state=state)
             detect_btn.configure(state=state)
             test_llm_btn.configure(state=state)
-            is_ollama = provider == "ollama"
+            is_ollama: bool = provider == "ollama"
             manage_models_btn.configure(state=("normal" if (state == "normal" and is_ollama) else "disabled"))
             if state == "disabled":
                 self._set_llm_test_status("Disabled", self.colors.get("muted", "#8b949e"))
@@ -10760,13 +10819,13 @@ class PCAPSentryApp:
 
         window.grab_set()
 
-    def _save_llm_settings(self, window):
+    def _save_llm_settings(self, window) -> None:
         """Save LLM settings and close dialog."""
         self._save_settings_from_vars()
         self._update_llm_header_indicator()
         window.destroy()
 
-    def _test_llm_connection(self):
+    def _test_llm_connection(self) -> None:
         if not self._llm_is_enabled():
             messagebox.showwarning(
                 "LLM Test", "LLM provider is disabled. Configure an LLM provider in File → LLM Settings first."
@@ -10777,8 +10836,8 @@ class PCAPSentryApp:
         self._set_llm_test_status("Testing...", self.colors.get("muted", "#8b949e"))
 
         def task():
-            provider = self.llm_provider_var.get().strip().lower()
-            endpoint = self.llm_endpoint_var.get().strip()
+            provider: str = self.llm_provider_var.get().strip().lower()
+            endpoint: str = self.llm_endpoint_var.get().strip()
 
             if provider == "ollama":
                 if not endpoint:
@@ -10803,21 +10862,21 @@ class PCAPSentryApp:
             elif provider == "openai_compatible":
                 if not endpoint:
                     raise ValueError("OpenAI-compatible endpoint is required")
-                api_key = self.llm_api_key_var.get().strip()
+                api_key: str = self.llm_api_key_var.get().strip()
                 model_id = self._probe_openai_compat(endpoint, api_key=api_key)
                 return {"success": True, "model": model_id}
             else:
                 raise ValueError(f"Unsupported LLM provider: {provider}")
 
-        def done(result):
+        def done(result) -> None:
             self._set_llm_test_status("OK", self.colors.get("success", "#3fb950"))
 
-        def failed(err):
+        def failed(err) -> None:
             self._set_llm_test_status("FAIL", self.colors.get("danger", "#f85149"))
             _write_error_log("LLM test failed", err)
 
-            provider = self.llm_provider_var.get().strip().lower()
-            endpoint = self.llm_endpoint_var.get().strip() or "http://localhost:11434"
+            provider: str = self.llm_provider_var.get().strip().lower()
+            endpoint: str = self.llm_endpoint_var.get().strip() or "http://localhost:11434"
             if provider == "ollama" and endpoint.rstrip("/").endswith("/v1"):
                 messagebox.showerror(
                     "LLM Test",
@@ -10841,7 +10900,7 @@ class PCAPSentryApp:
 
         self._run_task(task, done, on_error=failed)
 
-    def _apply_label_to_kb(self, label, stats, features, summary, title, message):
+    def _apply_label_to_kb(self, label, stats, features, summary, title, message) -> None:
         # Move ALL KB operations to background thread to prevent UI freeze
         def kb_task():
             # Step 1: Add to knowledge base (I/O operation)
@@ -10850,7 +10909,7 @@ class PCAPSentryApp:
             kb = load_knowledge_base()
             return kb
 
-        def kb_done(kb):
+        def kb_done(kb) -> None:
             # Update UI on main thread after KB operations complete
             self._last_kb_label = label
             self._last_kb_entry = kb[label][-1] if kb[label] else None
@@ -10864,7 +10923,7 @@ class PCAPSentryApp:
                 def train_task():
                     return _train_local_model(kb)
 
-                def train_done(result):
+                def train_done(result) -> None:
                     model_bundle, err = result
                     if model_bundle is None:
                         messagebox.showinfo("Local Model", err or "Local model training skipped.")
@@ -10872,18 +10931,18 @@ class PCAPSentryApp:
                         _save_local_model(model_bundle)
                         self.status_var.set("Local model updated.")
 
-                def train_failed(exc):
+                def train_failed(exc) -> None:
                     messagebox.showwarning("Local Model", f"Model training failed: {exc}")
 
                 self._run_task(train_task, train_done, on_error=train_failed, message="Training local model...")
 
-        def kb_failed(exc):
+        def kb_failed(exc) -> None:
             messagebox.showerror("Error", f"Failed to save to knowledge base: {exc}")
 
         self._run_task(kb_task, kb_done, on_error=kb_failed, message="Saving to knowledge base...")
 
-    def _train(self, label):
-        path = self.safe_path_var.get() if label == "safe" else self.mal_path_var.get()
+    def _train(self, label) -> None:
+        path: str = self.safe_path_var.get() if label == "safe" else self.mal_path_var.get()
         if not path:
             messagebox.showwarning("Missing file", "Please select a PCAP file.")
             return
@@ -10897,16 +10956,16 @@ class PCAPSentryApp:
                 use_high_memory=self.use_high_memory_var.get(),
             )
 
-        def done(result):
+        def done(result) -> None:
             try:
                 _df, stats, _ = result
                 if stats.get("packet_count", 0) == 0:
                     messagebox.showwarning("No data", "No IP packets found in this capture.")
                     return
                 features = build_features(stats)
-                summary = summarize_stats(stats)
+                summary: str = summarize_stats(stats)
 
-                def apply_label(final_label):
+                def apply_label(final_label) -> None:
                     self._apply_label_to_kb(
                         final_label,
                         stats,
@@ -10921,25 +10980,25 @@ class PCAPSentryApp:
                         self.mal_path_var.set("")
 
                 self._confirm_llm_label(label, stats, summary, apply_label)
-            except Exception as e:
+            except Exception as e: Exception:
                 _write_error_log(f"Error training with {label} PCAP", e, sys.exc_info()[2])
                 messagebox.showerror("Error", f"Failed to train with PCAP: {e!s}")
 
         self._run_task(task, done, message="Parsing PCAP...", progress_label="Parsing PCAP")
 
-    def _label_current(self, label):
+    def _label_current(self, label) -> None:
         if self.current_stats is None:
             messagebox.showwarning("Missing data", "Analyze a PCAP first.")
             return
         try:
             # Ensure the app data directory exists
-            data_dir = _get_app_data_dir()
+            data_dir: str = _get_app_data_dir()
             os.makedirs(data_dir, exist_ok=True)
 
             features = build_features(self.current_stats)
-            summary = summarize_stats(self.current_stats)
+            summary: str = summarize_stats(self.current_stats)
 
-            def apply_label(final_label):
+            def apply_label(final_label) -> None:
                 self._apply_label_to_kb(
                     final_label,
                     self.current_stats,
@@ -10950,29 +11009,29 @@ class PCAPSentryApp:
                 )
 
             self._confirm_llm_label(label, self.current_stats, summary, apply_label)
-        except Exception as e:
+        except Exception as e: Exception:
             _write_error_log(f"Error labeling current capture as {label}", e, sys.exc_info()[2])
             messagebox.showerror("Error", f"Failed to label capture: {e!s}")
 
     # ------------------------------------------------------------------
     # Post-analysis LLM label suggestion (non-blocking)
     # ------------------------------------------------------------------
-    def _hide_llm_suggestion(self):
+    def _hide_llm_suggestion(self) -> None:
         """Hide the LLM suggestion banner."""
         self._pending_llm_suggestion = None
         if self.llm_suggestion_frame is not None:
             self.llm_suggestion_frame.pack_forget()
 
-    def _request_llm_suggestion_async(self, stats):
+    def _request_llm_suggestion_async(self, stats) -> None:
         """After analysis, ask the LLM for a label suggestion in the background."""
         self._hide_llm_suggestion()
 
         if not self._llm_is_ready():
             return
 
-        summary = summarize_stats(stats)
+        summary: str = summarize_stats(stats)
 
-        def worker():
+        def worker() -> None:
             try:
                 suggestion = self._request_llm_label(stats, summary)
                 if suggestion and suggestion.get("label") in ("safe", "malicious"):
@@ -10982,7 +11041,7 @@ class PCAPSentryApp:
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _on_llm_suggestion(self, suggestion):
+    def _on_llm_suggestion(self, suggestion) -> None:
         """Called on the main thread when the LLM suggestion arrives."""
         # Only show if we still have analysis results (user hasn't started a new one)
         if self.current_stats is None:
@@ -10990,32 +11049,32 @@ class PCAPSentryApp:
         self._pending_llm_suggestion = suggestion
         self._show_llm_suggestion(suggestion)
 
-    def _show_llm_suggestion(self, suggestion):
+    def _show_llm_suggestion(self, suggestion) -> None:
         """Display the LLM suggestion banner with label, rationale, and accept button."""
-        frame = self.llm_suggestion_frame
+        frame: None | tk.Frame = self.llm_suggestion_frame
         if frame is None:
             return
 
         # Clear previous contents
-        for w in frame.winfo_children():
+        for w: tk.Widget | tk.Toplevel in frame.winfo_children():
             w.destroy()
 
         label = suggestion.get("label", "")
         confidence = suggestion.get("confidence")
         rationale = suggestion.get("rationale", "").strip()
-        conf_text = f"{confidence:.0%}" if isinstance(confidence, (int, float)) else ""
+        conf_text: str = f"{confidence:.0%}" if isinstance(confidence, (int, float)) else ""
 
         # Icon + label
         if label == "safe":
             icon = "\u2705"
-            label_color = self.colors.get("success", "#3fb950")
+            label_color: str = self.colors.get("success", "#3fb950")
             label_display = "Safe"
         else:
             icon = "\u26a0\ufe0f"
-            label_color = self.colors.get("danger", "#f85149")
+            label_color: str = self.colors.get("danger", "#f85149")
             label_display = "Malicious"
 
-        header_text = f"{icon}  LLM suggests: {label_display}"
+        header_text: str = f"{icon}  LLM suggests: {label_display}"
         if conf_text:
             header_text += f"  ({conf_text} confidence)"
 
@@ -11055,7 +11114,7 @@ class PCAPSentryApp:
 
         frame.pack(fill=tk.X, pady=(0, 4))
 
-    def _accept_llm_suggestion(self):
+    def _accept_llm_suggestion(self) -> None:
         """Apply the LLM-suggested label to the knowledge base (skips re-confirmation)."""
         suggestion = self._pending_llm_suggestion
         if suggestion is None or self.current_stats is None:
@@ -11069,10 +11128,10 @@ class PCAPSentryApp:
 
         # Apply directly — no need to re-ask the LLM since this IS the LLM suggestion
         try:
-            data_dir = _get_app_data_dir()
+            data_dir: str = _get_app_data_dir()
             os.makedirs(data_dir, exist_ok=True)
             features = build_features(self.current_stats)
-            summary = summarize_stats(self.current_stats)
+            summary: str = summarize_stats(self.current_stats)
             self._apply_label_to_kb(
                 label,
                 self.current_stats,
@@ -11081,20 +11140,20 @@ class PCAPSentryApp:
                 "Knowledge Base",
                 f"Current capture saved as {label} (LLM suggestion accepted).",
             )
-        except Exception as e:
+        except Exception as e: Exception:
             _write_error_log(f"Error accepting LLM suggestion as {label}", e, sys.exc_info()[2])
             messagebox.showerror("Error", f"Failed to label capture: {e!s}")
 
-    def _sync_undo_buttons(self):
+    def _sync_undo_buttons(self) -> None:
         """Enable or disable all undo buttons based on current undo state."""
-        has_undo = self._last_kb_label is not None and self._last_kb_entry is not None
+        has_undo: bool = self._last_kb_label is not None and self._last_kb_entry is not None
         # Analyze tab undo button
         self.undo_kb_button.config(state=tk.NORMAL if has_undo else tk.DISABLED)
         # Train tab undo buttons
         self.undo_safe_button.config(state=tk.NORMAL if has_undo and self._last_kb_label == "safe" else tk.DISABLED)
         self.undo_mal_button.config(state=tk.NORMAL if has_undo and self._last_kb_label == "malicious" else tk.DISABLED)
 
-    def _undo_last_kb_entry(self, filter_label=None):
+    def _undo_last_kb_entry(self, filter_label=None) -> None:
         """Remove the most recently added knowledge base entry.
 
         If filter_label is provided, only undo if the last entry matches that label.
@@ -11108,16 +11167,16 @@ class PCAPSentryApp:
             messagebox.showinfo("Undo", "Nothing to undo.")
             return
 
-        label = self._last_kb_label
-        entry = self._last_kb_entry
+        label: ttk.Never = self._last_kb_label
+        entry: ttk.Never = self._last_kb_entry
 
         kb = load_knowledge_base()
         entries = kb.get(label, [])
 
         # Find and remove the matching entry (compare by timestamp)
-        ts = entry.get("timestamp")
+        ts: ttk.Never = entry.get("timestamp")
         removed = False
-        for i in range(len(entries) - 1, -1, -1):
+        for i: int in range(len(entries) - 1, -1, -1):
             if entries[i].get("timestamp") == ts:
                 entries.pop(i)
                 removed = True
@@ -11247,8 +11306,8 @@ class PCAPSentryApp:
             )
             lines.append("")
             for port, count in top_ports[:10]:
-                desc = PORT_DESCRIPTIONS.get(port, "Unknown / non-standard service")
-                flag = "  ** UNUSUAL **" if port not in COMMON_PORTS else ""
+                desc: str = PORT_DESCRIPTIONS.get(port, "Unknown / non-standard service")
+                flag: str = "  ** UNUSUAL **" if port not in COMMON_PORTS else ""
                 lines.append(f"      Port {port:>5} : {desc} ({count} packets){flag}")
             if unusual_ports:
                 lines.append("")
@@ -11447,7 +11506,7 @@ class PCAPSentryApp:
                 lines.append("")
 
                 # -- Describe the destination port --
-                dport_int = int(dport) if str(dport).isdigit() else None
+                dport_int: int | None = int(dport) if str(dport).isdigit() else None
                 if dport_int and dport_int in PORT_DESCRIPTIONS_SHORT:
                     lines.append(f"      Port {dport} is: {PORT_DESCRIPTIONS_SHORT[dport_int]}")
                 elif dport_int and dport_int not in COMMON_PORTS:
@@ -11478,8 +11537,8 @@ class PCAPSentryApp:
                     lines.append("")
 
                 # -- Cross-reference with IoC data --
-                src_is_ioc = src_ip in ioc_ip_set
-                dst_is_ioc = dst_ip in ioc_ip_set
+                src_is_ioc: bool = src_ip in ioc_ip_set
+                dst_is_ioc: bool = dst_ip in ioc_ip_set
                 if src_is_ioc or dst_is_ioc:
                     lines.append("      !! IoC BLOCKLIST MATCH:")
                     if src_is_ioc:
@@ -11496,7 +11555,7 @@ class PCAPSentryApp:
                     if ip_addr in threat_ip_info:
                         ti = threat_ip_info[ip_addr]
                         risk = ti.get("risk_score", 0)
-                        sev = "HIGH" if risk > 70 else "MEDIUM" if risk > 40 else "LOW"
+                        sev: str = "HIGH" if risk > 70 else "MEDIUM" if risk > 40 else "LOW"
                         lines.append(f"      !! ONLINE THREAT INTEL for {ip_addr}:")
                         lines.append(f"         Risk score: {risk:.0f}/100 ({sev})")
                         sources = ti.get("sources", {})
@@ -11516,7 +11575,7 @@ class PCAPSentryApp:
                 if dst_ip != "?":
                     filter_parts.append(f"ip.addr == {dst_ip}")
                 if filter_parts:
-                    wireshark_filter = " && ".join(filter_parts)
+                    wireshark_filter: str = " && ".join(filter_parts)
                     lines.append(f"        Filter: {wireshark_filter}")
                 if dport_int:
                     proto_filter = "tcp" if proto == "TCP" else "udp" if proto == "UDP" else proto.lower()
@@ -11552,7 +11611,7 @@ class PCAPSentryApp:
                     if ip in threat_ip_info:
                         risk = threat_ip_info[ip].get("risk_score", 0)
                         notes.append(f"threat intel risk {risk:.0f}/100")
-                    note_str = f"  ({', '.join(notes)})" if notes else ""
+                    note_str: str = f"  ({', '.join(notes)})" if notes else ""
                     lines.append(f"      {ip}{note_str}")
                     lines.append(f"        https://www.virustotal.com/gui/ip-address/{ip}")
                     lines.append(f"        https://www.abuseipdb.com/check/{ip}")
@@ -11574,12 +11633,12 @@ class PCAPSentryApp:
                 if intel.get("risky_ips"):
                     for ip_info in intel["risky_ips"][:5]:
                         risk = ip_info["risk_score"]
-                        sev = "HIGH" if risk > 70 else "MEDIUM" if risk > 40 else "LOW"
+                        sev: str = "HIGH" if risk > 70 else "MEDIUM" if risk > 40 else "LOW"
                         lines.append(f"    IP {ip_info['ip']} — risk {risk:.0f}/100 ({sev})")
                 if intel.get("risky_domains"):
                     for d_info in intel["risky_domains"][:5]:
                         risk = d_info["risk_score"]
-                        sev = "HIGH" if risk > 70 else "MEDIUM" if risk > 40 else "LOW"
+                        sev: str = "HIGH" if risk > 70 else "MEDIUM" if risk > 40 else "LOW"
                         lines.append(f"    Domain {d_info['domain']} — risk {risk:.0f}/100 ({sev})")
                 lines.append("")
 
@@ -11588,7 +11647,7 @@ class PCAPSentryApp:
         lines.append("  COMMON ATTACK PATTERNS (GLOSSARY)")
         lines.append("-" * 60)
         lines.append("")
-        glossary = [
+        glossary: list[tuple[str, str]] = [
             (
                 "Beaconing",
                 "Malware sends small messages to its controller at\n"
@@ -11679,7 +11738,7 @@ class PCAPSentryApp:
         lines.append("  FREE RESOURCES TO KEEP LEARNING")
         lines.append("-" * 60)
         lines.append("")
-        resources = [
+        resources: list[tuple[str, str, str]] = [
             (
                 "Wireshark Official Docs & Wiki",
                 "https://www.wireshark.org/docs/",
@@ -11823,7 +11882,7 @@ class PCAPSentryApp:
         behavioral_findings=None,
     ):
         """Build the Results tab text lines (can run off main thread)."""
-        output_lines = [
+        output_lines: list[str] = [
             f"Risk Score: {risk_score}/100",
             f"Verdict: {verdict}",
             "",
@@ -11838,7 +11897,7 @@ class PCAPSentryApp:
         if anomaly_result is None:
             output_lines.append("- Baseline anomaly: no safe baseline available")
         else:
-            reasons = ", ".join(anomaly_reasons) if anomaly_reasons else "no standout outliers"
+            reasons: str = ", ".join(anomaly_reasons) if anomaly_reasons else "no standout outliers"
             output_lines.append(f"- Baseline anomaly: {anomaly_result} ({reasons})")
 
         if ioc_available:
@@ -11931,7 +11990,7 @@ class PCAPSentryApp:
             output_lines.append("Behavioral Anomalies")
             for finding in behavioral_findings:
                 severity = finding.get("severity", 0)
-                level = "HIGH" if severity >= 70 else "MEDIUM" if severity >= 50 else "LOW"
+                level: str = "HIGH" if severity >= 70 else "MEDIUM" if severity >= 50 else "LOW"
                 output_lines.append(f"- [{level}] {finding['detail']}")
         elif behavioral_findings is not None:
             output_lines.append("")
@@ -11957,7 +12016,7 @@ class PCAPSentryApp:
         behavioral_findings=None,
     ):
         """Build the Why tab text lines (can run off main thread)."""
-        why_lines = [
+        why_lines: list[str] = [
             "========================================",
             "  WHY THIS VERDICT WAS REACHED",
             "========================================",
@@ -12011,7 +12070,7 @@ class PCAPSentryApp:
         if anomaly_result is None:
             why_lines.append("    Result: No baseline available.")
         else:
-            reasons = ", ".join(anomaly_reasons) if anomaly_reasons else "nothing unusual"
+            reasons: str = ", ".join(anomaly_reasons) if anomaly_reasons else "nothing unusual"
             if isinstance(anomaly_result, (int, float)) and anomaly_result >= 40:
                 why_lines.append(f"    Result: ANOMALOUS — deviates from baseline (score: {anomaly_result})")
                 why_lines.append(f"    Reasons: {reasons}")
@@ -12026,8 +12085,8 @@ class PCAPSentryApp:
         why_lines.append("[C] INDICATOR OF COMPROMISE (IoC) CHECK")
         if ioc_available:
             if ioc_count:
-                domain_ct = len(ioc_matches["domains"])
-                ip_ct = len(ioc_matches["ips"])
+                domain_ct: int = len(ioc_matches["domains"])
+                ip_ct: int = len(ioc_matches["ips"])
                 why_lines.append(f"    Result: {ioc_count} MATCHES FOUND")
                 why_lines.append(f"    Breakdown: {domain_ct} domain(s) and {ip_ct} IP(s) matched")
                 if ioc_matches["domains"]:
@@ -12045,7 +12104,7 @@ class PCAPSentryApp:
             why_lines.append(f"    Result: {len(behavioral_findings)} anomaly(ies) detected")
             for finding in behavioral_findings:
                 severity = finding.get("severity", 0)
-                level = "HIGH" if severity >= 70 else "MEDIUM" if severity >= 50 else "LOW"
+                level: str = "HIGH" if severity >= 70 else "MEDIUM" if severity >= 50 else "LOW"
                 why_lines.append(f"    [{level}] {finding['detail']}")
         else:
             why_lines.append("    Result: No behavioral anomalies detected.")
@@ -12061,7 +12120,7 @@ class PCAPSentryApp:
             unusual = [(p, c) for p, c in top_ports if p not in COMMON_PORTS]
             why_lines.append("[D] PORTS")
             for port, count in top_ports[:10]:
-                flag = " << UNUSUAL" if port not in COMMON_PORTS else ""
+                flag: str = " << UNUSUAL" if port not in COMMON_PORTS else ""
                 why_lines.append(f"      Port {port}: {count} packet(s){flag}")
             if unusual:
                 why_lines.append(f"    {len(unusual)} non-standard port(s) detected.")
@@ -12157,8 +12216,8 @@ class PCAPSentryApp:
 
         return why_lines
 
-    def _analyze(self):
-        path = self.target_path_var.get()
+    def _analyze(self) -> None:
+        path: str = self.target_path_var.get()
         if not path:
             messagebox.showwarning("Missing file", "Please select a PCAP file.")
             return
@@ -12167,16 +12226,16 @@ class PCAPSentryApp:
         self._hide_llm_suggestion()
 
         # Read tkinter variables on main thread before launching worker
-        max_rows = max(100, min(self.max_rows_var.get(), 2_000_000))  # S6: clamp to sane range
-        parse_http = self.parse_http_var.get()
-        use_high_memory = self.use_high_memory_var.get()
-        offline_mode = self.offline_mode_var.get()
-        use_local_model = self.use_local_model_var.get()
-        use_multithreading = self.use_multithreading_var.get()
-        turbo_parse = self.turbo_parse_var.get()
+        max_rows: int = max(100, min(self.max_rows_var.get(), 2_000_000))  # S6: clamp to sane range
+        parse_http: bool = self.parse_http_var.get()
+        use_high_memory: bool = self.use_high_memory_var.get()
+        offline_mode: bool = self.offline_mode_var.get()
+        use_local_model: bool = self.use_local_model_var.get()
+        use_multithreading: bool = self.use_multithreading_var.get()
+        turbo_parse: bool = self.turbo_parse_var.get()
         kb = self._get_knowledge_base()
-        normalizer_cache = self.normalizer_cache
-        cancel_event = self._cancel_event
+        normalizer_cache: None = self.normalizer_cache
+        cancel_event: threading.Event = self._cancel_event
 
         # Choose parser: turbo (raw byte parsing) or standard (full Scapy)
         _parser = _fast_parse_pcap_path if turbo_parse else parse_pcap_path
@@ -12184,14 +12243,14 @@ class PCAPSentryApp:
         def _safe_extract(p, high_mem):
             try:
                 return extract_credentials_and_hosts(p, use_high_memory=high_mem)
-            except Exception as e:
+            except Exception as e: Exception:
                 print(f"[DEBUG] Credential extraction failed: {e}")
                 return {"credentials": [], "hosts": {}}
 
         def _core_analysis(df, stats, extracted, sample_info, t_start, progress_cb=None):
             """Shared analysis logic used by both sequential and multithreaded paths."""
 
-            def _report(pct, label="Analyzing..."):
+            def _report(pct, label="Analyzing...") -> None:
                 if progress_cb:
                     progress_cb(pct, label=label)
 
@@ -12207,21 +12266,21 @@ class PCAPSentryApp:
                         print("[DEBUG] Enriching stats with threat intelligence...")
 
                         # Report incremental progress during TI enrichment (32-44%)
-                        def _ti_progress(fraction):
+                        def _ti_progress(fraction) -> None:
                             _report(32 + fraction * 12)
 
                         return ti.enrich_stats(stats, progress_cb=_ti_progress)
-                except Exception as e:
+                except Exception as e: Exception:
                     print(f"[DEBUG] Threat intelligence enrichment failed: {e}")
                 return {}
 
             if use_multithreading:
                 # ── Pre-compute KB vectors once for reuse ──
-                kb_vectors = _vectorize_kb(kb)
+                kb_vectors: dict[str, list[list[float]]] = _vectorize_kb(kb)
 
                 # ── Parallel: Threat intel + IoC + baseline + flows ──
                 _report(32, label="Running threat intelligence checks...")
-                with ThreadPoolExecutor(max_workers=4) as pool:
+                with ThreadPoolExecutor(max_workers=4) as pool: ThreadPoolExecutor:
                     f_ti = pool.submit(_do_threat_intel)
                     f_ioc = pool.submit(match_iocs, stats, kb.get("ioc", {}))
                     f_base = pool.submit(compute_baseline_from_kb, kb, kb_vectors)
@@ -12243,16 +12302,16 @@ class PCAPSentryApp:
                 suspicious_flows = detect_suspicious_flows(df, kb, flow_df=flow_df_early)
                 behavioral_findings = detect_behavioral_anomalies(df, stats, flow_df=flow_df_early)
 
-                t_p2 = time.time()
+                t_p2: float = time.time()
                 print(f"[TIMING] Phase 2 parallel (intel+ioc+baseline+flows): {t_p2 - t_start:.2f}s")
 
                 # ── Parallel: Scoring ──
                 _report(50, label="Building feature vectors...")
                 features = build_features(stats)
-                vector = _vector_from_features(features)
+                vector: list[float] = _vector_from_features(features)
 
                 _report(55, label="Running machine learning classification...")
-                with ThreadPoolExecutor(max_workers=3) as pool:
+                with ThreadPoolExecutor(max_workers=3) as pool: ThreadPoolExecutor:
                     f_safe = pool.submit(lambda: get_top_k_similar_entries(features, kb["safe"], k=5))
                     f_mal = pool.submit(lambda: get_top_k_similar_entries(features, kb["malicious"], k=5))
                     f_classify = pool.submit(
@@ -12265,11 +12324,11 @@ class PCAPSentryApp:
 
                 _report(62, label="Detecting anomalies...")
                 anomaly_result, anomaly_reasons = anomaly_score(vector, baseline)
-                t_p3 = time.time()
+                t_p3: float = time.time()
                 print(f"[TIMING] Phase 3 parallel (scoring): {t_p3 - t_p2:.2f}s")
             else:
                 # ── Pre-compute KB vectors once for reuse ──
-                kb_vectors = _vectorize_kb(kb)
+                kb_vectors: dict[str, list[list[float]]] = _vectorize_kb(kb)
 
                 # ── Sequential path ──
                 _report(32, label="Checking threat intelligence...")
@@ -12289,7 +12348,7 @@ class PCAPSentryApp:
 
                 _report(52, label="Building feature vectors...")
                 features = build_features(stats)
-                vector = _vector_from_features(features)
+                vector: list[float] = _vector_from_features(features)
                 _report(56, label="Computing similarity scores...")
                 _, safe_scores = get_top_k_similar_entries(features, kb["safe"], k=5)
                 _, mal_scores = get_top_k_similar_entries(features, kb["malicious"], k=5)
@@ -12299,19 +12358,19 @@ class PCAPSentryApp:
                 )
                 _report(64, label="Detecting anomalies...")
                 anomaly_result, anomaly_reasons = anomaly_score(vector, baseline)
-                t_p3 = time.time()
+                t_p3: float = time.time()
                 print(f"[TIMING] Sequential analysis: {t_p3 - t_start:.2f}s")
 
             # ── Risk scoring (same for both paths) ──
             _report(68, label="Computing risk score...")
-            ioc_count = len(ioc_matches["ips"]) + len(ioc_matches["domains"])
-            ioc_available = any(kb.get("ioc", {}).get(key) for key in ("ips", "domains", "hashes"))
-            ioc_score = min(100.0, 80.0 + (ioc_count - 1) * 5.0) if ioc_count else 0.0
+            ioc_count: int = len(ioc_matches["ips"]) + len(ioc_matches["domains"])
+            ioc_available: bool = any(kb.get("ioc", {}).get(key) for key: str in ("ips", "domains", "hashes"))
+            ioc_score: float = min(100.0, 80.0 + (ioc_count - 1) * 5.0) if ioc_count else 0.0
 
             # Behavioral heuristic score (aggregated from individual findings)
             behavioral_score = 0.0
             if behavioral_findings:
-                behavioral_score = min(100.0, sum(f.get("risk_boost", 0) for f in behavioral_findings))
+                behavioral_score: float = min(100.0, sum(f.get("risk_boost", 0) for f in behavioral_findings))
 
             # Weighted risk scoring with dynamic weights
             risk_components = []
@@ -12325,20 +12384,20 @@ class PCAPSentryApp:
                 risk_components.append((behavioral_score, 0.20))
 
             if risk_components:
-                total_weight = sum(w for _, w in risk_components)
-                risk_score = round(sum(s * w for s, w in risk_components) / total_weight, 1)
+                total_weight: int = sum(w for _, w in risk_components)
+                risk_score: float = round(sum(s * w for s, w in risk_components) / total_weight, 1)
                 # A2 fix: When only 1 component is available, cap the score to reduce
                 # misleading high-confidence verdicts from a single signal source.
                 if len(risk_components) == 1:
-                    risk_score = min(risk_score, 65.0)
+                    risk_score: float = min(risk_score, 65.0)
             else:
                 risk_score = 0.0
 
             # Hard escalation: IoC matches or critical behavioral findings floor the score
             if ioc_count >= 2 and risk_score < 60:
-                risk_score = max(risk_score, 60.0)
+                risk_score: float = max(risk_score, 60.0)
             if behavioral_score >= 40 and risk_score < 45:
-                risk_score = max(risk_score, 45.0)
+                risk_score: float = max(risk_score, 45.0)
 
             if risk_score >= 70:
                 verdict = "Likely Malicious"
@@ -12357,7 +12416,7 @@ class PCAPSentryApp:
 
             _report(80, label="Building analysis report...")
             if use_multithreading:
-                with ThreadPoolExecutor(max_workers=3) as pool:
+                with ThreadPoolExecutor(max_workers=3) as pool: ThreadPoolExecutor:
                     f_output = pool.submit(
                         self._build_result_output_lines,
                         risk_score,
@@ -12472,8 +12531,8 @@ class PCAPSentryApp:
                 output_lines.append("- Wireshark filters: see Why tab")
 
             _report(95, label="Finalizing Results")
-            t_end = time.time()
-            mode = "multithreaded" if use_multithreading else "sequential"
+            t_end: float = time.time()
+            mode: str = "multithreaded" if use_multithreading else "sequential"
             print(f"[TIMING] Total worker processing ({mode}): {t_end - t_start:.2f}s")
 
             return {
@@ -12497,10 +12556,10 @@ class PCAPSentryApp:
             }
 
         def task(progress_cb=None):
-            t_start = time.time()
+            t_start: float = time.time()
 
             # Wrapper to add phase labels to parsing progress
-            def phase1_progress_cb(percent, eta_seconds=None, processed=None, total=None, label=None):
+            def phase1_progress_cb(percent, eta_seconds=None, processed=None, total=None, label=None) -> None:
                 if progress_cb:
                     # Override label during parsing to show descriptive text
                     if label is None and percent < 100:
@@ -12509,7 +12568,7 @@ class PCAPSentryApp:
 
             if use_multithreading:
                 # ── Phase 1: Parse + extract in parallel ──
-                with ThreadPoolExecutor(max_workers=2) as pool:
+                with ThreadPoolExecutor(max_workers=2) as pool: ThreadPoolExecutor:
                     parse_future = pool.submit(
                         _parser,
                         path,
@@ -12534,7 +12593,7 @@ class PCAPSentryApp:
                 extracted = _safe_extract(path, use_high_memory)
 
             (df, stats, sample_info) = parse_result
-            t_p1 = time.time()
+            t_p1: float = time.time()
             print(f"[TIMING] Phase 1 (parse + extract): {t_p1 - t_start:.2f}s")
 
             if stats.get("packet_count", 0) == 0:
@@ -12542,7 +12601,7 @@ class PCAPSentryApp:
 
             return _core_analysis(df, stats, extracted, sample_info, t_p1, progress_cb)
 
-        def done(result):
+        def done(result) -> None:
             if result.get("empty"):
                 messagebox.showwarning("No data", "No IP packets found in this capture.")
                 self.label_safe_button.configure(state=tk.DISABLED)
@@ -12646,7 +12705,7 @@ class PCAPSentryApp:
 
         self._run_task(task, done, message="Analyzing PCAP...", progress_label="Analyzing PCAP")
 
-    def _open_charts(self):
+    def _open_charts(self) -> None:
         if self.current_df is None:
             return
         window = tk.Toplevel(self.root)
@@ -12672,32 +12731,32 @@ class PCAPSentryApp:
             self.kb_cache = load_knowledge_base()
         return self.kb_cache
 
-    def _invalidate_caches(self):
+    def _invalidate_caches(self) -> None:
         """Invalidate all performance caches when KB changes"""
         self.kb_cache = None
         self.normalizer_cache = None
         self.threat_intel_cache = None
 
-    def _refresh_kb(self):
+    def _refresh_kb(self) -> None:
         kb = load_knowledge_base()
         self.kb_cache = kb  # Update cache with fresh KB
-        unsure_count = len(kb.get("unsure", []))
+        unsure_count: int = len(kb.get("unsure", []))
         self.kb_summary_var.set(
             f"Safe entries: {len(kb['safe'])} | Unsure entries: {unsure_count} | Malware entries: {len(kb['malicious'])}"
         )
         self.unsure_count_var.set(f"{unsure_count} item{'s' if unsure_count != 1 else ''}")
         ioc = kb.get("ioc", {})
-        ioc_counts = f"IoCs: {len(ioc.get('domains', []))} domains, {len(ioc.get('ips', []))} ips"
+        ioc_counts: str = f"IoCs: {len(ioc.get('domains', []))} domains, {len(ioc.get('ips', []))} ips"
         self.ioc_summary_var.set(ioc_counts)
         # Invalidate derived caches but keep kb_cache (we just refreshed it)
         self.normalizer_cache = None
         self.threat_intel_cache = None
 
-    def _on_tab_changed(self, _event):
+    def _on_tab_changed(self, _event) -> None:
         self.sample_note_var.set("")
 
 
-def _acquire_single_instance():
+def _acquire_single_instance() -> None | ctypes.Any | bool:
     """Prevent multiple instances using a Windows named mutex.
 
     Returns the mutex handle if this is the first instance, or ``None``
@@ -12714,15 +12773,15 @@ def _acquire_single_instance():
         if ctypes.windll.kernel32.GetLastError() == ERROR_ALREADY_EXISTS:
             # Another instance exists – try to bring its window forward
             # Walk windows looking for our title
-            EnumWindows = ctypes.windll.user32.EnumWindows
-            GetWindowTextW = ctypes.windll.user32.GetWindowTextW
-            SetForegroundWindow = ctypes.windll.user32.SetForegroundWindow
-            ShowWindow = ctypes.windll.user32.ShowWindow
+            EnumWindows: ctypes._NamedFuncPointer = ctypes.windll.user32.EnumWindows
+            GetWindowTextW: ctypes._NamedFuncPointer = ctypes.windll.user32.GetWindowTextW
+            SetForegroundWindow: ctypes._NamedFuncPointer = ctypes.windll.user32.SetForegroundWindow
+            ShowWindow: ctypes._NamedFuncPointer = ctypes.windll.user32.ShowWindow
             SW_RESTORE = 9
-            buf = ctypes.create_unicode_buffer(256)
+            buf: ctypes.Array[ctypes.c_wchar] = ctypes.create_unicode_buffer(256)
 
             @ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.wintypes.HWND, ctypes.wintypes.LPARAM)
-            def _enum_cb(hwnd, _lparam):
+            def _enum_cb(hwnd, _lparam) -> bool:
                 GetWindowTextW(hwnd, buf, 256)
                 if "PCAP Sentry" in buf.value:
                     ShowWindow(hwnd, SW_RESTORE)
@@ -12738,8 +12797,8 @@ def _acquire_single_instance():
         return True
 
 
-def main():
-    mutex = _acquire_single_instance()
+def main() -> None:
+    mutex: None | ctypes.Any | bool = _acquire_single_instance()
     if mutex is None:
         sys.exit(0)
 
