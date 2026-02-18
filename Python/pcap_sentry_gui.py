@@ -9624,12 +9624,8 @@ class PCAPSentryApp:
                     if self._shutting_down:
                         return
                     if not online and not self.offline_mode_var.get():
-                        self.offline_mode_var.set(True)
-                        self._save_settings_from_vars()
-                        self.root_title = self._get_window_title()
-                        self.root.title(self.root_title)
-                        self._update_online_header_indicator()
-                        self.status_var.set("No internet detected — offline mode enabled automatically.")
+                        # Don't auto-enable offline mode, just warn the user
+                        self.status_var.set("Warning: Internet connectivity check failed. Threat intelligence may not work. Click 'Offline' button if needed.")
                 except Exception:
                     pass  # Don't crash startup if we can't set offline mode
 
