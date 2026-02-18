@@ -9620,6 +9620,7 @@ class PCAPSentryApp:
                         self._save_settings_from_vars()
                         self.root_title = self._get_window_title()
                         self.root.title(self.root_title)
+                        self._update_online_header_indicator()
                         self.status_var.set("No internet detected — offline mode enabled automatically.")
                 except Exception:
                     pass  # Don't crash startup if we can't set offline mode
