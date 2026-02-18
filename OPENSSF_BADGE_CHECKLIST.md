@@ -221,7 +221,7 @@ This document tracks PCAP Sentry's readiness for the [OpenSSF Best Practices Bad
     * Stability tests (14 tests: imports, settings, IOC parsing, threat intelligence, URL validation, model name safety, etc.)
     * Stress tests (7 tests: large datasets, performance, memory cleanup, concurrent operations)
   - Platforms: Ubuntu + Windows (cross-platform validation)
-  - Python versions: 3.10, 3.11, 3.12 (multi-version validation)
+  - Python versions: 3.11, 3.12, 3.13 (multi-version validation)
   - CI/CD integration: Tests must pass before code can merge (quality gate)
   - Coverage: pytest-cov tracks code coverage (7% overall, security functions well-covered)
   - Evidence: Public CI logs show test execution on every commit (.github/workflows/ci.yml:52-54)
@@ -321,7 +321,7 @@ This document tracks PCAP Sentry's readiness for the [OpenSSF Best Practices Bad
 - [ ] **Test Statement**: Could document coverage targets (suggest 60%+ for libraries, 40%+ with GUI)
 - [x] **Continuous Integration**: GitHub Actions CI workflow runs tests on every push/PR
   - Test suite runs on Ubuntu and Windows
-  - Tests Python 3.10, 3.11, 3.12
+  - Tests Python 3.11, 3.12, 3.13
   - Code quality checks (ruff linter)
   - Security scanning (safety, bandit)
   - Build verification
