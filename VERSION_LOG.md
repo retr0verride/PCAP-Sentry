@@ -85,6 +85,9 @@
 
 
 
+
+## 2026.02.18-2 - 2026-02-18
+- UX: Model list auto-updates with visual loading indicator when server changes - Fixes startup crash
 ## 2026.02.18-1 - 2026-02-18
 - LLM Auto-Correction and Contextual Questions
 ## 2026.02.17-20 - 2026-02-17
