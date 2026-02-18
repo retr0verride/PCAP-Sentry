@@ -89,6 +89,9 @@
 
 
 
+
+## 2026.02.18-7 - 2026-02-18
+- Fix: LLM model list refreshes on endpoint edit and Disabled toggle
 ## 2026.02.18-5 - 2026-02-18
 - Minor tweaks and improvements
 ## 2026.02.18-4 - 2026-02-18
