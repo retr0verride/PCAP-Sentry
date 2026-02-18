@@ -77,6 +77,9 @@
 
 
 
+
+## 2026.02.17-15 - 2026-02-17
+- Minor tweaks and improvements
 ## 2026.02.17-15 - 2026-02-17
 - **Fix:** API key field now visible for cloud providers when offline mode is enabled
 
