@@ -43,4 +43,4 @@ PRIVACY & SECURITY
 * Built following OpenSSF secure development best practices
 
 For documentation and support, visit:
-https://github.com/industrial-dave/PCAP-Sentry
+https://github.com/retr0verride/PCAP-Sentry

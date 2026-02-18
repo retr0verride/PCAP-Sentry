@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # PCAP Sentry - Learn Malware Network Traffic Analysis (Beginner-Friendly Educational Tool)
-# Copyright (C) 2026 industrial-dave
+# Copyright (C) 2026 retr0verride
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -99,7 +99,7 @@ def _safe_urlopen(url, data=None, headers=None, timeout=30, context=None):
 class UpdateChecker:
     """Checks for and manages updates for PCAP Sentry."""
 
-    REPO_OWNER = "industrial-dave"
+    REPO_OWNER = "retr0verride"
     REPO_NAME = "PCAP-Sentry"
     RELEASES_URL = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/releases/latest"
     RELEASES_ALL_URL = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/releases"

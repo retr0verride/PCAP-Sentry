@@ -195,7 +195,7 @@ All code changes are automatically tested via [GitHub Actions CI](.github/workfl
 - ✅ **Security Scans** with safety and bandit
 - ✅ **Build Verification** ensures compilation succeeds
 
-**CI Status:** [![CI](https://github.com/industrial-dave/PCAP-Sentry/actions/workflows/ci.yml/badge.svg)](https://github.com/industrial-dave/PCAP-Sentry/actions/workflows/ci.yml)
+**CI Status:** [![CI](https://github.com/retr0verride/PCAP-Sentry/actions/workflows/ci.yml/badge.svg)](https://github.com/retr0verride/PCAP-Sentry/actions/workflows/ci.yml)
 
 ## Feature-to-Test Mapping Summary
 

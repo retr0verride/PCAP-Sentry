@@ -138,4 +138,4 @@ For specific legal questions, consult:
 ---
 
 **Last Updated:** February 17, 2026  
-**Maintainer:** industrial-dave
+**Maintainer:** retr0verride

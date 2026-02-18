@@ -1,11 +1,11 @@
 blank_issues_enabled: false
 contact_links:
   - name: 📖 User Manual
-    url: https://github.com/industrial-dave/PCAP-Sentry/blob/main/USER_MANUAL.md
+    url: https://github.com/retr0verride/PCAP-Sentry/blob/main/USER_MANUAL.md
     about: Read the comprehensive user guide for installation, usage, and troubleshooting
   - name: 💬 Discussions
-    url: https://github.com/industrial-dave/PCAP-Sentry/discussions
+    url: https://github.com/retr0verride/PCAP-Sentry/discussions
     about: Ask questions, share tips, or discuss PCAP analysis techniques with the community
   - name: 🔒 Security Vulnerability
-    url: https://github.com/industrial-dave/PCAP-Sentry/security/advisories/new
+    url: https://github.com/retr0verride/PCAP-Sentry/security/advisories/new
     about: Report security vulnerabilities privately (do not use public issues)

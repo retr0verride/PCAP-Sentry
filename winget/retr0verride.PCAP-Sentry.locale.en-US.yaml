@@ -1,18 +1,18 @@
 # Created using wingetcreate
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
 
-PackageIdentifier: industrial-dave.PCAP-Sentry
+PackageIdentifier: retr0verride.PCAP-Sentry
 PackageVersion: 2026.2.17.2
 PackageLocale: en-US
-Publisher: industrial-dave
-PublisherUrl: https://github.com/industrial-dave
-PublisherSupportUrl: https://github.com/industrial-dave/PCAP-Sentry/issues
-Author: industrial-dave
+Publisher: retr0verride
+PublisherUrl: https://github.com/retr0verride
+PublisherSupportUrl: https://github.com/retr0verride/PCAP-Sentry/issues
+Author: retr0verride
 PackageName: PCAP Sentry
-PackageUrl: https://github.com/industrial-dave/PCAP-Sentry
+PackageUrl: https://github.com/retr0verride/PCAP-Sentry
 License: GPL-3.0
-LicenseUrl: https://github.com/industrial-dave/PCAP-Sentry/blob/main/LICENSE
-Copyright: Copyright (C) 2026 industrial-dave
+LicenseUrl: https://github.com/retr0verride/PCAP-Sentry/blob/main/LICENSE
+Copyright: Copyright (C) 2026 retr0verride
 ShortDescription: Learn Malware Network Traffic Analysis - Beginner-friendly educational tool
 Description: |-
   PCAP Sentry is a beginner-friendly educational tool for learning to identify malware network traffic patterns. It analyzes network packet captures (.pcap / .pcapng) and teaches you how to recognize suspicious activity with clear explanations and hands-on practice.
@@ -44,9 +44,9 @@ Tags:
 ReleaseNotes: |-
   What's New:
   • CI Fix: Suppress Bandit B608 false positive for batch script creation - all security scans now pass
-ReleaseNotesUrl: https://github.com/industrial-dave/PCAP-Sentry/releases/tag/v2026.2.17-2
+ReleaseNotesUrl: https://github.com/retr0verride/PCAP-Sentry/releases/tag/v2026.2.17-2
 Documentations:
 - DocumentLabel: User Manual
-  DocumentUrl: https://github.com/industrial-dave/PCAP-Sentry/blob/main/USER_MANUAL.md
+  DocumentUrl: https://github.com/retr0verride/PCAP-Sentry/blob/main/USER_MANUAL.md
 ManifestType: defaultLocale
 ManifestVersion: 1.6.0

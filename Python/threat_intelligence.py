@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # PCAP Sentry - Learn Malware Network Traffic Analysis (Beginner-Friendly Educational Tool)
-# Copyright (C) 2026 industrial-dave
+# Copyright (C) 2026 retr0verride
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by

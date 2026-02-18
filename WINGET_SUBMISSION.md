@@ -15,7 +15,7 @@ To make PCAP Sentry available via `winget install PCAP-Sentry`:
 
 2. Update manifest for new release:
    ```powershell
-   wingetcreate update industrial-dave.PCAP-Sentry -u https://github.com/industrial-dave/PCAP-Sentry/releases/download/v2026.2.17-2/PCAP_Sentry_Setup.exe -v 2026.2.17.2 -t <GITHUB_TOKEN>
+   wingetcreate update retr0verride.PCAP-Sentry -u https://github.com/retr0verride/PCAP-Sentry/releases/download/v2026.2.17-2/PCAP_Sentry_Setup.exe -v 2026.2.17.2 -t <GITHUB_TOKEN>
    ```
    
    This will automatically:
@@ -33,19 +33,19 @@ To make PCAP Sentry available via `winget install PCAP-Sentry`:
    winget-pkgs/
    └── manifests/
        └── i/
-           └── industrial-dave/
+           └── retr0verride/
                └── PCAP-Sentry/
                    └── 2026.2.17.2/
-                       ├── industrial-dave.PCAP-Sentry.installer.yaml
-                       ├── industrial-dave.PCAP-Sentry.locale.en-US.yaml
-                       └── industrial-dave.PCAP-Sentry.yaml
+                       ├── retr0verride.PCAP-Sentry.installer.yaml
+                       ├── retr0verride.PCAP-Sentry.locale.en-US.yaml
+                       └── retr0verride.PCAP-Sentry.yaml
    ```
 
 3. Copy the three YAML files from this directory
 
 4. Validate manifests:
    ```powershell
-   winget validate --manifest manifests/i/industrial-dave/PCAP-Sentry/2026.2.17.2/
+   winget validate --manifest manifests/i/retr0verride/PCAP-Sentry/2026.2.17.2/
    ```
 
 5. Create PR to microsoft/winget-pkgs

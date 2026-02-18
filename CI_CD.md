@@ -4,7 +4,7 @@ This document describes PCAP Sentry's CI/CD infrastructure for automated testing
 
 ## Overview
 
-[![CI Status](https://github.com/industrial-dave/PCAP-Sentry/actions/workflows/ci.yml/badge.svg)](https://github.com/industrial-dave/PCAP-Sentry/actions/workflows/ci.yml)
+[![CI Status](https://github.com/retr0verride/PCAP-Sentry/actions/workflows/ci.yml/badge.svg)](https://github.com/retr0verride/PCAP-Sentry/actions/workflows/ci.yml)
 
 PCAP Sentry uses **GitHub Actions** for continuous integration. Every push to `main` or `develop` and every pull request automatically triggers:
 
@@ -297,7 +297,7 @@ ruff check Python/ tests/
 ### View CI Results
 
 1. **On Pull Requests:** CI status appears as checks at the bottom of the PR
-2. **On Main Branch:** Visit [Actions tab](https://github.com/industrial-dave/PCAP-Sentry/actions)
+2. **On Main Branch:** Visit [Actions tab](https://github.com/retr0verride/PCAP-Sentry/actions)
 3. **Badges:** README.md shows real-time CI status badge
 
 ### Understanding CI Failures
@@ -341,13 +341,13 @@ ruff check Python/ tests/
 CI automatically uploads coverage reports to Codecov (if configured):
 - **When:** After test suite runs on Ubuntu + Python 3.12
 - **What:** Line coverage, branch coverage, function coverage
-- **Where:** View at `https://codecov.io/gh/industrial-dave/PCAP-Sentry`
+- **Where:** View at `https://codecov.io/gh/retr0verride/PCAP-Sentry`
 
 ### Coverage Badges
 
 Add to README.md:
 ```markdown
-[![codecov](https://codecov.io/gh/industrial-dave/PCAP-Sentry/branch/main/graph/badge.svg)](https://codecov.io/gh/industrial-dave/PCAP-Sentry)
+[![codecov](https://codecov.io/gh/retr0verride/PCAP-Sentry/branch/main/graph/badge.svg)](https://codecov.io/gh/retr0verride/PCAP-Sentry)
 ```
 
 ### Local Coverage Reports

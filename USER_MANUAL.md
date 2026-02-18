@@ -132,7 +132,7 @@ If using a local LLM, additional resources are needed on top of the base require
 
 ### Option 1: Installer (Recommended)
 
-1. Download **PCAP_Sentry_Setup.exe** from the [Releases](https://github.com/industrial-dave/PCAP-Sentry/releases) page.
+1. Download **PCAP_Sentry_Setup.exe** from the [Releases](https://github.com/retr0verride/PCAP-Sentry/releases) page.
 2. Run the installer and follow the on-screen prompts.
 3. Choose an installation directory (default: `C:\Program Files\PCAP Sentry`).
 4. Optionally create a desktop shortcut.
@@ -143,7 +143,7 @@ If using a local LLM, additional resources are needed on top of the base require
 
 1. Clone the repository:
    ```
-   git clone https://github.com/industrial-dave/PCAP-Sentry.git
+   git clone https://github.com/retr0verride/PCAP-Sentry.git
    ```
 2. Install Python 3.14 or newer from [python.org](https://www.python.org/).
 3. Create and activate a virtual environment:
@@ -437,7 +437,7 @@ PCAP Sentry automatically backs up the knowledge base when you close the applica
 
 PCAP Sentry releases can include an optional starter knowledge base file. You can use it as a base and then continue training with your own samples.
 
-1. Download `pcap_knowledge_base_offline.json` from the [Releases](https://github.com/industrial-dave/PCAP-Sentry/releases) page.
+1. Download `pcap_knowledge_base_offline.json` from the [Releases](https://github.com/retr0verride/PCAP-Sentry/releases) page.
 2. Open the **Knowledge Base** tab.
 3. Click **Restore** and select the downloaded JSON file.
 
@@ -1338,9 +1338,9 @@ The analysis engine evaluates numerous heuristic signals including:
 
 ### E. Getting Help & Contributing
 
-- **GitHub:** [github.com/industrial-dave/PCAP-Sentry](https://github.com/industrial-dave/PCAP-Sentry)
-- **Issues:** Report bugs or request features via [GitHub Issues](https://github.com/industrial-dave/PCAP-Sentry/issues)
-- **License:** GNU General Public License v3.0 - see [LICENSE](LICENSE) file. Copyright (C) 2026 industrial-dave
+- **GitHub:** [github.com/retr0verride/PCAP-Sentry](https://github.com/retr0verride/PCAP-Sentry)
+- **Issues:** Report bugs or request features via [GitHub Issues](https://github.com/retr0verride/PCAP-Sentry/issues)
+- **License:** GNU General Public License v3.0 - see [LICENSE](LICENSE) file. Copyright (C) 2026 retr0verride
 
 ---
 

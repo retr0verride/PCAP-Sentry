@@ -35,11 +35,11 @@ Before creating a bug report:
 - **Test with the latest release** to ensure the bug still exists
 - **Gather details**: version, OS, steps to reproduce, expected vs actual behavior
 
-Use the [Bug Report template](https://github.com/industrial-dave/PCAP-Sentry/issues/new?template=bug_report.yml) when filing issues.
+Use the [Bug Report template](https://github.com/retr0verride/PCAP-Sentry/issues/new?template=bug_report.yml) when filing issues.
 
 ### Suggesting Features
 
-Feature suggestions are welcome! Use the [Feature Request template](https://github.com/industrial-dave/PCAP-Sentry/issues/new?template=feature_request.yml).
+Feature suggestions are welcome! Use the [Feature Request template](https://github.com/retr0verride/PCAP-Sentry/issues/new?template=feature_request.yml).
 
 Consider:
 - How does it fit with PCAP Sentry's focus on **beginner education** in malware network traffic identification?
@@ -387,7 +387,7 @@ Contributors will be recognized in:
 ## Questions?
 
 - Check the [User Manual](USER_MANUAL.md)
-- Search [existing issues](https://github.com/industrial-dave/PCAP-Sentry/issues)
+- Search [existing issues](https://github.com/retr0verride/PCAP-Sentry/issues)
 - Open a new issue for clarification
 
 ## License

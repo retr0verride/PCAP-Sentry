@@ -10,7 +10,7 @@
 ![Platform](https://img.shields.io/badge/Platform-Windows-58a6ff?style=for-the-badge&logo=windows&logoColor=white&labelColor=0d1117)
 ![License](https://img.shields.io/badge/License-GPL_v3-58a6ff?style=for-the-badge&labelColor=0d1117)
 
-[![CI](https://github.com/industrial-dave/PCAP-Sentry/actions/workflows/ci.yml/badge.svg)](https://github.com/industrial-dave/PCAP-Sentry/actions/workflows/ci.yml) [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/11952/badge)](https://www.bestpractices.dev/projects/11952)
+[![CI](https://github.com/retr0verride/PCAP-Sentry/actions/workflows/ci.yml/badge.svg)](https://github.com/retr0verride/PCAP-Sentry/actions/workflows/ci.yml) [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/11952/badge)](https://www.bestpractices.dev/projects/11952)
 
 </div>
 
@@ -46,25 +46,25 @@
 ### Option 1: Windows Package Manager (winget) - Easiest
 
 ```powershell
-winget install industrial-dave.PCAP-Sentry
+winget install retr0verride.PCAP-Sentry
 ```
 
 **Note:** Pending review ([PR #340251](https://github.com/microsoft/winget-pkgs/pull/340251)). Once approved, this will be the fastest way to install.
 
 ### Option 2: Installer (Recommended)
 
-1. Download **PCAP_Sentry_Setup.exe** from the [Releases](https://github.com/industrial-dave/PCAP-Sentry/releases) page.
+1. Download **PCAP_Sentry_Setup.exe** from the [Releases](https://github.com/retr0verride/PCAP-Sentry/releases) page.
 2. Run the installer and follow the prompts.
 3. Launch PCAP Sentry from the Start Menu or desktop shortcut.
 4. To set up a local LLM, open **Preferences** and click **Manage LLM Servers…** to install Ollama, LM Studio, GPT4All, or Jan.
 5. On exit, PCAP Sentry will ask whether to stop any running local LLM server.
 
-Optional: download `pcap_knowledge_base_offline.json` from the [Releases](https://github.com/industrial-dave/PCAP-Sentry/releases) page and import it via **Knowledge Base** > **Restore** to use it as a starter KB.
+Optional: download `pcap_knowledge_base_offline.json` from the [Releases](https://github.com/retr0verride/PCAP-Sentry/releases) page and import it via **Knowledge Base** > **Restore** to use it as a starter KB.
 
 ### Option 3: Run from Source
 
 ```bash
-git clone https://github.com/industrial-dave/PCAP-Sentry.git
+git clone https://github.com/retr0verride/PCAP-Sentry.git
 cd PCAP-Sentry
 python -m venv .venv
 .venv\Scripts\activate.bat
@@ -195,9 +195,9 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
 - Security vulnerability reporting
 
 Quick links:
-- [Report a Bug](https://github.com/industrial-dave/PCAP-Sentry/issues/new?template=bug_report.yml)
-- [Request a Feature](https://github.com/industrial-dave/PCAP-Sentry/issues/new?template=feature_request.yml)
-- [View All Issues](https://github.com/industrial-dave/PCAP-Sentry/issues)
+- [Report a Bug](https://github.com/retr0verride/PCAP-Sentry/issues/new?template=bug_report.yml)
+- [Request a Feature](https://github.com/retr0verride/PCAP-Sentry/issues/new?template=feature_request.yml)
+- [View All Issues](https://github.com/retr0verride/PCAP-Sentry/issues)
 
 ## ⚠️ Disclaimer
 
@@ -283,4 +283,4 @@ This project is licensed under the GNU General Public License v3.0 - see the [LI
 
 **NO WARRANTY:** This program comes with ABSOLUTELY NO WARRANTY. This is free software, and you are welcome to redistribute it under certain conditions. See LICENSE for details.
 
-Copyright (C) 2026 industrial-dave
+Copyright (C) 2026 retr0verride

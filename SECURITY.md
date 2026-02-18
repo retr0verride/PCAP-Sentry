@@ -41,7 +41,7 @@ We are committed to working with security researchers to address vulnerabilities
 ### Preferred Method: Private Security Advisory
 
 Use GitHub's private security advisory feature:
-1. Go to the [Security tab](https://github.com/industrial-dave/PCAP-Sentry/security)
+1. Go to the [Security tab](https://github.com/retr0verride/PCAP-Sentry/security)
 2. Click **Report a vulnerability**
 3. Fill out the advisory form with:
    - Description of the vulnerability

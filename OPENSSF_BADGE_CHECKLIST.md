@@ -7,7 +7,7 @@ This document tracks PCAP Sentry's readiness for the [OpenSSF Best Practices Bad
 1. Visit https://bestpractices.coreinfrastructure.org/
 2. Sign in with your GitHub account
 3. Click "Add Project" 
-4. Enter: `https://github.com/industrial-dave/PCAP-Sentry`
+4. Enter: `https://github.com/retr0verride/PCAP-Sentry`
 5. Complete the self-certification questionnaire
 6. Once all "MUST" criteria are met, you'll earn the "passing" badge
 7. ✅ **Badge Updated**: Project ID **11952** now active in README.md
