@@ -9604,8 +9604,8 @@ class PCAPSentryApp:
                 # If any succeed, return True immediately
                 endpoints = [
                     "https://www.cloudflare.com",  # Fastest (global CDN)
-                    "https://www.google.com",      # Very fast
-                    "https://www.microsoft.com",   # Slightly slower
+                    "https://www.google.com",  # Very fast
+                    "https://www.microsoft.com",  # Slightly slower
                 ]
                 for url in endpoints:
                     try:
@@ -9631,7 +9631,9 @@ class PCAPSentryApp:
                         self.root_title = self._get_window_title()
                         self.root.title(self.root_title)
                         self._update_online_header_indicator()
-                        self.status_var.set("No internet detected (checked 3 endpoints) — offline mode enabled automatically.")
+                        self.status_var.set(
+                            "No internet detected (checked 3 endpoints) — offline mode enabled automatically."
+                        )
                 except Exception:
                     pass  # Don't crash startup if we can't set offline mode
 
