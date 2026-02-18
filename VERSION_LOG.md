@@ -79,6 +79,9 @@
 
 
 
+
+## 2026.02.17-17 - 2026-02-17
+- Minor tweaks and improvements
 ## 2026.02.17-17 - 2026-02-17
 - **UX:** Simplified analysis progress messages (removed "Phase X:" prefix for clearer status updates)
 - **UX:** Removed success popup when saving LLM settings (dialog now saves silently)
