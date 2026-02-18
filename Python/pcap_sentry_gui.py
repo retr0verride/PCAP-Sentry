@@ -10108,14 +10108,16 @@ class PCAPSentryApp:
             if provider == "disabled" and endpoint and detected_provider != "disabled":
                 should_enable = True
                 print(f"[LLM] Found {detected_provider} endpoint while disabled, attempting to enable")
-                sys.stdout.flush()
+                if sys.stdout:
+                    sys.stdout.flush()
 
             # If no model set or model doesn't match provider, use default
             needs_fix = False
             if not current_model:
                 needs_fix = True
                 print(f"[LLM] No model set, using default for {detected_provider}")
-                sys.stdout.flush()
+                if sys.stdout:
+                    sys.stdout.flush()
             else:
                 # Check if current model matches expected patterns
                 expected_patterns = provider_patterns.get(detected_provider, [])
@@ -10125,14 +10127,16 @@ class PCAPSentryApp:
                 if not model_valid:
                     needs_fix = True
                     print(f"[LLM] Model '{current_model}' incompatible with {detected_provider} endpoint")
-                    sys.stdout.flush()
+                    if sys.stdout:
+                        sys.stdout.flush()
 
             # Apply fix if needed
             if needs_fix or should_enable:
                 default_model = default_models.get(detected_provider, "")
                 if default_model and needs_fix:
                     print(f"[LLM] Auto-correcting to '{default_model}' for {detected_provider}")
-                    sys.stdout.flush()
+                    if sys.stdout:
+                        sys.stdout.flush()
                     self.llm_model_var.set(default_model)
 
                 # Enable LLM if it was disabled but has valid endpoint
@@ -10141,7 +10145,8 @@ class PCAPSentryApp:
                     if not current_model or needs_fix:
                         self.llm_model_var.set(default_model)
                     print(f"[LLM] Enabled {detected_provider} with model {self.llm_model_var.get()}")
-                    sys.stdout.flush()
+                    if sys.stdout:
+                        sys.stdout.flush()
 
                 self._save_settings_from_vars()
                 # Update status to show it's ready
@@ -10151,7 +10156,8 @@ class PCAPSentryApp:
             import sys
 
             print(f"[LLM] Validation error: {e}")
-            sys.stdout.flush()
+            if sys.stdout:
+                sys.stdout.flush()
             pass  # Don't crash if validation fails
 
     def _auto_detect_llm(self):
