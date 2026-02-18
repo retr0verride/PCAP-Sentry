@@ -84,7 +84,11 @@
 
 
 ## 2026.02.17-20 - 2026-02-17
-- Minor tweaks and improvements
+- **Fix:** Online/offline indicator now syncs with title bar when auto-detecting offline mode at startup
+- **UX:** Improved internet connectivity detection - tests 3 endpoints sequentially (Cloudflare, Google, Microsoft)
+- **UX:** Auto-enable offline mode only if all 3 endpoints fail (prevents false positives from firewall/proxy)
+- **UX:** Early exit on first successful endpoint check for faster startup
+
 ## 2026.02.17-19 - 2026-02-17
 - **Performance:** Pre-load Scapy library in background on startup (eliminates 20+ second delay on first analysis)
 - **Performance:** Cache Scapy and TLS imports for instant access during analysis
