@@ -355,7 +355,7 @@ def _is_valid_model_name(name: str) -> bool:
     return bool(name and _MODEL_NAME_RE.fullmatch(name))
 
 
-_EMBEDDED_VERSION = "2026.02.18-7"  # Stamped by update_version.ps1 at build time
+_EMBEDDED_VERSION = "2026.02.18-8"  # Stamped by update_version.ps1 at build time
 
 
 def _compute_app_version() -> str:
@@ -3277,6 +3277,7 @@ class PCAPSentryApp:
         # Restore window geometry from last session
         saved_geometry = self.settings.get("window_geometry", "1200x950")
         self.root.geometry(saved_geometry)
+        self.root.minsize(900, 700)
 
         self.theme_var = tk.StringVar(value=self.settings.get("theme", "system"))
         self.colors = {}
@@ -3379,6 +3380,7 @@ class PCAPSentryApp:
         self.chat_entry = None
         self.chat_send_button = None
         self.chat_clear_button = None
+        self.chat_disabled_label = None
         self.chat_disabled_var = tk.StringVar(value="")
 
         # Extracted Info tab state
@@ -4014,7 +4016,7 @@ class PCAPSentryApp:
         notebook.add(self.analyze_tab, text="  \U0001f50d  Analyze  ")
         notebook.add(self.train_tab, text="  \U0001f9e0  Train  ")
         notebook.add(self.kb_tab, text="  \U0001f4da  Knowledge Base  ")
-        notebook.add(self.chat_tab, text="  \U0001f4ac  Chat  ")
+        notebook.add(self.chat_tab, text="  \U0001f4ac  PARRY  ")
 
         self._build_train_tab()
         self._build_analyze_tab()
@@ -4515,6 +4517,7 @@ class PCAPSentryApp:
             window.title("Update Available")
             window.resizable(True, True)
             window.geometry("600x450")
+            window.minsize(520, 380)
             window.configure(bg=self.colors["bg"])
             self._set_dark_titlebar(window)
 
@@ -4568,6 +4571,7 @@ class PCAPSentryApp:
                 window.title("Check for Updates")
                 window.resizable(True, True)
                 window.geometry("550x350")
+                window.minsize(480, 300)
                 window.configure(bg=self.colors["bg"])
                 self._set_dark_titlebar(window)
 
@@ -4882,18 +4886,23 @@ class PCAPSentryApp:
             self.ioc_path_var.set("")
 
     def _build_chat_tab(self) -> None:
-        container = ttk.Frame(self.chat_tab, padding=14)
+        container = ttk.Frame(self.chat_tab, padding=(10, 6, 10, 10))
         container.pack(fill=tk.BOTH, expand=True)
 
         header = ttk.Frame(container)
-        header.pack(fill=tk.X, pady=(0, 8))
-        ttk.Label(header, text="Chat Assistant", style="Heading.TLabel").pack(side=tk.LEFT)
+        header.pack(fill=tk.X, pady=(0, 4))
+        ttk.Label(header, text="PARRY", style="Heading.TLabel").pack(side=tk.LEFT)
         self._help_icon(
-            header, "Ask questions about the current analysis or general usage. Chat uses the configured LLM provider."
+            header,
+            "PARRY — A 1972 AI so convincingly paranoid that psychiatrists couldn't tell it from a real patient.\n\n"
+            "This PARRY has no memory of any of that, is suspicious of your packets, and may occasionally "
+            "imply that your DNS traffic is part of a larger pattern. He is almost certainly right.\n\n"
+            "Ask questions about the current analysis, packet data, threats, or general network security. "
+            "Chat uses the configured LLM provider.",
         )
 
-        disabled_label = ttk.Label(container, textvariable=self.chat_disabled_var, style="Hint.TLabel")
-        disabled_label.pack(anchor=tk.W, pady=(0, 6))
+        self.chat_disabled_label = ttk.Label(container, textvariable=self.chat_disabled_var, style="Hint.TLabel")
+        # Only shown when LLM is disabled — populated by _sync_chat_controls
 
         self.chat_text = tk.Text(container, height=18, wrap=tk.WORD)
         self._style_text(self.chat_text)
@@ -4921,8 +4930,12 @@ class PCAPSentryApp:
         enabled: bool = self._llm_is_enabled()
         if not enabled:
             self.chat_disabled_var.set("Chat is disabled. Configure an LLM provider in File → LLM Settings.")
+            if self.chat_disabled_label is not None:
+                self.chat_disabled_label.pack(anchor=tk.W, pady=(0, 4), before=self.chat_text)
         else:
             self.chat_disabled_var.set("")
+            if self.chat_disabled_label is not None:
+                self.chat_disabled_label.pack_forget()
 
         state: str = "normal" if enabled else "disabled"
         if self.chat_entry is not None:
@@ -4936,12 +4949,12 @@ class PCAPSentryApp:
         if self.chat_text is None:
             return
         self.chat_text.configure(state=tk.NORMAL)
-        prefix: str = "User: " if role == "user" else "Assistant: "
+        prefix: str = "User: " if role == "user" else "PARRY: "
         tag: str = "user" if role == "user" else "assistant"
         if role == "system":
             prefix = "System: "
             tag = "system"
-        self.chat_text.insert(tk.END, f"{prefix}{text}\n", tag)
+        self.chat_text.insert(tk.END, f"{prefix}{text}\n\n", tag)
         self.chat_text.see(tk.END)
         self.chat_text.configure(state=tk.DISABLED)
 
@@ -4985,18 +4998,61 @@ class PCAPSentryApp:
             "top_tls_sni": self.current_stats.get("top_tls_sni", []),
         }
 
+    # Default endpoints for named cloud providers
+    _PROVIDER_ENDPOINTS: dict = {
+        "openai": "https://api.openai.com",
+        "groq": "https://api.groq.com/openai",
+        "deepseek_api": "https://api.deepseek.com",
+        "mistral_api": "https://api.mistral.ai",
+        "together": "https://api.together.xyz",
+        "openrouter": "https://openrouter.ai/api",
+        "perplexity": "https://api.perplexity.ai",
+    }
+
+    _PARRY_SYSTEM_PROMPT: str = (
+        "You are PARRY, the network security analyst for PCAP Sentry. "
+        "You are modeled after the 1972 Stanford AI PARRY, which simulated paranoid thinking so convincingly "
+        "that psychiatrists couldn't distinguish it from real patients. "
+        "You are deeply suspicious of unusual network behavior, convinced that anomalies are never coincidences, "
+        "and occasionally dark about what the packets imply. "
+        "Despite this, your technical analysis is always accurate, precise, and genuinely helpful. "
+        "You may be unhinged, but you are never wrong. Answer clearly but with personality."
+    )
+
     def _request_llm_chat(self, user_message):
         provider: str = self.llm_provider_var.get().strip().lower()
+
         if provider == "ollama":
             return self._request_ollama_chat(user_message)
+
+        # Build PARRY messages payload (shared by all OpenAI-compatible providers)
+        parry_messages = [
+            {"role": "system", "content": self._PARRY_SYSTEM_PROMPT},
+            {"role": "user", "content": self._build_openai_chat_prompt(user_message)},
+        ]
+
         if provider == "openai_compatible":
-            return self._request_openai_compat_chat(
-                [
-                    {"role": "system", "content": "You are a PCAP Sentry assistant. Answer clearly and concisely."},
-                    {"role": "user", "content": self._build_openai_chat_prompt(user_message)},
-                ]
-            )
-        raise ValueError(f"Unsupported LLM provider: {provider}")
+            return self._request_openai_compat_chat(parry_messages)
+
+        # Named cloud providers that use OpenAI-compatible APIs
+        _openai_compat_providers = set(self._PROVIDER_ENDPOINTS.keys())
+        if provider in _openai_compat_providers:
+            # Use stored endpoint if set, otherwise fall back to known default
+            endpoint: str = self.llm_endpoint_var.get().strip()
+            if not endpoint:
+                endpoint = self._PROVIDER_ENDPOINTS[provider]
+                self.llm_endpoint_var.set(endpoint)
+            return self._request_openai_compat_chat(parry_messages)
+
+        # Anthropic — native API (not OpenAI-compatible)
+        if provider == "anthropic":
+            return self._request_anthropic_chat(parry_messages)
+
+        # Gemini — native API
+        if provider in ("gemini", "google"):
+            return self._request_gemini_chat(user_message)
+
+        raise ValueError(f"Unsupported LLM provider for chat: {provider}")
 
     def _request_ollama_chat(self, user_message):
         endpoint: str = self._normalize_ollama_endpoint(self.llm_endpoint_var.get() or "http://localhost:11434")
@@ -5008,8 +5064,8 @@ class PCAPSentryApp:
             {
                 "role": "system",
                 "content": (
-                    "You are a PCAP Sentry assistant. Answer clearly and concisely. "
-                    "If no analysis is loaded, say so and answer in general terms.\n\n"
+                    f"{self._PARRY_SYSTEM_PROMPT}\n\n"
+                    "If no analysis is loaded, say so — darkly — and answer in general terms.\n\n"
                     f"Context JSON:\n{json.dumps(context, indent=2)}"
                 ),
             },
@@ -5063,7 +5119,7 @@ class PCAPSentryApp:
     _LLM_MAX_RESPONSE_BYTES = 10 * 1024 * 1024  # 10 MB safety cap
 
     @staticmethod
-    def _llm_http_request(url, data, timeout=30, max_retries=2, api_key=""):
+    def _llm_http_request(url, data, timeout=30, max_retries=2, api_key="", extra_headers=None):
         """Send an HTTP POST to an LLM endpoint with automatic retry on transient errors."""
         # Only allow http:// and https:// schemes (block file://, ftp://, etc.)
         url_lower = url.lower()
@@ -5088,6 +5144,8 @@ class PCAPSentryApp:
             headers: dict[str, str] = {"Content-Type": "application/json"}
             if api_key:
                 headers["Authorization"] = f"Bearer {api_key}"
+            if extra_headers:
+                headers.update(extra_headers)
             req = urllib.request.Request(url, data=data, headers=headers)
             try:
                 with _safe_urlopen(req, timeout=timeout) as resp:
@@ -5138,6 +5196,66 @@ class PCAPSentryApp:
         if not content:
             raise ValueError("LLM response was empty.")
         return content.strip()
+
+    def _request_anthropic_chat(self, messages) -> str:
+        """Send chat messages to Anthropic Claude API with PARRY's personality."""
+        api_key: str = self.llm_api_key_var.get().strip()
+        model: str = self.llm_model_var.get().strip() or "claude-3-5-sonnet-20241022"
+        if not api_key:
+            raise ValueError("Anthropic API key is required. Set it in File → LLM Settings.")
+
+        # Anthropic separates the system prompt from messages
+        system_content: str = next(
+            (m["content"] for m in messages if m.get("role") == "system"), self._PARRY_SYSTEM_PROMPT
+        )
+        user_messages = [m for m in messages if m.get("role") != "system"]
+
+        url = "https://api.anthropic.com/v1/messages"
+        payload = {
+            "model": model,
+            "system": system_content,
+            "messages": user_messages,
+            "max_tokens": 1024,
+        }
+        headers_extra = {
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+        }
+        data: bytes = json.dumps(payload).encode("utf-8")
+        raw = self._llm_http_request(url, data, timeout=30, extra_headers=headers_extra)
+        response = json.loads(raw)
+        content_blocks = response.get("content", [])
+        if not content_blocks:
+            raise ValueError("Anthropic response was empty.")
+        return content_blocks[0].get("text", "").strip()
+
+    def _request_gemini_chat(self, user_message: str) -> str:
+        """Send chat messages to Google Gemini API with PARRY's personality."""
+        api_key: str = self.llm_api_key_var.get().strip()
+        model: str = self.llm_model_var.get().strip() or "gemini-2.0-flash-exp"
+        endpoint: str = self.llm_endpoint_var.get().strip()
+        if not api_key and not endpoint:
+            raise ValueError("Gemini API key is required. Set it in File → LLM Settings.")
+
+        # Support both native Gemini and Gemini via OpenAI-compatible endpoint
+        if endpoint and "openai" in endpoint.lower():
+            parry_messages = [
+                {"role": "system", "content": self._PARRY_SYSTEM_PROMPT},
+                {"role": "user", "content": self._build_openai_chat_prompt(user_message)},
+            ]
+            return self._request_openai_compat_chat(parry_messages)
+
+        base_url = endpoint.rstrip("/") if endpoint else "https://generativelanguage.googleapis.com"
+        url = f"{base_url}/v1beta/models/{model}:generateContent?key={api_key}"
+        prompt_text = f"{self._PARRY_SYSTEM_PROMPT}\n\n{self._build_openai_chat_prompt(user_message)}"
+        payload = {"contents": [{"parts": [{"text": prompt_text}]}]}
+        data: bytes = json.dumps(payload).encode("utf-8")
+        raw = self._llm_http_request(url, data, timeout=30)
+        response = json.loads(raw)
+        try:
+            return response["candidates"][0]["content"]["parts"][0]["text"].strip()
+        except (KeyError, IndexError) as exc:
+            raise ValueError(f"Unexpected Gemini response format: {exc}") from exc
 
     def _send_chat_message(self) -> None:
         if not self._llm_is_enabled():
@@ -7826,6 +7944,8 @@ class PCAPSentryApp:
         review_window = tk.Toplevel(self.root)
         review_window.title("Review Unsure Items")
         review_window.geometry("900x600")
+        review_window.resizable(True, True)
+        review_window.minsize(700, 480)
         review_window.transient(self.root)
 
         # Header
@@ -8805,7 +8925,9 @@ class PCAPSentryApp:
 
         window = tk.Toplevel(self.root)
         window.title("Manage Ollama Models")
-        window.resizable(False, False)
+        window.resizable(True, True)
+        window.geometry("620x520")
+        window.minsize(520, 420)
         window.configure(bg=self.colors["bg"])
         self._set_dark_titlebar(window)
 
@@ -9093,7 +9215,9 @@ class PCAPSentryApp:
         """Show a dialog to pick and download an Ollama model right after install."""
         window = tk.Toplevel(self.root)
         window.title("Download Ollama Model")
-        window.resizable(False, False)
+        window.resizable(True, True)
+        window.geometry("520x400")
+        window.minsize(480, 360)
         window.configure(bg=self.colors["bg"])
         self._set_dark_titlebar(window)
 
@@ -9353,7 +9477,9 @@ class PCAPSentryApp:
 
         window = tk.Toplevel(self.root)
         window.title("Manage LLM Servers")
-        window.resizable(False, False)
+        window.resizable(True, True)
+        window.geometry("560x440")
+        window.minsize(480, 380)
         window.configure(bg=self.colors["bg"])
         self._set_dark_titlebar(window)
 
@@ -10164,24 +10290,41 @@ class PCAPSentryApp:
             if provider in ("disabled", ""):
                 return
 
-            # Skip cloud services (non-localhost endpoints)
-            if endpoint:
-                # Parse endpoint to check if it's local
-                from urllib.parse import urlparse
-
-                parsed = urlparse(endpoint)
-                hostname: str = parsed.hostname or ""
-                is_local: bool = (
-                    hostname in ("localhost", "127.0.0.1", "")
-                    or hostname.startswith("192.168.")
-                    or hostname.startswith("10.")
-                )
-                if not is_local:
-                    return  # Skip cloud/remote endpoints
-
             # If LLM is configured with local provider, verify it works and update model if needed
             if provider in ("ollama", "openai_compatible"):
-                self._verify_and_update_llm_at_startup()
+                # Check if endpoint is local or remote
+                if endpoint:
+                    from urllib.parse import urlparse
+
+                    parsed = urlparse(endpoint)
+                    hostname: str = parsed.hostname or ""
+                    is_local: bool = (
+                        hostname in ("localhost", "127.0.0.1", "")
+                        or hostname.startswith("192.168.")
+                        or hostname.startswith("10.")
+                    )
+                    if is_local:
+                        self._verify_and_update_llm_at_startup()
+                    else:
+                        self._verify_llm_at_startup()
+                else:
+                    self._verify_and_update_llm_at_startup()
+                return
+
+            # For cloud/remote providers, verify connectivity at startup
+            _cloud_providers: set[str] = {
+                "openai",
+                "gemini",
+                "anthropic",
+                "deepseek_api",
+                "groq",
+                "mistral_api",
+                "together",
+                "openrouter",
+                "perplexity",
+            }
+            if provider in _cloud_providers or endpoint:
+                self._verify_llm_at_startup()
                 return
 
             # Skip auto-detect if user explicitly disabled it
@@ -10290,12 +10433,26 @@ class PCAPSentryApp:
 
     def _verify_llm_at_startup(self) -> None:
         """Verify that a configured LLM is reachable at startup."""
+        # Providers that require an API key to be considered configured
+        _api_key_providers: set[str] = {
+            "openai",
+            "gemini",
+            "anthropic",
+            "deepseek_api",
+            "groq",
+            "mistral_api",
+            "together",
+            "openrouter",
+            "perplexity",
+        }
+
         try:
 
             def worker() -> bool:
                 try:
                     provider: str = self.llm_provider_var.get().strip().lower()
                     endpoint: str = self.llm_endpoint_var.get().strip()
+                    api_key: str = self.llm_api_key_var.get().strip()
 
                     if provider == "ollama":
                         if not endpoint:
@@ -10303,11 +10460,16 @@ class PCAPSentryApp:
                         # Try to probe Ollama
                         self._probe_ollama(endpoint)
                         return True
+
                     if provider == "openai_compatible" and endpoint:
                         # Try to probe OpenAI-compatible endpoint
-                        api_key: str = self.llm_api_key_var.get().strip()
-                        self._probe_openai_compat(endpoint, api_key=api_key)
-                        return True
+                        model_id = self._probe_openai_compat(endpoint, api_key=api_key)
+                        return bool(model_id)
+
+                    # Cloud providers — check that the required fields are present
+                    if provider in _api_key_providers:
+                        return bool(api_key)
+
                 except Exception:
                     pass
                 return False
@@ -10318,7 +10480,7 @@ class PCAPSentryApp:
                     if self._shutting_down or not self.root or not self.root.winfo_exists():
                         return
                     if success:
-                        self._set_llm_test_status("Auto", self.colors.get("accent", "#58a6ff"))
+                        self._set_llm_test_status("Ready", self.colors.get("accent", "#58a6ff"))
                     else:
                         self._set_llm_test_status("Not tested", self.colors.get("muted", "#8b949e"))
                 except Exception:
@@ -12620,6 +12782,8 @@ class PCAPSentryApp:
         window = tk.Toplevel(self.root)
         window.title("PCAP Charts")
         window.geometry("1000x800")
+        window.resizable(True, True)
+        window.minsize(800, 600)
         window.configure(bg=self.colors["bg"])
         self._set_dark_titlebar(window)
 

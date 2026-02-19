@@ -90,8 +90,17 @@
 
 
 
+
+## 2026.02.18-8 - 2026-02-18
+- **UX:** Rename Chat tab and assistant identity to **PARRY** (with updated tooltip/persona)
+- **UX:** Add minimum window sizes to main window (900×700) and update dialogs
+- **Fix:** Chat disabled label now uses pack/pack_forget instead of textvariable to prevent layout artifacts
+- **Fix:** Chat messages now include a trailing blank line for readability
+- **Refactor:** Introduce `_PROVIDER_ENDPOINTS` dict and `_PARRY_SYSTEM_PROMPT` constant
+
 ## 2026.02.18-7 - 2026-02-18
 - Fix: LLM model list refreshes on endpoint edit and Disabled toggle
+
 ## 2026.02.18-5 - 2026-02-18
 - Minor tweaks and improvements
 ## 2026.02.18-4 - 2026-02-18
