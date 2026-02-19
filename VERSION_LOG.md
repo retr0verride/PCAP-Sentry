@@ -1,5 +1,8 @@
 # Version Log
 
+## 2026.02.19-10 - 2026-02-19
+- **Fix:** LLM settings (and all user settings) lost after update — `_get_app_data_dir()` was storing data in `<exe_dir>\data\` whenever the install directory was writable (always true for dev `dist\` builds). Each clean rebuild created a fresh empty `dist\PCAP_Sentry\data\` folder, discarding `settings.json`. Changed to always use `%LOCALAPPDATA%\PCAP_Sentry\` so settings, knowledge base, and model survive any EXE replacement or directory change
+
 ## 2026.02.19-9 - 2026-02-19
 - **Fix:** `AttributeError` on `education_questions_frame` — re-initialize attribute to `None` in `__init__` and guard `_populate_contextual_questions` to prevent crash when the Education tab has not yet been built
 - **Performance:** Logo spin animation now pre-generates frames in a background thread (`LogoFrameGen`) at startup, eliminating the main-thread stutter caused by 36× LANCZOS PIL resizes firing synchronously on the first animation tick; `_animate_logo_spin` reschedules non-blocking while frames are pending; `PhotoImage` finalization always happens on the main thread for Tkinter safety

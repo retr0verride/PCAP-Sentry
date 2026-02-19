@@ -745,7 +745,7 @@ def _is_valid_model_name(name: str) -> bool:
     return bool(name and _MODEL_NAME_RE.fullmatch(name))
 
 
-_EMBEDDED_VERSION = "2026.02.19-9"  # Stamped by update_version.ps1 at build time
+_EMBEDDED_VERSION = "2026.02.19-10"  # Stamped by update_version.ps1 at build time
 
 
 def _compute_app_version() -> str:
@@ -1012,24 +1012,32 @@ APP_DATA_DIR = None
 def _get_app_data_dir() -> str:
     global APP_DATA_FALLBACK_NOTICE
     global APP_DATA_DIR
-    fallback_notice = None
-    if getattr(sys, "frozen", False):
-        base_dir: str = _get_app_base_dir()
-        data_dir: str = os.path.join(base_dir, "data")
-        if _is_writable_dir(base_dir):
-            try:
-                os.makedirs(data_dir, exist_ok=True)
-                APP_DATA_DIR = data_dir
-                return data_dir
-            except OSError:
-                fallback_notice = "App data folder in install directory is not writable."
-
+    # Always store user data in %LOCALAPPDATA%\PCAP_Sentry\ regardless of where
+    # the EXE lives.  Keeping data next to the EXE meant settings were lost on
+    # every fresh build / reinstall because the dist\ folder changed each time.
     base_dir: str = os.getenv("LOCALAPPDATA") or os.getenv("APPDATA") or os.path.expanduser("~")
     data_dir: str = os.path.join(base_dir, "PCAP_Sentry")
     os.makedirs(data_dir, exist_ok=True)
     APP_DATA_DIR = data_dir
-    if fallback_notice:
-        APP_DATA_FALLBACK_NOTICE = f"{fallback_notice} Using {data_dir} instead."
+
+    # One-time migration: if LOCALAPPDATA folder has no settings.json but the
+    # old exe-relative data\ folder does, copy everything across automatically.
+    if getattr(sys, "frozen", False):
+        new_settings = os.path.join(data_dir, "settings.json")
+        if not os.path.exists(new_settings):
+            old_data_dir = os.path.join(_get_app_base_dir(), "data")
+            old_settings = os.path.join(old_data_dir, "settings.json")
+            if os.path.isdir(old_data_dir) and os.path.isfile(old_settings):
+                try:
+                    import shutil as _shutil
+                    for _item in os.listdir(old_data_dir):
+                        _src = os.path.join(old_data_dir, _item)
+                        _dst = os.path.join(data_dir, _item)
+                        if os.path.isfile(_src) and not os.path.exists(_dst):
+                            _shutil.copy2(_src, _dst)
+                except Exception:
+                    pass  # Migration is best-effort; never crash startup
+
     return data_dir
 
 

@@ -209,8 +209,8 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pcap-sentry-exe
-          path: dist/PCAP_Sentry/PCAP_Sentry.exe
+          name: pcap-sentry-dist
+          path: dist/PCAP_Sentry/
           retention-days: 7
   
   # Gate 5: OpenSSF compliance check
@@ -310,3 +310,104 @@ jobs:
           echo "- ✅ OpenSSF best practices compliance" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Status: Ready for deployment** 🚀" >> $GITHUB_STEP_SUMMARY
+
+  # Final step: build the Inno Setup installer and publish the GitHub Release
+  create-release:
+    name: Create GitHub Release
+    runs-on: windows-latest
+    needs: [deployment-ready, validate-build]
+    # Only create a release when triggered by a version tag
+    if: |
+      always() &&
+      needs.deployment-ready.result == 'success' &&
+      needs.validate-build.result == 'success' &&
+      startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download dist artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pcap-sentry-dist
+          path: dist/PCAP_Sentry
+
+      - name: Download VC++ redistributable
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File download_vcredist.ps1
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          $url = 'https://files.jrsoftware.org/is/6/innosetup-6.3.3.exe'
+          $out = "$env:TEMP\innosetup.exe"
+          Invoke-WebRequest -Uri $url -OutFile $out -UseBasicParsing
+          Start-Process -FilePath $out -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART' -Wait
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          & $iscc installer\PCAP_Sentry.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (!(Test-Path 'dist\PCAP_Sentry_Setup.exe')) {
+            Write-Error 'Installer not found after ISCC build'
+            exit 1
+          }
+          $size = [math]::Round((Get-Item 'dist\PCAP_Sentry_Setup.exe').Length / 1MB, 1)
+          Write-Host "Installer built: $size MB"
+
+      - name: Generate SHA256 checksum
+        id: checksum
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash 'dist\PCAP_Sentry_Setup.exe' -Algorithm SHA256).Hash.ToLower()
+          "$hash  PCAP_Sentry_Setup.exe" | Out-File -Encoding utf8 'dist\SHA256SUMS.txt' -Append
+          Write-Host "SHA256: $hash"
+
+      - name: Resolve release tag
+        id: tag
+        shell: bash
+        run: echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Read version log entry
+        id: notes
+        shell: pwsh
+        run: |
+          $tag = '${{ steps.tag.outputs.tag }}'
+          $ver = $tag -replace '^v',''
+          $content = Get-Content VERSION_LOG.md -Raw
+          # Extract the first section matching this version
+          if ($content -match "(?s)## $([regex]::Escape($ver)) -.*?(?=\n## |\z)") {
+            $notes = $Matches[0].Trim()
+          } else {
+            $notes = "Release $tag"
+          }
+          # Write to a file to avoid multiline env var issues
+          $notes | Out-File -Encoding utf8 release_notes.txt
+          Write-Host "Release notes written."
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $tag = '${{ steps.tag.outputs.tag }}'
+          $notes = Get-Content release_notes.txt -Raw
+          # Create draft=false, prerelease=false release (update if it already exists)
+          $exists = gh release view $tag --repo $env:GITHUB_REPOSITORY 2>&1
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Release $tag already exists — uploading assets"
+          } else {
+            gh release create $tag `
+              --repo $env:GITHUB_REPOSITORY `
+              --title "PCAP Sentry $tag" `
+              --notes $notes
+          }
+          gh release upload $tag `
+            dist\PCAP_Sentry_Setup.exe `
+            dist\SHA256SUMS.txt `
+            --repo $env:GITHUB_REPOSITORY --clobber
+          Write-Host "Assets uploaded to release $tag"
