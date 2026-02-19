@@ -1,5 +1,9 @@
 # Version Log
 
+## 2026.02.19-9 - 2026-02-19
+- **Fix:** `AttributeError` on `education_questions_frame` — re-initialize attribute to `None` in `__init__` and guard `_populate_contextual_questions` to prevent crash when the Education tab has not yet been built
+- **Performance:** Logo spin animation now pre-generates frames in a background thread (`LogoFrameGen`) at startup, eliminating the main-thread stutter caused by 36× LANCZOS PIL resizes firing synchronously on the first animation tick; `_animate_logo_spin` reschedules non-blocking while frames are pending; `PhotoImage` finalization always happens on the main thread for Tkinter safety
+
 
 
 

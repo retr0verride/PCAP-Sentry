@@ -1,6 +1,6 @@
 #define VCRedistPath "..\assets\vcredist_x64.exe"
 
-#define AppVer "2026.02.19-8"
+#define AppVer "2026.02.19-9"
 
 [Setup]
 AppId={{91EFC8EF-E9F8-42FC-9D82-479C14FBE67D}
