@@ -50,11 +50,14 @@ if errorlevel 1 (
 )
 echo.
 
-if defined NO_BUMP (
-	call build_exe.bat -NoBump -Notes "!BUILD_NOTES!"
-) else (
-	call build_exe.bat -Notes "!BUILD_NOTES!"
-)
+REM Avoid calling a label-heavy batch from inside an else() compound block
+ REM (CMD GOTO inside a called script can break the else-block context).
+if not defined NO_BUMP goto :build_exe_normal
+call build_exe.bat -NoBump -Notes "!BUILD_NOTES!"
+goto :after_exe_build
+:build_exe_normal
+call build_exe.bat -Notes "!BUILD_NOTES!"
+:after_exe_build
 if errorlevel 1 exit /b 1
 
 set "PCAP_NO_BUMP=1"
