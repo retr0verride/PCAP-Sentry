@@ -32,32 +32,29 @@ goto :parse_args
 REM Run pre-deployment validation checks
 echo ==== Running Pre-Deployment Validation ====
 powershell -NoProfile -ExecutionPolicy Bypass -File "pre_deploy_checks.ps1"
-if errorlevel 1 (
-	echo.
-	echo ============================================
-	echo PRE-DEPLOYMENT CHECKS FAILED
-	echo ============================================
-	echo One or more quality gates failed.
-	echo Review the errors above and fix them before deploying.
-	echo.
-	echo To skip checks (NOT RECOMMENDED):
-	echo   set PCAP_SKIP_CHECKS=1
-	echo   build_release.bat
-	echo ============================================
-	if not defined PCAP_SKIP_CHECKS exit /b 1
-	echo WARNING: Proceeding with deployment despite failed checks!
-	timeout /t 5
-)
+set "_predeploy_rc=%errorlevel%"
+if %_predeploy_rc% equ 0 goto :predeploy_ok
+echo.
+echo ============================================
+echo PRE-DEPLOYMENT CHECKS FAILED
+echo ============================================
+echo One or more quality gates failed.
+echo Review the errors above and fix them before deploying.
+echo.
+echo To skip checks (NOT RECOMMENDED):
+echo   set PCAP_SKIP_CHECKS=1
+echo   build_release.bat
+echo ============================================
+if not defined PCAP_SKIP_CHECKS exit /b 1
+echo WARNING: Proceeding with deployment despite failed checks!
+timeout /t 5
+:predeploy_ok
 echo.
 
-REM Avoid calling a label-heavy batch from inside an else() compound block
- REM (CMD GOTO inside a called script can break the else-block context).
-if not defined NO_BUMP goto :build_exe_normal
-call build_exe.bat -NoBump -Notes "!BUILD_NOTES!"
-goto :after_exe_build
-:build_exe_normal
-call build_exe.bat -Notes "!BUILD_NOTES!"
-:after_exe_build
+REM Build the EXE, passing -NoBump only when NO_BUMP is set.
+set "_bump_flag="
+if defined NO_BUMP set "_bump_flag=-NoBump"
+call build_exe.bat %_bump_flag% -Notes "!BUILD_NOTES!"
 if errorlevel 1 exit /b 1
 
 set "PCAP_NO_BUMP=1"
