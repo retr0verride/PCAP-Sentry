@@ -952,7 +952,7 @@ def _is_valid_model_name(name: str) -> bool:
     return bool(name and _MODEL_NAME_RE.fullmatch(name))
 
 
-_EMBEDDED_VERSION = "2026.02.20-6"  # Stamped by update_version.ps1 at build time
+_EMBEDDED_VERSION = "2026.02.20-7"  # Stamped by update_version.ps1 at build time
 
 
 def _compute_app_version() -> str:
@@ -1208,6 +1208,47 @@ def _set_app_icon(root) -> None:
     try:
         root.iconbitmap(default=icon_path)
         root.iconbitmap(icon_path)
+    except Exception:
+        pass
+    # Also set taskbar icon explicitly via Win32 API.
+    # root.iconbitmap() only fixes the title-bar icon; the taskbar button
+    # needs WM_SETICON sent with properly sized icons loaded via LoadImageW.
+    try:
+        import ctypes
+        import ctypes.wintypes
+
+        IMAGE_ICON = 1
+        LR_LOADFROMFILE = 0x10
+        LR_DEFAULTSIZE = 0x40
+        WM_SETICON = 0x0080
+        ICON_SMALL = 0
+        ICON_BIG = 1
+
+        user32 = ctypes.windll.user32
+        # Small icon (16 px) for taskbar thumbnail
+        hicon_small = user32.LoadImageW(
+            None,
+            icon_path,
+            IMAGE_ICON,
+            16,
+            16,
+            LR_LOADFROMFILE,
+        )
+        # Big icon (256 px) for taskbar jump-list / alt-tab
+        hicon_big = user32.LoadImageW(
+            None,
+            icon_path,
+            IMAGE_ICON,
+            256,
+            256,
+            LR_LOADFROMFILE | LR_DEFAULTSIZE,
+        )
+        # GetParent gives the real top-level HWND for a Tk window
+        hwnd = user32.GetParent(root.winfo_id())
+        if not hwnd:
+            hwnd = root.winfo_id()
+        user32.SendMessageW(hwnd, WM_SETICON, ICON_SMALL, hicon_small)
+        user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, hicon_big)
     except Exception:
         pass
 
@@ -16248,6 +16289,15 @@ def main() -> None:
     mutex: None | bool = _acquire_single_instance()
     if mutex is None:
         sys.exit(0)
+
+    # Set AppUserModelID so Windows groups/pins the taskbar button correctly
+    # and uses the bundled .ico rather than the Python interpreter icon.
+    try:
+        import ctypes
+
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("retr0verride.PCAPSentry")
+    except Exception:
+        pass
 
     _init_error_logs()
     sys.excepthook = _handle_exception

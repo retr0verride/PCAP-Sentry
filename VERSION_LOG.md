@@ -8,6 +8,9 @@
 
 
 
+
+## 2026.02.20-7 - 2026-02-20
+- Fix taskbar icon - set AppUserModelID and WM_SETICON via Win32 API
 ## 2026.02.20-6 - 2026-02-20
 - refactor(creds): rebuild API encryption & storage from scratch; redesign API Keys tab with LLM key support and unified WCM-per-key storage
 ## 2026.02.20-6 - 2026-02-20
