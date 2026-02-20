@@ -5373,6 +5373,27 @@ class PCAPSentryApp:
             daily_limit=500,
         )
 
+        # ── Verify All row ────────────────────────────────────────────────────
+        ttk.Separator(api_frame, orient="horizontal").pack(fill="x", pady=(8, 4))
+        _va_row = ttk.Frame(api_frame)
+        _va_row.pack(anchor="w", pady=(4, 2))
+        ttk.Button(
+            _va_row,
+            text="Verify All",
+            style="Secondary.TButton",
+            command=self._verify_all_api_keys,
+        ).pack(side=tk.LEFT)
+        _va_lbl = tk.Label(
+            api_frame,
+            text=" ",
+            font=("Segoe UI", 9),
+            anchor="w",
+            bg=self.colors.get("bg", "#0d1117"),
+            fg=self.colors.get("muted", "#8b949e"),
+        )
+        _va_lbl.pack(anchor="w", pady=(0, 8))
+        self._verify_all_label = _va_lbl
+
         # ── Bottom button row ──────────────────────────────────────────────────
         ttk.Separator(window, orient="horizontal").pack(fill="x")
         btn_row = ttk.Frame(window, padding=(16, 8, 16, 8))
@@ -10389,6 +10410,172 @@ class PCAPSentryApp:
             self.root.after(0, lambda: _apply(result))
 
         threading.Thread(target=_run, daemon=True).start()
+
+    def _verify_all_api_keys(self) -> None:
+        """Verify all non-empty API keys in parallel.
+
+        Updates each per-key status label as results arrive, then sets a
+        summary label: “✓ All N available API keys verified” when every
+        tested key passes, or “✗ <service>: <error>; …” for any failures.
+        Blank key fields are silently skipped.
+        """
+        from concurrent.futures import as_completed
+
+        summary_label: object = getattr(self, "_verify_all_label", None)
+
+        # ── Per-service test functions ────────────────────────────────────────
+        def _test_otx(key: str) -> tuple[bool, str]:
+            try:
+                import requests
+                r = requests.get(
+                    "https://otx.alienvault.com/api/v1/user/me",
+                    headers={"X-OTX-API-KEY": key},
+                    timeout=8,
+                )
+                if r.status_code == 200:
+                    return True, f"Valid ({r.json().get('username', 'User')})"
+                if r.status_code == 403:
+                    return False, "Invalid API key"
+                return False, f"HTTP {r.status_code}"
+            except Exception as exc:
+                return False, str(exc).split("\n")[0][:40]
+
+        def _test_abuseipdb(key: str) -> tuple[bool, str]:
+            try:
+                import requests
+                r = requests.get(
+                    "https://api.abuseipdb.com/api/v2/check",
+                    headers={"Key": key, "Accept": "application/json"},
+                    params={"ipAddress": "8.8.8.8", "maxAgeInDays": "1"},
+                    timeout=8,
+                )
+                if r.status_code == 200:
+                    return True, "Key valid"
+                if r.status_code == 401:
+                    return False, "Invalid API key"
+                if r.status_code == 429:
+                    return True, "Key valid (rate limited)"
+                return False, f"HTTP {r.status_code}"
+            except Exception as exc:
+                return False, str(exc).split("\n")[0][:40]
+
+        def _test_greynoise(key: str) -> tuple[bool, str]:
+            try:
+                import requests
+                r = requests.get(
+                    "https://api.greynoise.io/v3/community/8.8.8.8",
+                    headers={"key": key},
+                    timeout=8,
+                )
+                if r.status_code == 200:
+                    return True, "Key valid"
+                if r.status_code == 401:
+                    return False, "Invalid API key"
+                if r.status_code == 429:
+                    return True, "Key valid (rate limited)"
+                return False, f"HTTP {r.status_code}"
+            except Exception as exc:
+                return False, str(exc).split("\n")[0][:40]
+
+        def _test_virustotal(key: str) -> tuple[bool, str]:
+            try:
+                import requests
+                r = requests.get(
+                    "https://www.virustotal.com/api/v3/ip_addresses/8.8.8.8",
+                    headers={"x-apikey": key},
+                    timeout=8,
+                )
+                if r.status_code == 200:
+                    return True, "Key valid"
+                if r.status_code == 401:
+                    return False, "Invalid API key"
+                if r.status_code == 429:
+                    return True, "Key valid (rate limited)"
+                return False, f"HTTP {r.status_code}"
+            except Exception as exc:
+                return False, str(exc).split("\n")[0][:40]
+
+        _SERVICE_NAMES: dict[str, str] = {
+            "_otx_verify_label": "OTX",
+            "_abuseipdb_verify_label": "AbuseIPDB",
+            "_greynoise_verify_label": "GreyNoise",
+            "_virustotal_verify_label": "VirusTotal",
+        }
+
+        # ── Collect non-empty candidates ──────────────────────────────────────
+        candidates: list[tuple[str, str, object]] = []
+        for attr, var, test_fn in [
+            ("_otx_verify_label", self.otx_api_key_var, _test_otx),
+            ("_abuseipdb_verify_label", self.abuseipdb_api_key_var, _test_abuseipdb),
+            ("_greynoise_verify_label", self.greynoise_api_key_var, _test_greynoise),
+            ("_virustotal_verify_label", self.virustotal_api_key_var, _test_virustotal),
+        ]:
+            if var.get().strip():
+                candidates.append((attr, var.get().strip(), test_fn))
+
+        if not candidates:
+            if summary_label:
+                summary_label.configure(
+                    text="No API keys entered \u2014 nothing to verify",
+                    fg=self.colors.get("warning", "#d29922"),
+                )
+            return
+
+        # ── Set all relevant labels to “Verifying…” ────────────────────────────
+        for attr, _, _ in candidates:
+            lbl = getattr(self, attr, None)
+            if lbl:
+                lbl.configure(text="Verifying\u2026", fg=self.colors.get("accent", "#58a6ff"))
+        if summary_label:
+            summary_label.configure(text="\u23f3 Verifying\u2026", fg=self.colors.get("accent", "#58a6ff"))
+
+        def _run_all() -> None:
+            results: dict[str, tuple[bool, str]] = {}
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                future_map = {
+                    executor.submit(test_fn, key): attr
+                    for attr, key, test_fn in candidates
+                }
+                for fut in as_completed(future_map):
+                    attr = future_map[fut]
+                    try:
+                        success, message = fut.result()
+                    except Exception as exc:
+                        success, message = False, str(exc)[:40]
+                    results[attr] = (success, message)
+                    # Update the individual per-key label as each result arrives
+                    ind_lbl = getattr(self, attr, None)
+                    if ind_lbl:
+                        _text = f"\u2713 {message}" if success else f"\u2717 {message}"
+                        _fg = (
+                            self.colors.get("success", "#3fb950")
+                            if success
+                            else self.colors.get("danger", "#f85149")
+                        )
+                        self.root.after(
+                            0, lambda _l=ind_lbl, _t=_text, _c=_fg: _l.configure(text=_t, fg=_c)
+                        )
+
+            # ── Summary ───────────────────────────────────────────────────────
+            failures = [(attr, msg) for attr, (ok, msg) in results.items() if not ok]
+            if not failures:
+                _n = len(results)
+                _summary = f"\u2713 All {_n} available API key{'s' if _n != 1 else ''} verified"
+                _sfg = self.colors.get("success", "#3fb950")
+            else:
+                _bad = [
+                    f"{_SERVICE_NAMES.get(attr, attr)}: {msg}"
+                    for attr, msg in failures
+                ]
+                _summary = f"\u2717 {'; '.join(_bad)}"
+                _sfg = self.colors.get("danger", "#f85149")
+
+            if summary_label:
+                self.root.after(
+                    0, lambda _t=_summary, _c=_sfg: summary_label.configure(text=_t, fg=_c)
+                )
+
+        threading.Thread(target=_run_all, daemon=True).start()
 
     def _verify_llm_api_key(self) -> None:
         """Verify the LLM API key by making a test request."""
