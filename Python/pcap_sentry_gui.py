@@ -1334,166 +1334,111 @@ def _load_seed_rows() -> tuple[list[dict], list[str]]:
         return [], []
 
 
-# ── Secure credential helpers ────────────────────────────────────────────────
-_KEYRING_SERVICE = "PCAP_Sentry"
-_KEYRING_USERNAME_LLM = "llm_api_key"
-_KEYRING_USERNAME_OTX = "otx_api_key"
-_KEYRING_USERNAME_CHAT_KEY = "chat_encryption_key"
-_KEYRING_USERNAME_KB_KEY = "kb_encryption_key"
-_KEYRING_USERNAME_ABUSEIPDB = "abuseipdb_api_key"
-_KEYRING_USERNAME_GREYNOISE = "greynoise_api_key"
-_KEYRING_USERNAME_VIRUSTOTAL = "virustotal_api_key"
+# ── Secure credential helpers — rebuilt from scratch ─────────────────────────
+#
+# Every API key gets its own unique Windows Credential Manager Target so keys
+# NEVER overwrite each other.
+#
+#   Target format:  "PCAP_Sentry/<key_name>"   (one entry per key in WCM)
+#   Username field: always "credential"         (Target is the unique PK on WCM)
+#
+# Key-name constants — also used as the dict keys inside settings:
+_KEY_LLM        = "llm_api_key"
+_KEY_OTX        = "otx_api_key"
+_KEY_ABUSEIPDB  = "abuseipdb_api_key"
+_KEY_GREYNOISE  = "greynoise_api_key"
+_KEY_VIRUSTOTAL = "virustotal_api_key"
+_KEY_CHAT_ENC   = "chat_encryption_key"
+_KEY_KB_ENC     = "kb_encryption_key"
+
+# All API keys that appear in the API Keys tab — used for batch load/save/delete
+_ALL_API_KEYS: list[str] = [
+    _KEY_LLM, _KEY_OTX, _KEY_ABUSEIPDB, _KEY_GREYNOISE, _KEY_VIRUSTOTAL,
+]
+
+# Backward-compat aliases expected by the data-encryption helpers below
+_KEYRING_USERNAME_CHAT_KEY = _KEY_CHAT_ENC
+_KEYRING_USERNAME_KB_KEY   = _KEY_KB_ENC
+
+_CRED_SERVICE_PREFIX = "PCAP_Sentry"
+_CRED_USERNAME       = "credential"
 
 
-def _kr_service(name: str) -> str:
-    """Return a per-credential Windows Credential Manager target name.
-
-    Windows Credential Manager uses the *Target* field as the unique primary
-    key.  Storing all credentials under the same ``PCAP_Sentry`` service name
-    means each ``set_password`` call overwrites the previous one.  Embedding
-    the credential name into the service string gives every key its own
-    unique Target, e.g. ``PCAP_Sentry/llm_api_key``.
-    """
-    return f"{_KEYRING_SERVICE}/{name}"
+def _cred_target(name: str) -> str:
+    """Return the unique WCM Target string for credential *name*."""
+    return f"{_CRED_SERVICE_PREFIX}/{name}"
 
 
 def _keyring_available() -> bool:
-    """Check if the keyring module is available and functional."""
+    """Return True when the keyring module is importable and functional."""
     try:
         import keyring
-
         return bool(keyring)
     except Exception:
         return False
 
 
-def _store_credential(name: str, value: str) -> None:
-    """Store *value* under *name* in the OS credential store.
+def _store_cred(name: str, value: str) -> None:
+    """Persist *value* under *name* in Windows Credential Manager.
 
-    No-op when *value* is empty — call ``_delete_credential`` to intentionally
-    remove a credential.  This prevents auto-save paths from wiping a valid
-    credential that could not be loaded into memory (e.g. transient keyring
-    error at startup).
+    No-op when *value* is empty — call ``_delete_cred`` to explicitly remove
+    a credential.  Blank-value no-op prevents an accidental in-memory wipe
+    from overwriting a still-valid WCM entry.
     """
     if not value:
         return
     try:
         import keyring
-
-        keyring.set_password(_kr_service(name), name, value)
+        keyring.set_password(_cred_target(name), _CRED_USERNAME, value)
     except Exception:
-        pass  # Fallback: value stays in settings.json
+        pass  # Key stays in memory; plaintext file storage is intentionally avoided
 
 
-def _load_credential(name: str) -> str:
-    """Return the stored value for *name*, or ``""`` on any failure or absence.
-
-    On first read, automatically migrates from the legacy ``PCAP_Sentry``
-    shared-service format (where all keys used the same Target and overwrote
-    each other) to the current per-credential ``PCAP_Sentry/<name>`` format.
-    """
+def _load_cred(name: str) -> str:
+    """Return the stored value for *name*, or ``""`` on any error or absence."""
     try:
         import keyring
-
-        # Current format: unique target per credential
-        val: str | None = keyring.get_password(_kr_service(name), name)
-        if val:
-            return val
-        # Legacy migration: old code used service="PCAP_Sentry" + username=name
-        # which on Windows Credential Manager creates target "name@PCAP_Sentry".
-        # Migrate to the new per-credential target and remove the old entry.
-        legacy: str | None = keyring.get_password(_KEYRING_SERVICE, name)
-        if legacy:
-            keyring.set_password(_kr_service(name), name, legacy)
-            try:
-                keyring.delete_password(_KEYRING_SERVICE, name)
-            except Exception:
-                pass
-            return legacy
-        return ""
+        val: str | None = keyring.get_password(_cred_target(name), _CRED_USERNAME)
+        return val or ""
     except Exception:
         return ""
 
 
-def _delete_credential(name: str) -> None:
-    """Remove *name* from the OS credential store; silently ignores missing entries.
-
-    Cleans up both the current per-credential target and any remaining legacy
-    shared-service entry so nothing is left behind.
-    """
+def _delete_cred(name: str) -> None:
+    """Remove *name* from Windows Credential Manager; silently ignores missing."""
     try:
         import keyring
-
-        keyring.delete_password(_kr_service(name), name)
-    except Exception:
-        pass
-    try:
-        import keyring
-
-        keyring.delete_password(_KEYRING_SERVICE, name)
+        keyring.delete_password(_cred_target(name), _CRED_USERNAME)
     except Exception:
         pass
 
 
-# ── Per-key wrappers (thin delegation — all keys follow the same path) ────────
-def _store_api_key(key: str) -> None:
-    _store_credential(_KEYRING_USERNAME_LLM, key)
+# ── Backward-compat aliases used internally by encryption helpers ─────────────
+_store_credential  = _store_cred
+_load_credential   = _load_cred
+_delete_credential = _delete_cred
 
 
-def _load_api_key() -> str:
-    return _load_credential(_KEYRING_USERNAME_LLM)
+# ── Per-key convenience wrappers ──────────────────────────────────────────────
+def _store_api_key(key: str) -> None:       _store_cred(_KEY_LLM, key)
+def _load_api_key() -> str:                 return _load_cred(_KEY_LLM)
+def _delete_api_key() -> None:              _delete_cred(_KEY_LLM)
 
+def _store_otx_api_key(key: str) -> None:   _store_cred(_KEY_OTX, key)
+def _load_otx_api_key() -> str:             return _load_cred(_KEY_OTX)
+def _delete_otx_api_key() -> None:          _delete_cred(_KEY_OTX)
 
-def _delete_api_key() -> None:
-    _delete_credential(_KEYRING_USERNAME_LLM)
+def _store_abuseipdb_api_key(key: str) -> None:   _store_cred(_KEY_ABUSEIPDB, key)
+def _load_abuseipdb_api_key() -> str:             return _load_cred(_KEY_ABUSEIPDB)
+def _delete_abuseipdb_api_key() -> None:          _delete_cred(_KEY_ABUSEIPDB)
 
+def _store_greynoise_api_key(key: str) -> None:   _store_cred(_KEY_GREYNOISE, key)
+def _load_greynoise_api_key() -> str:             return _load_cred(_KEY_GREYNOISE)
+def _delete_greynoise_api_key() -> None:          _delete_cred(_KEY_GREYNOISE)
 
-def _store_otx_api_key(key: str) -> None:
-    _store_credential(_KEYRING_USERNAME_OTX, key)
-
-
-def _load_otx_api_key() -> str:
-    return _load_credential(_KEYRING_USERNAME_OTX)
-
-
-def _delete_otx_api_key() -> None:
-    _delete_credential(_KEYRING_USERNAME_OTX)
-
-
-def _store_abuseipdb_api_key(key: str) -> None:
-    _store_credential(_KEYRING_USERNAME_ABUSEIPDB, key)
-
-
-def _load_abuseipdb_api_key() -> str:
-    return _load_credential(_KEYRING_USERNAME_ABUSEIPDB)
-
-
-def _delete_abuseipdb_api_key() -> None:
-    _delete_credential(_KEYRING_USERNAME_ABUSEIPDB)
-
-
-def _store_greynoise_api_key(key: str) -> None:
-    _store_credential(_KEYRING_USERNAME_GREYNOISE, key)
-
-
-def _load_greynoise_api_key() -> str:
-    return _load_credential(_KEYRING_USERNAME_GREYNOISE)
-
-
-def _delete_greynoise_api_key() -> None:
-    _delete_credential(_KEYRING_USERNAME_GREYNOISE)
-
-
-def _store_virustotal_api_key(key: str) -> None:
-    _store_credential(_KEYRING_USERNAME_VIRUSTOTAL, key)
-
-
-def _load_virustotal_api_key() -> str:
-    return _load_credential(_KEYRING_USERNAME_VIRUSTOTAL)
-
-
-def _delete_virustotal_api_key() -> None:
-    _delete_credential(_KEYRING_USERNAME_VIRUSTOTAL)
+def _store_virustotal_api_key(key: str) -> None:  _store_cred(_KEY_VIRUSTOTAL, key)
+def _load_virustotal_api_key() -> str:            return _load_cred(_KEY_VIRUSTOTAL)
+def _delete_virustotal_api_key() -> None:         _delete_cred(_KEY_VIRUSTOTAL)
 
 
 # ── Data encryption helpers ──────────────────────────────────────────────────
@@ -1573,6 +1518,7 @@ def _default_settings():
         "llm_provider": "disabled",
         "llm_model": "",
         "llm_endpoint": "",
+        "llm_api_key": "",
         "llm_auto_detect": True,
         "theme": "system",
         "offline_mode": False,
@@ -1594,43 +1540,17 @@ def load_settings():
                 defaults.update(data)
                 # Prefer OS credential store for API keys
                 if _keyring_available():
-                    # Handle LLM API key
-                    stored_key: str = _load_api_key()
-                    if stored_key:
-                        defaults["llm_api_key"] = stored_key
-                    elif data.get("llm_api_key"):
-                        # Migrate plaintext LLM key to keyring on first load
-                        _store_api_key(data["llm_api_key"])
-                        defaults["llm_api_key"] = data["llm_api_key"]
-                    # Handle OTX API key
-                    stored_otx_key: str = _load_otx_api_key()
-                    if stored_otx_key:
-                        defaults["otx_api_key"] = stored_otx_key
-                    elif data.get("otx_api_key"):
-                        # Migrate plaintext OTX key to keyring on first load
-                        _store_otx_api_key(data["otx_api_key"])
-                        defaults["otx_api_key"] = data["otx_api_key"]
-                    # AbuseIPDB key
-                    stored_abuseipdb: str = _load_abuseipdb_api_key()
-                    if stored_abuseipdb:
-                        defaults["abuseipdb_api_key"] = stored_abuseipdb
-                    elif data.get("abuseipdb_api_key"):
-                        _store_abuseipdb_api_key(data["abuseipdb_api_key"])
-                        defaults["abuseipdb_api_key"] = data["abuseipdb_api_key"]
-                    # GreyNoise key
-                    stored_greynoise: str = _load_greynoise_api_key()
-                    if stored_greynoise:
-                        defaults["greynoise_api_key"] = stored_greynoise
-                    elif data.get("greynoise_api_key"):
-                        _store_greynoise_api_key(data["greynoise_api_key"])
-                        defaults["greynoise_api_key"] = data["greynoise_api_key"]
-                    # VirusTotal key
-                    stored_virustotal: str = _load_virustotal_api_key()
-                    if stored_virustotal:
-                        defaults["virustotal_api_key"] = stored_virustotal
-                    elif data.get("virustotal_api_key"):
-                        _store_virustotal_api_key(data["virustotal_api_key"])
-                        defaults["virustotal_api_key"] = data["virustotal_api_key"]
+                    # Load every API key from Windows Credential Manager.
+                    # If a key is absent from WCM but present as plaintext in
+                    # settings.json (first-run / migration scenario), persist it
+                    # to WCM immediately so the file stays clean going forward.
+                    for _kname in _ALL_API_KEYS:
+                        _val = _load_cred(_kname)
+                        if _val:
+                            defaults[_kname] = _val
+                        elif data.get(_kname):
+                            _store_cred(_kname, data[_kname])
+                            defaults[_kname] = data[_kname]
 
                     # Decrypt chat_history if encrypted
                     encrypted_chat = data.get("chat_history_encrypted")
@@ -1649,22 +1569,18 @@ def load_settings():
 
 def save_settings(settings) -> None:
     try:
-        # Store API keys in OS credential store if available
-        llm_api_key = settings.get("llm_api_key", "")
-        otx_api_key = settings.get("otx_api_key", "")
         if _keyring_available():
-            _store_api_key(llm_api_key)
-            _store_otx_api_key(otx_api_key)
-            _store_abuseipdb_api_key(settings.get("abuseipdb_api_key", ""))
-            _store_greynoise_api_key(settings.get("greynoise_api_key", ""))
-            _store_virustotal_api_key(settings.get("virustotal_api_key", ""))
-            # Remove plaintext keys from settings file
+            # Persist every non-empty API key to Windows Credential Manager.
+            # Empty values are skipped (_store_cred is a no-op for "");
+            # explicit deletion of cleared keys is done in _save_preferences
+            # before this path is reached.
+            for _kname in _ALL_API_KEYS:
+                _store_cred(_kname, settings.get(_kname, ""))
+            # Strip all API keys from the JSON settings file so they are
+            # never persisted to disk in plaintext.
             settings = dict(settings)
-            settings.pop("llm_api_key", None)
-            settings.pop("otx_api_key", None)
-            settings.pop("abuseipdb_api_key", None)
-            settings.pop("greynoise_api_key", None)
-            settings.pop("virustotal_api_key", None)
+            for _kname in _ALL_API_KEYS:
+                settings.pop(_kname, None)
 
             # Encrypt chat_history
             chat_history = settings.get("chat_history", [])
@@ -5279,7 +5195,28 @@ class PCAPSentryApp:
         api_frame = ttk.Frame(api_scrollable, padding=16)
         api_frame.pack(fill=tk.BOTH, expand=True)
 
-        ttk.Label(api_frame, text="API Keys", style="Heading.TLabel").pack(anchor="w", pady=(0, 4))
+        # Header row: title left, Verify All button top-right
+        api_header_row = ttk.Frame(api_frame)
+        api_header_row.pack(fill="x", pady=(0, 2))
+        ttk.Label(api_header_row, text="API Keys", style="Heading.TLabel").pack(side=tk.LEFT)
+        ttk.Button(
+            api_header_row,
+            text="Verify All",
+            style="Secondary.TButton",
+            command=self._verify_all_api_keys,
+        ).pack(side=tk.RIGHT)
+        # Verify All summary label (below header)
+        _va_lbl = tk.Label(
+            api_frame,
+            text=" ",
+            font=("Segoe UI", 9),
+            anchor="w",
+            bg=self.colors.get("bg", "#0d1117"),
+            fg=self.colors.get("muted", "#8b949e"),
+        )
+        _va_lbl.pack(anchor="w", pady=(0, 4))
+        self._verify_all_label = _va_lbl
+
         ttk.Label(
             api_frame,
             text="Keys are stored in Windows Credential Manager \u2014 never in plain text files.",
@@ -5339,6 +5276,14 @@ class PCAPSentryApp:
                 link_lbl.bind("<Button-1>", lambda _e, u=signup_url: webbrowser.open(u))
             setattr(self, status_attr, status_lbl)
 
+        # ── LLM API key (cloud providers: OpenAI, Anthropic, Google, Mistral…) ─
+        _api_section(
+            "LLM API Key  (OpenAI / Anthropic / Google / Mistral / etc.)",
+            "Required for cloud LLM providers. Select the provider in File \u2192 LLM Settings.",
+            self.llm_api_key_var,
+            "_llm_verify_label",
+            self._verify_llm_api_key,
+        )
         _api_section(
             "AlienVault OTX",
             "Enhanced pulse data & higher rate limits",
@@ -5376,26 +5321,7 @@ class PCAPSentryApp:
             daily_limit=500,
         )
 
-        # ── Verify All row ────────────────────────────────────────────────────
-        ttk.Separator(api_frame, orient="horizontal").pack(fill="x", pady=(8, 4))
-        _va_row = ttk.Frame(api_frame)
-        _va_row.pack(anchor="w", pady=(4, 2))
-        ttk.Button(
-            _va_row,
-            text="Verify All",
-            style="Secondary.TButton",
-            command=self._verify_all_api_keys,
-        ).pack(side=tk.LEFT)
-        _va_lbl = tk.Label(
-            api_frame,
-            text=" ",
-            font=("Segoe UI", 9),
-            anchor="w",
-            bg=self.colors.get("bg", "#0d1117"),
-            fg=self.colors.get("muted", "#8b949e"),
-        )
-        _va_lbl.pack(anchor="w", pady=(0, 8))
-        self._verify_all_label = _va_lbl
+        # (Verify All button is in the header row at the top of this tab)
 
         # ── Bottom button row ──────────────────────────────────────────────────
         ttk.Separator(window, orient="horizontal").pack(fill="x")
@@ -5412,18 +5338,18 @@ class PCAPSentryApp:
         window.grab_set()
 
     def _save_preferences(self, window) -> None:
-        # Explicit user save: if a key field was intentionally cleared, remove from keyring
+        # Explicit user save: delete from WCM any key the user intentionally cleared.
         if _keyring_available():
-            if not self.otx_api_key_var.get().strip():
-                _delete_otx_api_key()
-            if not self.llm_api_key_var.get().strip():
-                _delete_api_key()
-            if not self.abuseipdb_api_key_var.get().strip():
-                _delete_abuseipdb_api_key()
-            if not self.greynoise_api_key_var.get().strip():
-                _delete_greynoise_api_key()
-            if not self.virustotal_api_key_var.get().strip():
-                _delete_virustotal_api_key()
+            _key_var_map = {
+                _KEY_LLM:        self.llm_api_key_var,
+                _KEY_OTX:        self.otx_api_key_var,
+                _KEY_ABUSEIPDB:  self.abuseipdb_api_key_var,
+                _KEY_GREYNOISE:  self.greynoise_api_key_var,
+                _KEY_VIRUSTOTAL: self.virustotal_api_key_var,
+            }
+            for _kname, _var in _key_var_map.items():
+                if not _var.get().strip():
+                    _delete_cred(_kname)
         self._save_settings_from_vars()
         self.root_title: str = self._get_window_title()
         self.root.title(self.root_title)
@@ -10956,7 +10882,65 @@ class PCAPSentryApp:
             except Exception as exc:
                 return False, str(exc).split("\n")[0][:40]
 
+        def _test_llm(key: str) -> tuple[bool, str]:
+            """Test the LLM API key against the configured cloud provider."""
+            provider: str = self.llm_provider_var.get().strip().lower()
+            if provider in ("", "disabled", "ollama", "lm studio", "localai", "llamacpp", "jan"):
+                return True, "Local provider — no key needed"
+            try:
+                import requests
+                if provider == "openai":
+                    r = requests.get(
+                        "https://api.openai.com/v1/models",
+                        headers={"Authorization": f"Bearer {key}"},
+                        timeout=10,
+                    )
+                    if r.status_code == 200:
+                        return True, "OpenAI key valid"
+                    if r.status_code == 401:
+                        return False, "Invalid key"
+                    return False, f"HTTP {r.status_code}"
+                if provider == "google":
+                    r = requests.get(
+                        f"https://generativelanguage.googleapis.com/v1beta/models?key={key}",
+                        timeout=10,
+                    )
+                    if r.status_code == 200:
+                        return True, "Google key valid"
+                    if r.status_code == 400:
+                        return False, "Invalid key"
+                    return False, f"HTTP {r.status_code}"
+                if provider == "anthropic":
+                    r = requests.post(
+                        "https://api.anthropic.com/v1/messages",
+                        headers={"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
+                        json={"model": "claude-3-haiku-20240307", "max_tokens": 1, "messages": [{"role": "user", "content": "Hi"}]},
+                        timeout=10,
+                    )
+                    if r.status_code == 200:
+                        return True, "Anthropic key valid"
+                    if r.status_code == 401:
+                        return False, "Invalid key"
+                    return False, f"HTTP {r.status_code}"
+                # Generic OpenAI-compatible (Mistral, Groq, Together, etc.)
+                endpoint: str = self.llm_endpoint_var.get().strip().rstrip("/")
+                if not endpoint:
+                    return False, "No endpoint configured"
+                r = requests.get(
+                    f"{endpoint}/v1/models",
+                    headers={"Authorization": f"Bearer {key}"},
+                    timeout=10,
+                )
+                if r.status_code in (200, 201):
+                    return True, "Key valid"
+                if r.status_code == 401:
+                    return False, "Invalid key"
+                return False, f"HTTP {r.status_code}"
+            except Exception as exc:
+                return False, str(exc).split("\n")[0][:40]
+
         _SERVICE_NAMES: dict[str, str] = {
+            "_llm_verify_label": "LLM",
             "_otx_verify_label": "OTX",
             "_abuseipdb_verify_label": "AbuseIPDB",
             "_greynoise_verify_label": "GreyNoise",
@@ -10966,6 +10950,7 @@ class PCAPSentryApp:
         # ── Collect non-empty candidates ──────────────────────────────────────
         candidates: list[tuple[str, str, object]] = []
         for attr, var, test_fn in [
+            ("_llm_verify_label", self.llm_api_key_var, _test_llm),
             ("_otx_verify_label", self.otx_api_key_var, _test_otx),
             ("_abuseipdb_verify_label", self.abuseipdb_api_key_var, _test_abuseipdb),
             ("_greynoise_verify_label", self.greynoise_api_key_var, _test_greynoise),
