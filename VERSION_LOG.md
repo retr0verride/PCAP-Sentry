@@ -7,6 +7,9 @@
 
 
 
+
+## 2026.02.20-6 - 2026-02-20
+- refactor(creds): rebuild API encryption & storage from scratch; redesign API Keys tab with LLM key support and unified WCM-per-key storage
 ## 2026.02.20-6 - 2026-02-20
 - refactor(creds): rebuild credential layer from scratch — replace `_kr_service`/`_KEYRING_SERVICE` + legacy-migration code with `_cred_target` (`PCAP_Sentry/<name>`) and a fixed `_CRED_USERNAME = "credential"`; add `_ALL_API_KEYS` batch list for uniform load/save loops; LLM API Key added as first section in API Keys tab; **Verify All** button relocated to top-right of tab header; `_verify_all_api_keys` includes provider-aware `_test_llm` function; `_default_settings()` includes `llm_api_key`
 
