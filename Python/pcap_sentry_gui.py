@@ -1029,6 +1029,7 @@ def _get_app_data_dir() -> str:
             if os.path.isdir(old_data_dir) and os.path.isfile(old_settings):
                 try:
                     import shutil as _shutil
+
                     for _item in os.listdir(old_data_dir):
                         _src = os.path.join(old_data_dir, _item)
                         _dst = os.path.join(data_dir, _item)
