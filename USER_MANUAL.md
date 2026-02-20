@@ -97,7 +97,7 @@ For the best experience — especially with large captures and local LLM:
 | **CPU** | 4+ cores | Multithreaded analysis, 6 concurrent TI workers, behavioral heuristics |
 | **RAM** | 16 GB | High-memory mode loads full PCAP + pandas DataFrame + matplotlib charts. Large PCAPs (500 MB+) with LLM can peak at 10–12 GB |
 | **Disk** | 1 GB+ | App ~50 MB, but KB backups + ML model + update downloads + PCAP working copies add up |
-| **Display** | 1920×1080 | 4 main tabs + 5 result sub-tabs + charts window; lower res clips the UI |
+| **Display** | 1920×1080 | 5 main tabs + 5 result sub-tabs + charts window; lower res clips the UI |
 | **Network** | Broadband | 6 concurrent TI API calls + update checks + LLM cloud endpoints |
 
 ### With Local LLM (Ollama)
@@ -173,7 +173,7 @@ When you launch PCAP Sentry for the first time, the application opens to the **A
 
 - A **header banner** with the application name and version
 - A **toolbar** with analysis controls and preferences
-- **Four main tabs**: Analyze, Train, Knowledge Base, and Chat
+- **Five main tabs**: Analyze, Train, Knowledge Base, Education, and PARRY
 
 ### Quick Start: Analyzing Your First PCAP
 
@@ -189,14 +189,32 @@ When you launch PCAP Sentry for the first time, the application opens to the **A
 
 ### Main Tabs
 
-PCAP Sentry has four primary tabs:
+PCAP Sentry has five primary tabs:
 
 | Tab | Purpose |
 |-----|--------|
 | 🔍 **Analyze** | Select and analyze PCAP files, view results |
 | 🧠 **Train** | Add known-safe or known-malware PCAPs to the knowledge base |
 | 📚 **Knowledge Base** | Manage the KB: refresh, backup, restore, reset, import IoC feeds |
-| 💬 **Chat** | Ask questions about current analysis results and general cybersecurity topics (requires an LLM) |
+| 🎓 **Education** | Static Wireshark reference guide — PCAP format, capture/display filters, TLS decryption, tshark/tcpdump CLI, protocol quick reference, clickable resource links |
+| 💬 **PARRY** | Ask questions about current analysis results and general cybersecurity topics (requires an LLM) |
+
+#### Education Tab
+
+The **Education** tab is a static reference guide that never changes between analysis runs. It covers:
+
+- **PCAP format** — How packet captures are structured and recorded
+- **Wireshark UI** — Pane layout, colorisation rules, and navigation
+- **Capture filters (BPF)** — Syntax and common examples for filtering at capture time
+- **Display filter cheat sheet** — Wireshark display filter syntax with annotated examples
+- **Follow Stream & file magic bytes** — How to reconstruct sessions and identify file types in payloads
+- **Statistics tools** — Protocol Hierarchy, Conversations, Endpoints, I/O Graph
+- **File extraction** — Export Objects via HTTP, SMB, and FTP reassembly
+- **TLS decryption** — Step-by-step guide using `SSLKEYLOGFILE` environment variable and a server private key
+- **Protocol quick reference** — Common ports and their expected traffic patterns
+- **Identifying infected hosts** — Finding hostnames and usernames from DHCP, NetBIOS, Kerberos, NTLM, and SMB
+- **tshark/tcpdump CLI** — Command-line equivalents of key Wireshark operations
+- **Resources** — Clickable links to MITRE ATT&CK, SANS cheat sheets, PCAP repositories, and Wireshark docs
 
 ### Toolbar
 
@@ -274,7 +292,7 @@ After analysis completes, you can:
 - **Copy Wireshark Filters** — Copy auto-generated Wireshark display filters to the clipboard (found in the **Why** sub-tab)
 - **File → Export Results as JSON** — Save the full analysis output (verdict, risk score, threat intel findings, suspicious flows, Wireshark filters) as a JSON file for archiving or external processing
 
-> **Tip:** Right-click anywhere in the Results, Why, or Education text panels to access **Copy** and **Select All** context menu options.
+> **Tip:** Right-click anywhere in the Results, Why, or Details text panels to access **Copy** and **Select All** context menu options.
 
 ---
 
@@ -312,9 +330,9 @@ Provides the analytical reasoning behind the verdict:
 - **Wireshark filter generation** — Auto-generates display filters you can paste directly into Wireshark
 - **Copy Wireshark Filters** button — Copies all generated filters to the clipboard
 
-### 7.3 Education Tab
+### 7.3 Details Tab
 
-Designed for beginners and learning purposes. After every analysis, the Education tab builds a personalised guide from the actual flows found in the capture.
+Designed for beginners and learning purposes. After every analysis, the **Details** tab builds a personalised guide from the actual flows found in the capture.
 
 #### Malware Activity Summary
 
@@ -351,7 +369,7 @@ A five-step guide explains how to read the raw stolen content in Wireshark, incl
 
 #### Six-Phase Malware Traffic Analysis Methodology
 
-The rest of the Education tab walks through a structured six-phase approach used by professional malware analysts:
+The rest of the **Details** tab walks through a structured six-phase approach used by professional malware analysts:
 
 | Phase | Goal |
 |-------|------|
@@ -364,7 +382,7 @@ The rest of the Education tab walks through a structured six-phase approach used
 
 Each phase generates **dynamic content** from the actual flows in the current capture — for example, Phase 6 produces a per-IP block of Wireshark filters for every internal source IP found in suspicious flows.
 
-#### Other Education Tab Content
+#### Other Details Tab Content
 
 - **Plain-English verdict explanation** — Why the current verdict was reached
 - **Risk score breakdown** — How the weighted combination of ML, anomaly, and IoC checks contributes to the 0–100 score
@@ -792,7 +810,7 @@ To add a key:
 1. Open **⚙ Preferences** and click the **API Keys** tab.
 2. Click the blue **"Get a free API key →"** link next to any service to open the signup page in your browser.
 3. Paste your key into the relevant field.
-4. Click **Verify** to confirm the key is valid.
+4. Click **Verify** next to an individual key to confirm it is valid, or click **Verify All** to test every configured key simultaneously — per-key pass/fail labels update live and a summary shows the total count.
 5. Click **Save**.
 
 The tab also shows **"Used today: X / Y"** counters for AbuseIPDB and VirusTotal so you can monitor your daily quota usage.
@@ -853,9 +871,9 @@ PCAP Sentry works with any server that implements the OpenAI chat completions AP
    - **LLM endpoint** = your server's base URL (e.g., `http://localhost:1234`). Do not include `/v1`.
 3. Click **Test Connection** to verify.
 
-### Chat Tab
+### PARRY Chat
 
-The **Chat** tab provides a conversational interface powered by your configured LLM:
+The **PARRY** tab provides a conversational interface powered by your configured LLM:
 
 - **Context-aware** — Automatically includes the current analysis results (verdict, risk score, protocol stats) in the conversation
 - **Conversation history** — The last 6 messages are sent as context for follow-up questions

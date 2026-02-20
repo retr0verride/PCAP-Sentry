@@ -5,6 +5,13 @@
 
 
 
+## 2026.02.20-4 - 2026-02-20
+- **UI:** Five main tabs — added top-level **Education** tab with static Wireshark reference guide (PCAP format, BPF capture filters, display filter cheat sheet, Follow Stream + file magic bytes, Statistics tools, file extraction, TLS decryption via `SSLKEYLOGFILE` + private key, protocol quick reference, identifying infected hosts, tshark/tcpdump CLI); resource links are clickable and open in the browser
+- **UI:** Results sub-tab renamed **Education → Details** — LabelFrame label changed to "Analysis Details"; all internal string references updated; tab map entry updated in `_build_tabs` and `_on_tab_changed`
+- **UI:** API Keys tab — **Verify All** button verifies every configured API key in parallel; per-key status labels update live; summary dialog shows pass/fail count on completion
+- **UI:** Sensible default sizes and `minsize` guards applied to all dialogs and the main window — prevents collapsed/blank windows on lower-resolution displays
+- **Style:** `ruff format` applied across `Python/` and `tests/` — whitespace-only changes; all linting/formatting checks now pass cleanly
+
 ## 2026.02.20-3 - 2026-02-20
 - fix: unify all credential storage through _store/_load/_delete_credential with unique per-key Windows Credential Manager targets; automatic legacy-format migration on first load prevents key overwrites and populates LLM/OTX fields correctly
 ## 2026.02.20-2 - 2026-02-20
