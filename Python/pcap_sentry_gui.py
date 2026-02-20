@@ -1010,7 +1010,6 @@ APP_DATA_DIR = None
 
 
 def _get_app_data_dir() -> str:
-    global APP_DATA_FALLBACK_NOTICE
     global APP_DATA_DIR
     # Always store user data in %LOCALAPPDATA%\PCAP_Sentry\ regardless of where
     # the EXE lives.  Keeping data next to the EXE meant settings were lost on
