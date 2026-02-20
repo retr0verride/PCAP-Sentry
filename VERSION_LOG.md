@@ -9,6 +9,9 @@
 
 
 
+
+## 2026.02.20-8 - 2026-02-20
+- Remove LLM API key from API Keys tab - use LLM Settings dialog only
 ## 2026.02.20-7 - 2026-02-20
 - Fix taskbar icon - set AppUserModelID and WM_SETICON via Win32 API
 ## 2026.02.20-6 - 2026-02-20

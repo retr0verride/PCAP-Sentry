@@ -952,7 +952,7 @@ def _is_valid_model_name(name: str) -> bool:
     return bool(name and _MODEL_NAME_RE.fullmatch(name))
 
 
-_EMBEDDED_VERSION = "2026.02.20-7"  # Stamped by update_version.ps1 at build time
+_EMBEDDED_VERSION = "2026.02.20-8"  # Stamped by update_version.ps1 at build time
 
 
 def _compute_app_version() -> str:
@@ -1394,7 +1394,6 @@ _KEY_KB_ENC = "kb_encryption_key"
 
 # All API keys that appear in the API Keys tab — used for batch load/save/delete
 _ALL_API_KEYS: list[str] = [
-    _KEY_LLM,
     _KEY_OTX,
     _KEY_ABUSEIPDB,
     _KEY_GREYNOISE,
@@ -5364,14 +5363,6 @@ class PCAPSentryApp:
                 link_lbl.bind("<Button-1>", lambda _e, u=signup_url: webbrowser.open(u))
             setattr(self, status_attr, status_lbl)
 
-        # ── LLM API key (cloud providers: OpenAI, Anthropic, Google, Mistral…) ─
-        _api_section(
-            "LLM API Key  (OpenAI / Anthropic / Google / Mistral / etc.)",
-            "Required for cloud LLM providers. Select the provider in File \u2192 LLM Settings.",
-            self.llm_api_key_var,
-            "_llm_verify_label",
-            self._verify_llm_api_key,
-        )
         _api_section(
             "AlienVault OTX",
             "Enhanced pulse data & higher rate limits",
@@ -11037,7 +11028,6 @@ class PCAPSentryApp:
                 return False, str(exc).split("\n")[0][:40]
 
         _SERVICE_NAMES: dict[str, str] = {
-            "_llm_verify_label": "LLM",
             "_otx_verify_label": "OTX",
             "_abuseipdb_verify_label": "AbuseIPDB",
             "_greynoise_verify_label": "GreyNoise",
@@ -11047,7 +11037,6 @@ class PCAPSentryApp:
         # ── Collect non-empty candidates ──────────────────────────────────────
         candidates: list[tuple[str, str, object]] = []
         for attr, var, test_fn in [
-            ("_llm_verify_label", self.llm_api_key_var, _test_llm),
             ("_otx_verify_label", self.otx_api_key_var, _test_otx),
             ("_abuseipdb_verify_label", self.abuseipdb_api_key_var, _test_abuseipdb),
             ("_greynoise_verify_label", self.greynoise_api_key_var, _test_greynoise),
