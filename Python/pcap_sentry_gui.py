@@ -4257,9 +4257,9 @@ class PCAPSentryApp:
         self.root.title(self.root_title)
 
         # Restore window geometry from last session
-        saved_geometry = self.settings.get("window_geometry", "1200x950")
+        saved_geometry = self.settings.get("window_geometry", "1280x860")
         self.root.geometry(saved_geometry)
-        self.root.minsize(900, 700)
+        self.root.minsize(960, 700)
 
         self.theme_var = tk.StringVar(value=self.settings.get("theme", "system"))
         self.colors = {}
@@ -5124,8 +5124,8 @@ class PCAPSentryApp:
         window = tk.Toplevel(self.root)
         window.title("Preferences")
         window.resizable(True, True)
-        window.geometry("780x620")
-        window.minsize(700, 560)
+        window.geometry("820x660")
+        window.minsize(700, 540)
         window.configure(bg=self.colors["bg"])
         self._set_dark_titlebar(window)
 
@@ -5460,7 +5460,7 @@ class PCAPSentryApp:
             "theme": self.theme_var.get().strip().lower() or "system",
             "app_data_notice_shown": bool(self.settings.get("app_data_notice_shown")),
             # Preserve window state and chat history from current settings
-            "window_geometry": self.settings.get("window_geometry", "1200x950"),
+            "window_geometry": self.settings.get("window_geometry", "1280x860"),
             "selected_tab": self.settings.get("selected_tab", 0),
             "chat_history": self.settings.get("chat_history", []),
             "last_safe_path": self.settings.get("last_safe_path", ""),
@@ -5524,7 +5524,7 @@ class PCAPSentryApp:
         about_window = tk.Toplevel(self.root)
         about_window.title("About PCAP Sentry")
         about_window.resizable(False, False)
-        about_window.geometry("500x400")
+        about_window.geometry("520x420")
         about_window.configure(bg=self.colors["bg"])
         self._set_dark_titlebar(about_window)
 
@@ -5651,7 +5651,7 @@ class PCAPSentryApp:
             window = tk.Toplevel(self.root)
             window.title("Update Available")
             window.resizable(True, True)
-            window.geometry("600x450")
+            window.geometry("660x500")
             window.minsize(520, 380)
             window.configure(bg=self.colors["bg"])
             self._set_dark_titlebar(window)
@@ -5705,7 +5705,7 @@ class PCAPSentryApp:
                 window = tk.Toplevel(self.root)
                 window.title("Check for Updates")
                 window.resizable(True, True)
-                window.geometry("550x350")
+                window.geometry("600x400")
                 window.minsize(480, 300)
                 window.configure(bg=self.colors["bg"])
                 self._set_dark_titlebar(window)
@@ -5757,7 +5757,7 @@ class PCAPSentryApp:
         progress_window = tk.Toplevel(self.root)
         progress_window.title("Downloading Update")
         progress_window.resizable(False, False)
-        progress_window.geometry("400x120")
+        progress_window.geometry("440x130")
         progress_window.configure(bg=self.colors["bg"])
         self._set_dark_titlebar(progress_window)
 
@@ -9873,7 +9873,7 @@ class PCAPSentryApp:
         # Create review window
         review_window = tk.Toplevel(self.root)
         review_window.title("Review Unsure Items")
-        review_window.geometry("900x600")
+        review_window.geometry("960x640")
         review_window.resizable(True, True)
         review_window.minsize(700, 480)
         review_window.transient(self.root)
@@ -11086,7 +11086,7 @@ class PCAPSentryApp:
         window = tk.Toplevel(self.root)
         window.title("Manage Ollama Models")
         window.resizable(True, True)
-        window.geometry("620x520")
+        window.geometry("660x560")
         window.minsize(520, 420)
         window.configure(bg=self.colors["bg"])
         self._set_dark_titlebar(window)
@@ -11376,7 +11376,7 @@ class PCAPSentryApp:
         window = tk.Toplevel(self.root)
         window.title("Download Ollama Model")
         window.resizable(True, True)
-        window.geometry("520x400")
+        window.geometry("560x440")
         window.minsize(480, 360)
         window.configure(bg=self.colors["bg"])
         self._set_dark_titlebar(window)
@@ -11638,7 +11638,7 @@ class PCAPSentryApp:
         window = tk.Toplevel(self.root)
         window.title("Manage LLM Servers")
         window.resizable(True, True)
-        window.geometry("560x440")
+        window.geometry("620x500")
         window.minsize(480, 380)
         window.configure(bg=self.colors["bg"])
         self._set_dark_titlebar(window)
@@ -12663,8 +12663,8 @@ class PCAPSentryApp:
         window = tk.Toplevel(self.root)
         window.title("LLM Settings")
         window.resizable(True, True)
-        window.geometry("800x650")
-        window.minsize(750, 600)
+        window.geometry("860x700")
+        window.minsize(720, 580)
         window.configure(bg=self.colors["bg"])
         self._set_dark_titlebar(window)
 
@@ -15892,9 +15892,9 @@ class PCAPSentryApp:
             return
         window = tk.Toplevel(self.root)
         window.title("PCAP Charts")
-        window.geometry("1000x800")
+        window.geometry("1100x760")
         window.resizable(True, True)
-        window.minsize(800, 600)
+        window.minsize(800, 560)
         window.configure(bg=self.colors["bg"])
         self._set_dark_titlebar(window)
 
