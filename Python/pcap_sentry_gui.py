@@ -12911,6 +12911,70 @@ class PCAPSentryApp:
                 if _f not in _c2_flows:
                     _c2_flows.append(_f)
 
+        # ── Exfil inference helpers (available to both summary + Phase 4) ──────
+        _EXFIL_PORT_HINTS = {
+            20:   "FTP data channel — files sent in cleartext (fully readable in Follow Stream)",
+            21:   "FTP control — username + password sent in plaintext before file transfer",
+            22:   "SSH/SFTP — encrypted file or command transfer (content hidden)",
+            25:   "SMTP — email messages + attachments being sent out",
+            53:   "DNS — possible DNS tunneling (data hidden in DNS query strings)",
+            80:   "HTTP — UNENCRYPTED: Follow → TCP Stream to read raw stolen content",
+            110:  "POP3 — email download including cleartext credentials",
+            143:  "IMAP — email messages including cleartext login",
+            389:  "LDAP — Active Directory data: usernames, computer names, group memberships",
+            443:  "HTTPS — encrypted: likely credentials, saved passwords, files, or screenshots",
+            445:  "SMB — Windows file share access (documents, passwords, NTLM hashes)",
+            465:  "SMTP/TLS — encrypted email exfiltration",
+            587:  "SMTP submission — likely email or attachment exfiltration",
+            636:  "LDAPS — encrypted Active Directory data",
+            993:  "IMAP/TLS — encrypted email download",
+            995:  "POP3/TLS — encrypted email + credentials",
+            1433: "MSSQL — database records (user tables, passwords, financial data)",
+            3306: "MySQL/MariaDB — database records",
+            3389: "RDP — remote desktop session data",
+            5432: "PostgreSQL — database records",
+            6379: "Redis — session tokens, API keys, cached credentials",
+            8080: "HTTP alternate port — unencrypted (same as port 80)",
+            8443: "HTTPS alternate port — encrypted",
+        }
+        _EXFIL_DOMAIN_SIGNALS = [
+            (["discord.com/api/webhooks", "discordapp.com"],       "Discord webhook — classic RedLine/Lumma/Vidar stealer drop for credentials + cookies"),
+            (["api.telegram.org", "telegram.org"],                  "Telegram Bot API — stealers DM stolen credentials directly to attacker"),
+            (["pastebin.com", "paste.ee", "hastebin.com", "pastecode.io", "dpaste.org"],
+                                                                    "Paste site — malware dumping stolen text (passwords, API keys, session tokens)"),
+            (["transfer.sh", "anonfiles.com", "gofile.io", "file.io", "fileditch.com"],
+                                                                    "Anonymous file host — malware uploading stolen documents or archive files"),
+            (["ngrok.io", "ngrok.com"],                             "ngrok tunnel — malware hiding real C2 behind a reverse proxy"),
+            (["s3.amazonaws.com", "amazonaws.com"],                 "AWS S3 bucket — bulk file/data upload to attacker-controlled cloud storage"),
+            (["storage.googleapis.com", "drive.google.com"],       "Google Cloud Storage — possible unauthorized data upload"),
+            (["dropbox.com", "dl.dropboxuser.com"],                 "Dropbox — possible unauthorized file upload masquerading as cloud sync"),
+            (["onedrive.live.com", "sharepoint.com"],               "OneDrive/SharePoint — possible unauthorized upload or lateral data move"),
+            (["gist.github.com", "raw.githubusercontent.com"],     "GitHub Gist/Raw — malware using code-hosting as data drop or config pull"),
+        ]
+        _all_contacted_domains: set = (
+            set(stats.get("http_hosts", [])) | set(stats.get("tls_sni", []))
+        )
+
+        def _infer_exfil_data_type(dp_int: int, dst_ip: str) -> list:
+            """Return plain-language lines explaining what was likely stolen."""
+            hints = []
+            port_hint = _EXFIL_PORT_HINTS.get(dp_int)
+            if port_hint:
+                hints.append(f"Port {dp_int} → {port_hint}")
+            for domains, label in _EXFIL_DOMAIN_SIGNALS:
+                for frag in domains:
+                    if any(frag in d for d in _all_contacted_domains):
+                        hints.append(f"Domain signal → {label}")
+                        break
+            if not hints:
+                if dp_int == 0:
+                    hints.append("Non-standard protocol — raw socket or unknown encapsulation")
+                elif dp_int < 1024:
+                    hints.append(f"Port {dp_int} is a well-known service port — consult IANA registry for exact protocol")
+                else:
+                    hints.append(f"Port {dp_int} is non-standard — could be custom C2, encrypted blob, or archive upload")
+            return hints
+
         _has_findings = _c2_flows or _exfil_flows or _spread_flows
         if _has_findings:
             lines.append("=" * 60)
@@ -12966,16 +13030,25 @@ class PCAPSentryApp:
                     _pr   = _f.get("proto", "?")
                     _byte = _f.get("bytes", "?")
                     _pkts = _f.get("packets", "?")
+                    _dp_i = int(_dp) if str(_dp).isdigit() else 0
                     lines.append(f"    {_src}  →  {_dst}  port {_dp} / {_pr}")
                     lines.append(f"      Volume: {_byte} across {_pkts} packets")
+                    for _hint in _infer_exfil_data_type(_dp_i, _dst):
+                        lines.append(f"  !! {_hint.strip()}")
                     lines.append(f"      Wireshark: ip.src == {_src} && ip.dst == {_dst}")
                     lines.append( "      Then: Statistics → Conversations to confirm bulk transfer")
                     lines.append("")
                 lines.append(
-                    "  To see WHAT was taken (if unencrypted):\n"
-                    "    Right-click any packet in the flow → Follow → TCP Stream\n"
-                    "    Look for file content, Base64 blobs, or JSON/XML data\n"
-                    "    with field names like 'password', 'user', 'cookie', 'key'"
+                    "  To read the actual stolen data (unencrypted flows only):\n"
+                    "    1. Apply filter:  ip.src == <infected host IP>\n"
+                    "    2. Right-click a packet → Follow → TCP (or UDP) Stream\n"
+                    "    3. Look for JSON fields:  'password', 'cookie', 'user',\n"
+                    "       'token', 'key', 'path', 'hostname' — these are stealer\n"
+                    "       output formats used by RedLine, Vidar, Lumma, etc.\n"
+                    "    4. Base64 blobs: Edit → Find Packet → String 'eyJ' or '==' —\n"
+                    "       these are encoded credential dumps\n"
+                    "    5. For encrypted flows (HTTPS) use Decrypt TLS in Wireshark\n"
+                    "       (requires the server private key or a SSLKEYLOGFILE)"
                 )
                 lines.append("")
             else:
@@ -13749,12 +13822,19 @@ class PCAPSentryApp:
             if exfil_candidates:
                 lines.append("")
                 lines.append("  EXFILTRATION CANDIDATES IN THIS CAPTURE:")
+                lines.append("  (volume + likely data type based on port and contacted domains)")
+                lines.append("")
                 for cand in exfil_candidates[:3]:
+                    _c_dp   = cand.get("dport", "?")
+                    _c_dp_i = int(_c_dp) if str(_c_dp).isdigit() else 0
                     lines.append(
                         f"    {cand.get('src','?')} → {cand.get('dst','?')}:"
                         f"  {cand.get('bytes','?')} over {cand.get('packets','?')} packets"
-                        f"  (port {cand.get('dport','?')})"
+                        f"  (port {_c_dp})"
                     )
+                    for _ph in _infer_exfil_data_type(_c_dp_i, cand.get("dst", "?")):
+                        lines.append(f"    !! {_ph}")
+                    lines.append("")
                 lines.append(
                     "  Use Statistics → Conversations → sort by 'Bytes A→B'\n"
                     "  to confirm these carry the bulk of outbound transfer."
