@@ -13336,6 +13336,606 @@ class PCAPSentryApp:
                         lines.append(f"    Domain {d_info['domain']} — risk {risk:.0f}/100 ({sev})")
                 lines.append("")
 
+        # ── Malware traffic analysis methodology ──
+        lines.append("-" * 60)
+        lines.append("  MALWARE TRAFFIC ANALYSIS — STEP BY STEP")
+        lines.append("  How to filter, inspect, and decode what the malware did")
+        lines.append("-" * 60)
+        lines.append("")
+        lines.append(
+            "  When you have a PCAP that contains malware traffic, work\n"
+            "  through these four phases in order.  Each one answers a\n"
+            "  different question about what the attacker did."
+        )
+        lines.append("")
+
+        # -- Phase 1: Filtering --
+        lines.append("  ── PHASE 1 · FILTER THE MALWARE TRAFFIC ──────────────")
+        lines.append("")
+        lines.append(
+            "  Goal: isolate only the packets that belong to the malware,\n"
+            "  hiding all the background noise (Windows Updates, DNS, etc.)."
+        )
+        lines.append("")
+        lines.append(
+            "  Start broad, then narrow down:\n"
+            "\n"
+            "  Step 1 — Remove known-safe traffic:\n"
+            "    !(ip.addr == 8.8.8.8 || ip.addr == 8.8.4.4)  — drop Google DNS\n"
+            "    !(dns.qry.name contains 'microsoft.com')       — drop MS updates\n"
+            "    !(ip.dst == 239.0.0.0/8)                       — drop mDNS/SSDP\n"
+            "\n"
+            "  Step 2 — Highlight external connections only:\n"
+            "    !(ip.dst == 10.0.0.0/8 || ip.dst == 192.168.0.0/16\n"
+            "      || ip.dst == 172.16.0.0/12)\n"
+            "    This leaves only traffic to the public internet — where\n"
+            "    a C2 server would be.\n"
+            "\n"
+            "  Step 3 — Focus on specific suspicious IPs/ports found above:"
+        )
+        # If we have flagged flows, generate concrete ready-to-paste filters
+        if suspicious_flows:
+            ext_ips = []
+            seen_ext = set()
+            for item in suspicious_flows[:6]:
+                for addr_key in ("src", "dst"):
+                    ip_val = item.get(addr_key, "")
+                    if ip_val and ip_val not in seen_ext and not ip_val.startswith(
+                        ("10.", "192.168.", "172.1", "172.2", "172.3", "127.", "0.")
+                    ):
+                        ext_ips.append(ip_val)
+                        seen_ext.add(ip_val)
+            if ext_ips:
+                lines.append("")
+                lines.append("    Flagged external IPs from THIS capture:")
+                for ip_val in ext_ips[:5]:
+                    lines.append(f"      ip.addr == {ip_val}")
+                if len(ext_ips) > 1:
+                    combined = " || ".join(f"ip.addr == {a}" for a in ext_ips[:4])
+                    lines.append(f"\n    Combined filter for all flagged IPs:\n      {combined}")
+            # Flagged ports
+            flagged_ports = {}
+            for item in suspicious_flows[:8]:
+                dp = item.get("dport", "")
+                if str(dp).isdigit() and int(dp) not in COMMON_PORTS:
+                    flagged_ports[int(dp)] = item.get("proto", "tcp").lower()
+            if flagged_ports:
+                lines.append("")
+                lines.append("    Uncommon destination ports from THIS capture:")
+                for pt, pr in list(flagged_ports.items())[:5]:
+                    lines.append(f"      {pr}.port == {pt}")
+        lines.append("")
+
+        # -- Phase 2: Headers and payloads --
+        lines.append("  ── PHASE 2 · INSPECT HEADERS AND PAYLOADS ────────────")
+        lines.append("")
+        lines.append(
+            "  Goal: understand exactly what each packet carries — both the\n"
+            "  routing information in the header and the data in the payload."
+        )
+        lines.append("")
+        lines.append(
+            "  The Wireshark packet detail pane has three layers to examine:\n"
+            "\n"
+            "  ┌─────────────────────────────────────────────────────────┐\n"
+            "  │ Frame (size, arrival time, interface)                   │\n"
+            "  │   └─ Ethernet II (MAC addresses)                        │\n"
+            "  │        └─ IP (src/dst IP, TTL, protocol)                │\n"
+            "  │             └─ TCP/UDP (src/dst port, flags, seq/ack)   │\n"
+            "  │                  └─ Application payload (the data)      │\n"
+            "  └─────────────────────────────────────────────────────────┘\n"
+        )
+        lines.append(
+            "  What to look for in IP headers:\n"
+            "    • TTL (Time To Live) — a value far from 64/128/255 can\n"
+            "      indicate spoofing or routing anomalies.\n"
+            "    • Fragmented packets (More Fragments flag = 1) — malware\n"
+            "      sometimes splits packets to evade IDS/IPS.\n"
+            "    Wireshark filter: ip.flags.mf == 1\n"
+            "\n"
+            "  What to look for in TCP headers:\n"
+            "    • SYN with no matching SYN-ACK → port is closed/filtered\n"
+            "      or the source is scanning.  Filter: tcp.flags.syn==1\n"
+            "    • FIN/RST storms → unusual teardown, possible DoS.\n"
+            "    • Window size 0 → receiver telling sender to stop; can\n"
+            "      be abused to stall IDS sensors.\n"
+            "\n"
+            "  Reconstructing the payload (what the malware actually sent):\n"
+            "    1. Apply your IP filter to isolate the suspect flow.\n"
+            "    2. Right-click any packet in the flow.\n"
+            "    3. Choose  Follow → TCP Stream  (or UDP Stream).\n"
+            "    4. Wireshark reassembles all fragments into the full\n"
+            "       conversation.  Red = traffic FROM the source host;\n"
+            "       Blue = traffic TO the source host from the server.\n"
+            "    5. Switch the 'Show data as' dropdown:\n"
+            "         ASCII        — readable text (HTTP, SMTP, plain C2)\n"
+            "         Hex Dump     — raw bytes; look for file headers\n"
+            "                        (4D 5A = MZ = Windows PE/EXE)\n"
+            "         Base64/UTF-8 — encoded data (PowerShell payloads\n"
+            "                        often Base64-encode their commands)\n"
+            "\n"
+            "  Key payload red flags:\n"
+            "    • 'MZ' or '4D 5A' at the start → executable being\n"
+            "      transferred (drive-by download or lateral movement)\n"
+            "    • Long Base64 strings (A-Z, a-z, 0-9, +, /) → encoded\n"
+            "      commands or data blobs\n"
+            "    • 'JFIF' or 'PNG' magic bytes → image file (exfil\n"
+            "      hidden inside a photo is common steganography)\n"
+            "    • HTTP POST body with no Content-Type → raw data dump\n"
+            "    • Repeated fixed-length blocks → encrypted/compressed\n"
+            "      data (high entropy — no human-readable strings at all)"
+        )
+        lines.append("")
+
+        # -- Phase 3: C&C identification --
+        lines.append("  ── PHASE 3 · IDENTIFY C&C COMMUNICATION ──────────────")
+        lines.append("")
+        lines.append(
+            "  Goal: find the 'phone home' channel that lets the attacker\n"
+            "  control the infected machine from their server."
+        )
+        lines.append("")
+        lines.append(
+            "  C&C traffic signatures by protocol:\n"
+            "\n"
+            "  HTTP-based C2:\n"
+            "    • Unusual or misspelled User-Agent strings.\n"
+            "      Filter: http.user_agent\n"
+            "      Legitimate browsers follow strict UA format; malware\n"
+            "      often uses hard-coded fake strings like:\n"
+            '        "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)"\n'
+            "      (IE6 hasn't been used since ~2006)\n"
+            "    • Short POST requests at regular intervals to a URL\n"
+            "      with a random-looking path (e.g., /cx8f3k/update).\n"
+            "    • HTTP GET with base64 in the query string:\n"
+            "      e.g., GET /news.php?x=aGVsbG8gd29ybGQ=\n"
+            "    Filter: http.request.method == 'POST' && frame.len < 500\n"
+            "\n"
+            "  HTTPS-based C2 (encrypted but still detectable):\n"
+            "    • JA3 fingerprint — a hash of the TLS handshake\n"
+            "      parameters. Known-bad JA3 hashes are published.\n"
+            "      Wireshark shows JA3 if you add the ja3 column.\n"
+            "    • Self-signed certificate (issuer == subject):\n"
+            "      Filter: tls.handshake.extensions_server_name\n"
+            "      Then check: tls.handshake.certificate\n"
+            "    • Certificate issued hours or days ago (not months/years)\n"
+            "      — attackers register throw-away infrastructure fast.\n"
+            "    • SNI that is an IP address instead of a domain name:\n"
+            '      e.g., TLS SNI = "185.220.101.x" — almost never legit.\n'
+            "\n"
+            "  DNS-based C2:\n"
+            "    • Very long subdomain queries (>50 chars) — data encoded\n"
+            "      in the name itself (DNS tunneling).\n"
+            "      Filter: dns.qry.name matches '[a-z0-9]{30,}'\n"
+            "    • High query rate to a single second-level domain:\n"
+            "      Filter: dns.qry.name contains 'suspiciousdomain.com'\n"
+            "      Then Statistics → DNS → Name query count\n"
+            "    • TXT record responses with encoded content.\n"
+            "      Filter: dns.qry.type == 16\n"
+            "\n"
+            "  Beaconing (timing pattern of any protocol):\n"
+            "    • Apply your filter, then open Statistics → I/O Graph.\n"
+            "    • Set interval to 1 second.  Regular spikes (e.g., one\n"
+            "      spike every 30 s) = beacon interval.\n"
+            "    • Cross-check with sleeping processes:\n"
+            "      Windows Event ID 4688 (process creation) or\n"
+            "      Sysmon Event ID 1 with matching timestamps."
+        )
+        if suspicious_flows:
+            # Try to highlight C2 candidates from actual data
+            long_dur = [f for f in suspicious_flows if "long_duration" in f.get("reason", "").lower()]
+            beacon = [f for f in suspicious_flows if "beacon" in f.get("reason", "").lower()]
+            c2_candidates = long_dur or beacon
+            if c2_candidates:
+                lines.append("")
+                lines.append("  C2 CANDIDATES IN THIS CAPTURE:")
+                for cand in c2_candidates[:3]:
+                    lines.append(
+                        f"    {cand.get('src','?')} → {cand.get('dst','?')}:"
+                        f"  port {cand.get('dport','?')} / {cand.get('proto','?')}"
+                        f"  ({cand.get('reason','')})"
+                    )
+                lines.append(
+                    "  Apply 'Follow TCP Stream' to each of these to see whether\n"
+                    "  the payload is human-readable commands or encrypted data."
+                )
+        lines.append("")
+
+        # -- Phase 4: Data exfiltration --
+        lines.append("  ── PHASE 4 · IDENTIFY STOLEN DATA (EXFILTRATION) ─────")
+        lines.append("")
+        lines.append(
+            "  Goal: determine whether sensitive data (files, credentials,\n"
+            "  screenshots, keystrokes) was copied out of the network."
+        )
+        lines.append("")
+        lines.append(
+            "  Detection techniques:\n"
+            "\n"
+            "  Volume-based detection:\n"
+            "    • Statistics → Conversations → TCP tab → sort by Bytes B→A\n"
+            "      (B→A = outbound from internal host).  Any conversation\n"
+            "      sending megabytes to an external IP warrants investigation.\n"
+            "    • Filter: ip.src == <internal host IP>\n"
+            "      Then check: Statistics → Protocol Hierarchy to see what\n"
+            "      proportion of traffic is TLS vs. plain.\n"
+            "\n"
+            "  HTTP POST exfiltration (unencrypted path):\n"
+            "    • Filter: http.request.method == 'POST'\n"
+            "    • Follow the TCP stream — the POST body will contain the\n"
+            "      stolen data (sometimes Base64, sometimes raw text).\n"
+            "    • Look for form fields like 'data=', 'log=', 'file=' with\n"
+            "      large or encoded values.\n"
+            "\n"
+            "  HTTPS exfiltration (encrypted — harder but not impossible):\n"
+            "    • You can't read the content, but you CAN measure it.\n"
+            "    • Unusually large TLS Application Data records (look for\n"
+            "      packets > 10,000 bytes after the handshake completes).\n"
+            "    • If you control the endpoint, install a TLS inspection\n"
+            "      proxy (Zeek, Fiddler, mitmproxy) to decrypt in-flight.\n"
+            "\n"
+            "  DNS tunneling exfiltration:\n"
+            "    • Stolen data is encoded into DNS query names and sent\n"
+            "      to an attacker-controlled DNS server.\n"
+            "    • Signs: queries to ONE parent domain, but hundreds of\n"
+            "      unique subdomains; each subdomain is a data chunk.\n"
+            "    • Filter: dns && frame.len > 150\n"
+            "    • Tool: iodine detector / passivedns can decode this.\n"
+            "\n"
+            "  ICMP tunneling:\n"
+            "    • Data hidden in ICMP Echo (ping) payloads.\n"
+            "    • Normal pings have payloads of 32–56 bytes; tunneled\n"
+            "      pings carry hundreds of bytes.\n"
+            "    • Filter: icmp && frame.len > 100\n"
+            "\n"
+            "  On the compromised host, corroborate network findings with:\n"
+            "    • Prefetch files (%SystemRoot%\\Prefetch) for archive tools\n"
+            "      (7z.exe, winrar.exe, rar.exe) — archiving before exfil.\n"
+            "    • Scheduled Tasks or PowerShell history for upload scripts.\n"
+            "    • C:\\Users\\*\\AppData\\Local\\Temp for staged .zip/.7z files.\n"
+            "    • Windows Event 4663 (file access) to see what was read."
+        )
+        if suspicious_flows:
+            exfil_candidates = [
+                f for f in suspicious_flows
+                if "high_volume" in f.get("reason", "").lower()
+                or "exfil" in f.get("reason", "").lower()
+            ]
+            if exfil_candidates:
+                lines.append("")
+                lines.append("  EXFILTRATION CANDIDATES IN THIS CAPTURE:")
+                for cand in exfil_candidates[:3]:
+                    lines.append(
+                        f"    {cand.get('src','?')} → {cand.get('dst','?')}:"
+                        f"  {cand.get('bytes','?')} over {cand.get('packets','?')} packets"
+                        f"  (port {cand.get('dport','?')})"
+                    )
+                lines.append(
+                    "  Use Statistics → Conversations → sort by 'Bytes A→B'\n"
+                    "  to confirm these carry the bulk of outbound transfer."
+                )
+        lines.append("")
+
+        # -- Phase 5: Malware spreading --
+        lines.append("  ── PHASE 5 · HOW THE MALWARE SPREADS ─────────────────")
+        lines.append("")
+        lines.append(
+            "  Goal: determine whether the malware propagates itself to\n"
+            "  other machines on the same network (worm behaviour) or\n"
+            "  whether an attacker is manually moving laterally."
+        )
+        lines.append("")
+        lines.append(
+            "  Key spreading protocols to look for:\n"
+            "\n"
+            "  SMB — Windows file sharing (port 445):\n"
+            "    • Most ransomware and worms (WannaCry, NotPetya) spread\n"
+            "      via SMB.  Look for one host connecting to many others\n"
+            "      on port 445 in rapid succession.\n"
+            "    • Filter: tcp.port == 445\n"
+            "    • Malicious SMB patterns:\n"
+            "        - NTLM authentication attempts to many hosts (brute)\n"
+            "        - SMBv1 traffic (EternalBlue-class exploits)\n"
+            "          Filter: smb.dialect contains 'NT LM 0.12'\n"
+            "        - Pipe names used by known tools:\n"
+            "          \\\\PIPE\\\\svcctl, \\\\PIPE\\\\atsvc, \\\\PIPE\\\\PSEXESVC\n"
+            "\n"
+            "  RDP — Remote Desktop (port 3389):\n"
+            "    • Attackers use stolen credentials to remote-in to other\n"
+            "      machines.  Watch for SYN floods to port 3389 from one\n"
+            "      internal IP: this is credential-spraying.\n"
+            "    • Filter: tcp.port == 3389\n"
+            "\n"
+            "  WMI — Windows Management Instrumentation (port 135 + high):\n"
+            "    • Post-exploitation frameworks (Cobalt Strike, Metasploit)\n"
+            "      use WMI to execute commands remotely with no file written.\n"
+            "    • Filter: tcp.port == 135\n"
+            "    • Then follow the stream and look for DCE/RPC IObjectExporter\n"
+            "      calls followed by high-port back connections.\n"
+            "\n"
+            "  SSH (port 22):\n"
+            "    • Many auth attempts in seconds = brute force.\n"
+            "    • Filter: tcp.port == 22 && tcp.flags.syn == 1\n"
+            "    • Count unique destination IPs — one source hitting many\n"
+            "      destinations = scanning worm behaviour.\n"
+            "\n"
+            "  Network scanning (propagation reconnaissance):\n"
+            "    • SYN packets to sequential IPs with no SYN-ACK response.\n"
+            "    • Filter: tcp.flags.syn == 1 && !tcp.flags.ack == 1\n"
+            "    • Statistics → Conversations → sort by 'Packets' and look\n"
+            "      for one source with hundreds of 1-packet conversations.\n"
+            "\n"
+            "  ARP broadcasting (local subnet discovery):\n"
+            "    • Malware sends ARP Who-has? to every host on the subnet\n"
+            "      before attempting to spread.  Normal hosts send a few\n"
+            "      ARPs; a scanner sends hundreds in seconds.\n"
+            "    • Filter: arp.opcode == 1\n"
+            "    • Statistics → Endpoints → Ethernet → sort by 'Packets'\n"
+        )
+        # If we see lateral movement ports in the flagged flows, highlight them
+        if suspicious_flows:
+            lateral_ports = {445, 3389, 135, 22, 139}
+            lateral_flows = [
+                f for f in suspicious_flows
+                if str(f.get("dport", "")).isdigit() and int(f.get("dport", 0)) in lateral_ports
+            ]
+            if lateral_flows:
+                lines.append("")
+                lines.append("  LATERAL MOVEMENT INDICATORS IN THIS CAPTURE:")
+                for lf in lateral_flows[:4]:
+                    port_name = {445: "SMB", 3389: "RDP", 135: "WMI/RPC", 22: "SSH", 139: "NetBIOS"}.get(
+                        int(lf.get("dport", 0)), str(lf.get("dport", ""))
+                    )
+                    lines.append(
+                        f"    {lf.get('src','?')} → {lf.get('dst','?')}"
+                        f"  port {lf.get('dport','?')} ({port_name})"
+                    )
+                lines.append(
+                    "  Investigate whether the SOURCE IP is an internal host —\n"
+                    "  an internal machine connecting to other internal machines\n"
+                    "  on these ports is a strong lateral movement signal."
+                )
+        lines.append("")
+
+        # -- Phase 6: Identify the infected client (hostname + user) --
+        lines.append("  ── PHASE 6 · IDENTIFY THE INFECTED CLIENT ─────────────")
+        lines.append("")
+        lines.append(
+            "  Goal: determine WHICH computer on the network is infected\n"
+            "  and WHO was logged in when the malware ran.  This is the\n"
+            "  most important step for incident response — you need to\n"
+            "  know the machine to isolate it and the user to notify."
+        )
+        lines.append("")
+        lines.append(
+            "  ┌─────────────────────────────────────────────────────────┐\n"
+            "  │  The computer's hostname and the logged-in username      │\n"
+            "  │  leak into network traffic through many protocols.       │\n"
+            "  │  You do NOT need to crack encryption to find them —      │\n"
+            "  │  they appear in plaintext inside the packets themselves. │\n"
+            "  └─────────────────────────────────────────────────────────┘\n"
+        )
+
+        lines.append(
+            "  METHOD 1 — DHCP (easiest, most reliable)\n"
+            "  ─────────────────────────────────────────\n"
+            "  When a machine joins the network it broadcasts a DHCP\n"
+            "  request that includes its hostname in Option 12.\n"
+            "\n"
+            "  Wireshark filter:\n"
+            "    bootp.option.hostname\n"
+            "    or: bootp.type == 3    (DHCP Request packets only)\n"
+            "\n"
+            "  Steps:\n"
+            "    1. Apply filter  bootp\n"
+            "    2. Find a DHCP Request (DHCP Message Type = 3)\n"
+            "    3. Expand  Bootstrap Protocol → Option 12 (Host Name)\n"
+            "    4. The value IS the Windows computer name.\n"
+            "\n"
+            "  The DHCP ACK that the server sends back will show you:\n"
+            "    • The IP address the machine was assigned (map IP→name)\n"
+            "    • Lease time, subnet, gateway — tells you the network\n"
+            "      segment the infected machine is on.\n"
+            "\n"
+            "  TIP: If multiple DHCP exchanges appear in the PCAP, sort\n"
+            "  by Source IP, then look at which internal IP later sends\n"
+            "  malware traffic — that confirms which DHCP hostname matches."
+        )
+        lines.append("")
+        lines.append(
+            "  METHOD 2 — NBNS / NetBIOS Name Service (port 137 UDP)\n"
+            "  ─────────────────────────────────────────────────────\n"
+            "  Older Windows machines (and many modern ones) broadcast\n"
+            "  NetBIOS name registrations containing the NETBIOS name\n"
+            "  (same as the computer name, uppercase, max 15 chars).\n"
+            "\n"
+            "  Wireshark filter:\n"
+            "    nbns\n"
+            "    nbns.name  (shows the hostname field directly)\n"
+            "\n"
+            "  Steps:\n"
+            "    1. Filter: nbns\n"
+            "    2. Look for NB Registration Request or Name Query\n"
+            "    3. Expand  NetBIOS Name Service → Questions → Name\n"
+            "       The first 15 chars are the computer name.\n"
+            "\n"
+            "  NOTE: the 16th byte is a suffix code:\n"
+            "    0x00 = workstation, 0x20 = file server,\n"
+            "    0x1C = domain controller, 0x03 = messenger service"
+        )
+        lines.append("")
+        lines.append(
+            "  METHOD 3 — Kerberos (domain-joined machines — BEST for username)\n"
+            "  ─────────────────────────────────────────────────────────────────\n"
+            "  When a user logs in on a domain, Windows sends a Kerberos\n"
+            "  AS-REQ (Authentication Service Request) to the Domain\n"
+            "  Controller.  This packet contains BOTH the username AND\n"
+            "  the hostname in cleartext — even though Kerberos is an\n"
+            "  authentication protocol.\n"
+            "\n"
+            "  Wireshark filter:\n"
+            "    kerberos.CNameString\n"
+            "\n"
+            "  Steps:\n"
+            "    1. Filter: kerberos\n"
+            "    2. Find an AS-REQ (msg-type == 10)\n"
+            "    3. Expand  Kerberos → req-body → cname → CNameString\n"
+            "       → This is the USERNAME of the person who logged in.\n"
+            "    4. Expand  Kerberos → req-body → sname → sname-string\n"
+            "       → This contains the Kerberos REALM (domain name).\n"
+            "\n"
+            "  Kerberos TGS-REQ (ticket requests) also leak the service\n"
+            "  being accessed — e.g., cifs/fileserver01.corp tells you\n"
+            "  the user tried to access \\\\fileserver01 — lateral movement!\n"
+            "\n"
+            "  Filter for service ticket requests (lateral movement):\n"
+            "    kerberos.msg_type == 12   (TGS-REQ)\n"
+            "    kerberos.SNameString      (shows target service)"
+        )
+        lines.append("")
+        lines.append(
+            "  METHOD 4 — NTLM Authentication (works on all Windows versions)\n"
+            "  ────────────────────────────────────────────────────────────────\n"
+            "  NTLM is an older Windows auth protocol.  The third message\n"
+            "  in the NTLM handshake (NTLMSSP_AUTH) contains the domain\n"
+            "  name, username, and workstation name IN PLAINTEXT.\n"
+            "\n"
+            "  Wireshark filter:\n"
+            "    ntlmssp.auth.username\n"
+            "\n"
+            "  Steps:\n"
+            "    1. Filter: ntlmssp\n"
+            "    2. Find packets with NTLMSSP_AUTH (Challenge Response)\n"
+            "    3. Expand: NTLM Secure Service Provider →\n"
+            "         Lan Manager Response / NTLM Response →\n"
+            "         Domain name        ← Active Directory domain\n"
+            "         User name          ← logged-in user  ***\n"
+            "         Workstation name   ← computer name   ***\n"
+            "\n"
+            "  NTLM appears in SMB, HTTP, RDP, LDAP, and many other\n"
+            "  protocols — if ANY authenticated Windows service is used\n"
+            "  in the capture, NTLM or Kerberos auth will be visible.\n"
+            "\n"
+            "  TIP: Failed NTLM auth (Status = 0xC000006D) repeated many\n"
+            "  times from one source = password-spraying / brute-force."
+        )
+        lines.append("")
+        lines.append(
+            "  METHOD 5 — SMB Session Setup\n"
+            "  ─────────────────────────────\n"
+            "  SMB Session Setup request (sent to port 445) contains:\n"
+            "    AccountName    ← username of the connecting user\n"
+            "    PrimaryDomain  ← Windows domain\n"
+            "    NativeOS       ← exact Windows version/build\n"
+            "    NativeLanman   ← SMB client version\n"
+            "\n"
+            "  Wireshark filter:\n"
+            "    smb.native_os      (OS version — confirms machine type)\n"
+            "    smb.setup.action   (Guest / Authenticated)\n"
+            "\n"
+            "  SMB also reveals accessed shares and file paths:\n"
+            "    smb.path           (e.g., \\\\FILESERVER\\C$)\n"
+            "    smb2.filename      (exact files opened/read/written)"
+        )
+        lines.append("")
+        lines.append(
+            "  METHOD 6 — HTTP User-Agent / Authorization Headers\n"
+            "  ───────────────────────────────────────────────────\n"
+            "  Unencrypted HTTP traffic exposes:\n"
+            "\n"
+            "    User-Agent header — includes OS, browser version:\n"
+            '      e.g., "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"\n'
+            "           → Tells you OS version and architecture.\n"
+            "\n"
+            "    HTTP NTLM / Basic / Negotiate auth:\n"
+            "      Filter: http.authbasic  or  http.www_authenticate\n"
+            "      Basic auth sends  Base64(username:password)  in the\n"
+            "      Authorization header — Base64-decode it to read both.\n"
+            "\n"
+            "  Wireshark filter:\n"
+            "    http.request     (see all requests + User-Agent values)\n"
+            "    http.authorization  (auth headers — may contain username)"
+        )
+        lines.append("")
+        lines.append(
+            "  METHOD 7 — LDAP Queries (domain queries)\n"
+            "  ──────────────────────────────────────────\n"
+            "  Malware that does Active Directory reconnaissance uses LDAP\n"
+            "  (port 389 / 636 TLS) to enumerate users, groups, and DCs.\n"
+            "  The queries themselves reveal the attacking account.\n"
+            "\n"
+            "  Wireshark filter:\n"
+            "    ldap\n"
+            "    ldap.bindRequest_name  ← the account performing the bind"
+        )
+        lines.append("")
+
+        # Dynamically surface DHCP/NBNS/Kerberos/NTLM hints from the capture
+        lines.append("  QUICK-START: FILTERS FOR THIS SPECIFIC CAPTURE")
+        lines.append("  ───────────────────────────────────────────────")
+        lines.append("")
+
+        # List internal IPs that appear as sources in suspicious flows
+        internal_src = []
+        seen_int_src = set()
+        if suspicious_flows:
+            for item in suspicious_flows:
+                s = item.get("src", "")
+                if s and s not in seen_int_src and (
+                    s.startswith("10.")
+                    or s.startswith("192.168.")
+                    or s.startswith("172.")
+                    or s.startswith("169.")
+                ):
+                    internal_src.append(s)
+                    seen_int_src.add(s)
+
+        if internal_src:
+            lines.append("  Suspected infected machine(s) based on flagged flows:")
+            for ip in internal_src[:5]:
+                lines.append(f"    {ip}")
+            lines.append("")
+            lines.append("  To find the hostname and user for each IP above,")
+            lines.append("  apply these filters in sequence in Wireshark:\n")
+            for ip in internal_src[:3]:
+                lines.append(f"    # --- Machine: {ip} ---")
+                lines.append(f"    bootp && ip.src == {ip}")
+                lines.append(f"      → Look for Option 12 (hostname)")
+                lines.append(f"    nbns && ip.src == {ip}")
+                lines.append(f"      → Look for Name Registration Request")
+                lines.append(f"    kerberos && ip.src == {ip}")
+                lines.append(f"      → Look for CNameString (username)")
+                lines.append(f"    ntlmssp && ip.src == {ip}")
+                lines.append(f"      → Look for ntlmssp.auth.username")
+                lines.append("")
+        else:
+            lines.append("  Standard identity-extraction filters (paste into Wireshark):")
+            lines.append("")
+            lines.append("    bootp.option.hostname         → Computer name via DHCP")
+            lines.append("    nbns                          → NetBIOS computer name")
+            lines.append("    kerberos.CNameString          → Domain username")
+            lines.append("    ntlmssp.auth.username         → Windows username")
+            lines.append("    smb.setup.action              → SMB user + domain")
+            lines.append("    http.authorization            → HTTP Basic auth username")
+        lines.append("")
+        lines.append(
+            "  CORRELATING HOSTNAME → IP → USER:\n"
+            "  Once you have the hostname from DHCP/NBNS and the IP from\n"
+            "  the DHCP ACK, filter all suspicious traffic by that IP.\n"
+            "  Then look for Kerberos/NTLM on the same IP to get the\n"
+            "  username.  The timeline:\n"
+            "\n"
+            "    [DHCP Request]    → gets IP + hostname\n"
+            "    [Kerberos AS-REQ] → gets username + domain\n"
+            "    [Malware C2]      → same src IP = confirmed infected user\n"
+            "\n"
+            "  Export findings:\n"
+            "    File → Export Packet Dissections → As JSON\n"
+            "    Then  grep  for 'CNameString', 'hostname', 'username'\n"
+            "    to extract all identity artefacts at once."
+        )
+        lines.append("")
+
         # ── Common attack patterns glossary ──
         lines.append("-" * 60)
         lines.append("  COMMON ATTACK PATTERNS (GLOSSARY)")
