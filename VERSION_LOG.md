@@ -1,5 +1,8 @@
 # Version Log
 
+
+## 2026.02.19-11 - 2026-02-19
+- UX: clickable API key signup links on API Keys tab; fix Ruff PLW0602; CI coverage threshold fix
 ## 2026.02.19-10 (post-release fixes) - 2026-02-19
 - **UX:** API Keys tab now shows a clickable **"Get a free API key"** hyperlink beneath each service (AlienVault OTX, AbuseIPDB, GreyNoise, VirusTotal) that opens the signup page directly in the browser
 - **Fix:** Removed unused `global APP_DATA_FALLBACK_NOTICE` declaration in `_get_app_data_dir` (Ruff `PLW0602`)
