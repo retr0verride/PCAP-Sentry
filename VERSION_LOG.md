@@ -6,6 +6,9 @@
 
 
 
+
+## 2026.02.20-5 - 2026-02-20
+- fix(icon): fill hexagon interior with solid black — was transparent
 ## 2026.02.20-4 - 2026-02-20
 - v2026.02.20-4: Education main tab (Wireshark reference guide, 12 sections, clickable resource links); Details sub-tab rename; Verify All API keys button (parallel, live labels); sensible dialog/window default sizes and minsize guards; ruff format pass
 ## 2026.02.20-4 - 2026-02-20
