@@ -314,17 +314,68 @@ Provides the analytical reasoning behind the verdict:
 
 ### 7.3 Education Tab
 
-Designed for beginners and learning purposes:
+Designed for beginners and learning purposes. After every analysis, the Education tab builds a personalised guide from the actual flows found in the capture.
 
-- **Plain-English explanations** of what was found and why it matters
+#### Malware Activity Summary
+
+The first section immediately below the verdict and risk score is the **MALWARE ACTIVITY SUMMARY**, which classifies every suspicious flow from the capture into one of three categories:
+
+| Category | What it means | Example trigger |
+|----------|--------------|----------------|
+| `[C&C]` | Command & control — the malware calling home | Beaconing pattern, known-malicious destination IP, unusual port |
+| `[EXFIL]` | Data stolen from the host | High-volume outbound transfer (≥ P95 of all flows *and* ≥ 100 KB) |
+| `[SPREAD]` | Malware spreading to other machines | Traffic to SMB (445), RDP (3389), WMI (135), SSH (22) |
+
+Each flow entry shows the source IP → destination IP, port/protocol, byte volume, and a Wireshark display filter you can paste directly.
+
+#### Plain-Language Stolen-Data Inference
+
+For every `[EXFIL]` flow, PCAP Sentry infers in plain language what type of data was likely stolen:
+
+- **Port-based hints** — 23 well-known ports are mapped to human-readable explanations:
+  - Port 21 → *FTP — username + password sent in plaintext before file transfer*
+  - Port 80 → *HTTP — UNENCRYPTED: Follow → TCP Stream to read raw stolen content*
+  - Port 443 → *HTTPS — encrypted: likely credentials, saved passwords, files, or screenshots*
+  - Port 25 → *SMTP — email messages + attachments being sent out*
+  - Port 1433 → *MSSQL — database records (user tables, passwords, financial data)*
+  - … and 18 more
+- **Domain signals** — If the capture contacted a known stealer drop-point, it is called out by name:
+  - Discord webhooks → *RedLine/Lumma/Vidar stealer drop for credentials + cookies*
+  - Telegram Bot API → *stealers DM stolen credentials directly to the attacker*
+  - Paste sites (Pastebin, paste.ee, Hastebin) → *malware dumping stolen text as a public paste*
+  - Anonymous file hosts (transfer.sh, gofile.io) → *uploading stolen documents or archive files*
+  - ngrok tunnels → *malware hiding real C2 behind a reverse proxy*
+  - AWS S3, Google Cloud Storage, Dropbox, OneDrive, GitHub Gist
+
+A five-step guide explains how to read the raw stolen content in Wireshark, including Base64 blob searching and TLS decryption via `SSLKEYLOGFILE`.
+
+#### Six-Phase Malware Traffic Analysis Methodology
+
+The rest of the Education tab walks through a structured six-phase approach used by professional malware analysts:
+
+| Phase | Goal |
+|-------|------|
+| **1 — Filter & Orient** | Reduce noise; identify internal hosts, protocols, and external destinations |
+| **2 — Inspect Headers & Payloads** | Read HTTP requests, follow TCP streams, decode Base64 payloads |
+| **3 — Identify C&C Communication** | Find beaconing (regular interval callbacks), known-malicious IPs, unusual ports |
+| **4 — Identify Data Exfiltration** | Detect large outbound transfers, HTTP POSTs, DNS tunneling, ICMP tunneling |
+| **5 — Identify Spreading** | Find SMB/RDP/WMI/SSH lateral movement and network scanning |
+| **6 — Identify the Infected Client** | Extract hostname and username from DHCP Option 12, NetBIOS, Kerberos `CNameString`, NTLM `ntlmssp.auth.username`, SMB Session Setup, HTTP `User-Agent`, LDAP `sAMAccountName` |
+
+Each phase generates **dynamic content** from the actual flows in the current capture — for example, Phase 6 produces a per-IP block of Wireshark filters for every internal source IP found in suspicious flows.
+
+#### Other Education Tab Content
+
+- **Plain-English verdict explanation** — Why the current verdict was reached
+- **Risk score breakdown** — How the weighted combination of ML, anomaly, and IoC checks contributes to the 0–100 score
+- **What was found** — Dynamic summary of top ports, DNS queries, TLS SNI names, and flagged IPs with context
 - **MITRE ATT&CK technique IDs** — Each attack pattern links to the relevant ATT&CK technique (e.g., T1071.001 for Application Layer Protocol)
 - **Technical deep-dives** — How each attack pattern works at the protocol level
 - **Common malware families** — Real-world malware known to use each technique
 - **Host investigation steps** — What to look for on the affected machine
 - **Remediation guidance** — How to contain and recover from the identified threat
 - **External learning links** — MITRE ATT&CK, SANS, CISA, and vendor research pages
-- **Threat intelligence details** — ThreatFox and other TI findings are embedded inline with the relevant pattern explanation
-- **Attack pattern glossary** — Common network attack patterns explained
+- **Threat intelligence details** — ThreatFox and other TI findings embedded inline with the relevant pattern explanation
 
 ### 7.4 Packets Tab
 

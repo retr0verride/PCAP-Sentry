@@ -3,6 +3,31 @@
 
 
 
+
+## 2026.02.20-2 - 2026-02-20
+- Education tab: six-phase malware analysis methodology, MALWARE ACTIVITY SUMMARY, plain-language stolen-data inference; perf: lru_cache on _is_private_ip; accuracy: high_volume floor, port-scan external filter, richer ML features
+## 2026.02.20-2 - 2026-02-20
+
+### Education Tab — Step-by-Step Malware Traffic Analysis
+- **MALWARE ACTIVITY SUMMARY block** added at the top of the Education tab, immediately after the verdict and risk score. Classifies all suspicious flows from the current capture into three labelled groups — `[C&C]` (beaconing, unusual ports, IoC-matched destinations), `[EXFIL]` (high-volume outbound), and `[SPREAD]` (SMB/RDP/WMI/SSH lateral movement) — and prints each flow with real IPs, byte volumes, and a paste-ready Wireshark filter
+- **Plain-language stolen-data inference** added to every `[EXFIL]` flow entry:
+  - 23-port lookup table maps destination port to a plain-English explanation of what data traverses that port (e.g. port 21 → "FTP — username + password sent in plaintext before file transfer"; port 443 → "HTTPS — encrypted: likely credentials, saved passwords, files, or screenshots")
+  - 10 domain-pattern signals match contacted `http_hosts` and `tls_sni` against known stealer drop-points: Discord webhooks (RedLine/Lumma/Vidar), Telegram Bot API, paste sites (Pastebin, paste.ee, Hastebin), anonymous file hosts (transfer.sh, gofile.io), ngrok tunnels, AWS S3, Google Cloud Storage, Dropbox, OneDrive, GitHub Gist — each with a human-readable label
+  - Five-step Wireshark guide for reading raw stolen content: TCP Stream follow, JSON field search (`password`, `cookie`, `user`, `token`), Base64 blob detection (`eyJ`, `==`), and SSLKEYLOGFILE TLS decryption
+- **Phase 4** (Identify Stolen Data) updated: exfiltration candidate list now includes inferred data type per flow alongside volume and IP information
+- **Six-phase malware traffic analysis methodology** (Phases 1–6) covering: (1) filter and orient, (2) inspect headers/payloads, (3) identify C&C, (4) identify exfiltration, (5) identify spreading, (6) identify infected client hostname and user via DHCP Option 12, NetBIOS, Kerberos `CNameString`, NTLM `ntlmssp.auth.username`, SMB Session Setup, HTTP `User-Agent`, and LDAP `sAMAccountName`; Phase 6 dynamically generates per-IP Wireshark filters for all internal source IPs found in suspicious flows
+
+### Performance
+- `_is_private_ip()` decorated with `@functools.lru_cache(maxsize=4096)` — the same IP strings appear thousands of times per capture; the string-split + range-check is now done once per unique IP and cached for the rest of the run
+- `detect_suspicious_flows` flow allowlist lookup changed from two nested loops (O(k²)) to a pre-built `dict` keyed on `(src, dst, dport)` (O(k)), eliminating a redundant rescan of the allowlist for every hit
+
+### Accuracy — False-Positive Reduction
+- `high_volume` exfil detection now requires **both** a relative threshold (P95 of the current capture) **and** an absolute floor of 100 KB — previously a capture consisting entirely of small flows always flagged 5 % of them as exfiltration candidates; the floor prevents this on low-traffic captures
+- Port scan detection now filters to **external, non-multicast** destinations before counting distinct ports per source IP — Windows SSDP, mDNS, WSD, and LLMNR legitimately spray traffic across dozens of unique ports on `224.x`, `239.x`, and broadcast addresses, which was triggering the rule on every normal Windows desktop capture; port-count threshold also adjusted 20 → 15 (external-only is a stricter criterion so the threshold can be lower)
+
+### Accuracy — ML Model Signal
+- `build_features()` and `_vectorize_features()` add `tls_per_packet_ratio` and `http_per_packet_ratio` — high TLS + low HTTP indicates an encrypted C2 channel; the inverse indicates cleartext exfiltration; both are strong discriminators for the Random Forest classifier
+
 ## 2026.02.20-1 - 2026-02-20
 - **UI:** All application icons (48px, 256px, 512px PNG and multi-size ICO) regenerated with fully transparent backgrounds — the dark navy fill `#0a0c11` has been removed; only the hexagon/helix artwork is opaque
 - **UI:** `generate_logo.py` updated — canvas background changed from `DARK_BG` to `(0, 0, 0, 0)` so icons are vendor-neutral and theme-agnostic

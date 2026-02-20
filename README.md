@@ -27,6 +27,7 @@
 - **Behavioral detection** — Identify beaconing, DNS tunneling, port scanning, data exfiltration
 - **Real-world threat intel** — See how malicious IPs, URLs, and domains are flagged by security researchers
 - **AI-powered guidance** — Ask questions and get plain-language explanations via local LLM chat
+- **Six-phase malware analysis methodology** — Education tab walks through a structured analyst workflow (filter → headers → C&C → exfil → spread → client identity) using the actual flows from each capture; `[EXFIL]` flows include plain-language inference of what was likely stolen based on port number and contacted domains (Discord webhooks, Telegram Bot API, paste sites, anonymous file hosts, ngrok tunnels, cloud storage)
 
 ### 🔍 Hands-On Analysis Tools
 
