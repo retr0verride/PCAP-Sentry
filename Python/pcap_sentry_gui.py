@@ -951,7 +951,7 @@ def _is_valid_model_name(name: str) -> bool:
     return bool(name and _MODEL_NAME_RE.fullmatch(name))
 
 
-_EMBEDDED_VERSION = "2026.02.19-12"  # Stamped by update_version.ps1 at build time
+_EMBEDDED_VERSION = "2026.02.20-1"  # Stamped by update_version.ps1 at build time
 
 
 def _compute_app_version() -> str:
@@ -9030,38 +9030,39 @@ class PCAPSentryApp:
         theme: str = self._resolve_theme()
 
         if theme == "dark":
-            # Optimized gradient with fewer rectangles (8 instead of 32)
-            steps = 8
+            # 90s retrowave gradient: deep purple-black top -> dark vivid purple bottom
+            steps = 12
             for i in range(steps):
                 ratio: float = i / max(steps - 1, 1)
-                r = int(13 + (18 - 13) * ratio)
-                g = int(17 + (23 - 17) * ratio)
-                b = int(23 + (33 - 23) * ratio)
+                # #0d0015 -> #1c0035
+                r = int(13 + (28 - 13) * ratio)
+                g = 0
+                b = int(21 + (53 - 21) * ratio)
                 color: str = f"#{r:02x}{g:02x}{b:02x}"
                 y0 = int(h * i / steps)
                 y1 = int(h * (i + 1) / steps)
                 self.bg_canvas.create_rectangle(0, y0, w, y1, fill=color, outline="")
 
-            # Reduced dot grid density for better performance
-            dot_color = "#161d28"
-            for x in range(60, w, 80):
-                for y in range(60, h, 80):
-                    self.bg_canvas.create_oval(x, y, x + 1, y + 1, fill=dot_color, outline="")
+            # Scanline-style dot grid in dark purple for CRT texture
+            dot_color = "#250040"
+            for x in range(0, w, 4):
+                for y in range(0, h, 4):
+                    self.bg_canvas.create_rectangle(x, y, x, y, fill=dot_color, outline="")
         else:
-            # Light theme: optimized gradient (8 instead of 16 steps)
+            # Light theme: soft lavender gradient
             steps = 8
             for i in range(steps):
                 ratio: float = i / max(steps - 1, 1)
-                r = int(240 + (235 - 240) * ratio)
-                g = int(242 + (238 - 242) * ratio)
-                b = int(245 + (242 - 245) * ratio)
+                r = int(245 + (237 - 245) * ratio)
+                g = int(240 + (232 - 240) * ratio)
+                b = int(255 + (248 - 255) * ratio)
                 color: str = f"#{r:02x}{g:02x}{b:02x}"
                 y0 = int(h * i / steps)
                 y1 = int(h * (i + 1) / steps)
                 self.bg_canvas.create_rectangle(0, y0, w, y1, fill=color, outline=color)
 
-            # Very subtle dot pattern
-            dot_color = "#d8dce3"
+            # Subtle lavender dot pattern
+            dot_color = "#d0b8f0"
             for x in range(40, w, 60):
                 for y in range(40, h, 60):
                     self.bg_canvas.create_oval(x, y, x + 2, y + 2, fill=dot_color, outline=dot_color)

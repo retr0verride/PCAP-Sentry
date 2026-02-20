@@ -43,7 +43,7 @@ def _draw_aa(size, draw_fn, blur=0):
 
 
 def generate_logo(size=512):
-    img = Image.new("RGBA", (size, size), DARK_BG)
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     cx, cy = size / 2, size / 2
     r = size * 0.415                         # hexagon circumradius
 

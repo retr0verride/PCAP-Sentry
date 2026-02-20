@@ -2,6 +2,12 @@
 
 
 
+
+## 2026.02.20-1 - 2026-02-20
+- **UI:** All application icons (48px, 256px, 512px PNG and multi-size ICO) regenerated with fully transparent backgrounds — the dark navy fill `#0a0c11` has been removed; only the hexagon/helix artwork is opaque
+- **UI:** `generate_logo.py` updated — canvas background changed from `DARK_BG` to `(0, 0, 0, 0)` so icons are vendor-neutral and theme-agnostic
+- **UI:** Retrowave purple-black gradient background reapplied to dark theme (`#0d0015 → #1c0035`, 12 steps) with CRT-scanline dot-grid texture (`#250040`); light theme uses soft lavender gradient (`#f5f0ff → #ede8f8`) with `#d0b8f0` dots
+- **UI:** Spinning logo animation composites transparently over the retrowave gradient — no black square halo around the icon during spin
 ## 2026.02.19-12 - 2026-02-19
 - **ML:** `internal_traffic_ratio` and `external_dst_ratio` added to `build_features()` and `_vectorize_features()` — the Random Forest can now learn from whether a capture talks mostly to internal (RFC1918) vs external IPs; `_is_private_ip()` helper covers RFC1918, loopback, link-local, and CGNAT ranges
 - **KB / Risk scoring:** `trusted_ips` field added to the knowledge base schema; when ≥ 80 % of unique destination IPs are user-trusted and there are no IoC matches, the final risk score is damped by 30 % to reduce false-positive noise on well-understood networks
