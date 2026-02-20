@@ -6043,33 +6043,14 @@ class PCAPSentryApp:
             side=tk.LEFT,
         )
 
-        edu_outer = ttk.Frame(container)
-        edu_outer.pack(fill=tk.BOTH, expand=True)
+        txt_frame = ttk.Frame(container)
+        txt_frame.pack(fill=tk.BOTH, expand=True)
 
-        edu_canvas = tk.Canvas(edu_outer, bg=self.colors["bg"], highlightthickness=0)
-        edu_sb = ttk.Scrollbar(edu_outer, orient="vertical", command=edu_canvas.yview)
-        edu_inner = ttk.Frame(edu_canvas)
-        edu_inner.bind(
-            "<Configure>",
-            lambda _: edu_canvas.configure(scrollregion=edu_canvas.bbox("all")),
-        )
-        _edu_win = edu_canvas.create_window((0, 0), window=edu_inner, anchor="nw")
-        edu_canvas.configure(yscrollcommand=edu_sb.set)
-        # Stretch inner frame to always fill the canvas width
-        edu_canvas.bind("<Configure>", lambda e: edu_canvas.itemconfig(_edu_win, width=e.width))
-        edu_canvas.pack(side="left", fill="both", expand=True)
-        edu_sb.pack(side="right", fill="y")
-        edu_canvas.bind(
-            "<Enter>",
-            lambda _: edu_canvas.bind(
-                "<MouseWheel>",
-                lambda e: edu_canvas.yview_scroll(int(-1 * (e.delta / 120)), "units"),
-            ),
-        )
-        edu_canvas.bind("<Leave>", lambda _: edu_canvas.unbind("<MouseWheel>"))
+        edu_sb = ttk.Scrollbar(txt_frame, orient="vertical")
+        edu_sb.pack(side=tk.RIGHT, fill=tk.Y)
 
         txt = tk.Text(
-            edu_inner,
+            txt_frame,
             wrap=tk.WORD,
             font=("Segoe UI", 10),
             bg=self.colors.get("bg", "#0d1117"),
@@ -6079,9 +6060,12 @@ class PCAPSentryApp:
             relief=tk.FLAT,
             padx=12,
             pady=8,
+            yscrollcommand=edu_sb.set,
             state=tk.NORMAL,
         )
-        txt.pack(fill=tk.BOTH, expand=True)
+        txt.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        edu_sb.config(command=txt.yview)
+        txt.bind("<MouseWheel>", lambda e: txt.yview_scroll(int(-1 * (e.delta / 120)), "units"))
         self._bind_text_context_menu(txt)
 
         # ── colour tags ──────────────────────────────────────────────────────
