@@ -3213,6 +3213,10 @@ def parse_pcap_path(
                     pcap_bytes: bytes = handle.read()
                 pcap_source = io.BytesIO(pcap_bytes)
                 reader = PcapReader(pcap_source)
+            except MemoryError:
+                # File too large for RAM — fall back to streaming
+                print("[WARN] High-memory load failed (MemoryError) — falling back to streaming")
+                reader = PcapReader(resolved_path)
             except Exception:
                 reader = PcapReader(resolved_path)
         else:
@@ -4742,9 +4746,9 @@ class PCAPSentryApp:
         # If frames aren't ready yet, trigger async generation and wait for them
         if not self._spin_frames_generated:
             self._pregenerate_spin_frames_async()
-            self.root.after(50, self._animate_logo_spin)
+            self.root.after(40, self._animate_logo_spin)
         else:
-            self.root.after(50, self._animate_logo_spin)
+            self.root.after(40, self._animate_logo_spin)
 
     def _stop_logo_spin(self) -> None:
         """Stop spinning and reset the logo to its static frame."""
@@ -4765,7 +4769,7 @@ class PCAPSentryApp:
         # If frames aren't ready yet (async generation still running), reschedule
         # without blocking the main thread
         if not self._spin_frames_generated:
-            self.root.after(50, self._animate_logo_spin)
+            self.root.after(40, self._animate_logo_spin)
             return
 
         if not self._spin_frames:
@@ -4774,7 +4778,7 @@ class PCAPSentryApp:
         try:
             self._spin_index: int = (self._spin_index + 1) % len(self._spin_frames)
             self._brand_label.configure(image=self._spin_frames[self._spin_index])
-            self.root.after(50, self._animate_logo_spin)
+            self.root.after(40, self._animate_logo_spin)
         except tk.TclError:
             # Widget destroyed during shutdown
             return
@@ -4810,24 +4814,30 @@ class PCAPSentryApp:
         if self._spin_frames_generated or not self._spin_src_img:
             return
         try:
-            from PIL import Image
+            from PIL import Image, ImageEnhance
             import math as _math
 
             src = self._spin_src_img
-            num_frames = 36
-            pil_frames = []
+            num_frames = 60
+            size = self._brand_icon_size
+            thumb = src.resize((size, size), Image.LANCZOS)
 
+            pil_frames = []
             for i in range(num_frames):
-                angle: float = 2 * _math.pi * i / num_frames
-                scale_x: float = abs(_math.cos(angle))
-                w: int = max(int(self._brand_icon_size * scale_x), 1)
-                h: int = self._brand_icon_size
-                squeezed = src.resize((w, h), Image.LANCZOS)
-                if _math.cos(angle) < 0:
+                angle = 2 * _math.pi * i / num_frames
+                cos_val = _math.cos(angle)
+                # Y-axis coin-flip: squish width, keep height; thins to 1 px at 90°
+                w = max(int(size * abs(cos_val)), 1)
+                squeezed = thumb.resize((w, size), Image.LANCZOS)
+                if cos_val < 0:
                     squeezed = squeezed.transpose(Image.FLIP_LEFT_RIGHT)
-                canvas = Image.new("RGBA", (self._brand_icon_size, self._brand_icon_size), (0, 0, 0, 0))
-                canvas.paste(squeezed, ((self._brand_icon_size - w) // 2, 0))
-                pil_frames.append(canvas)
+                # Brightness flash: brightest at edge-on (cos≈0), normal at full face
+                brightness = 1.0 + 0.85 * (1.0 - abs(cos_val))
+                squeezed = ImageEnhance.Brightness(squeezed).enhance(brightness)
+                # Centre horizontally and vertically on fixed-size transparent canvas
+                frame = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+                frame.paste(squeezed, ((size - w) // 2, 0))
+                pil_frames.append(frame)
 
             # PhotoImage objects must be created on the main thread
             if not self._shutting_down:
@@ -4853,24 +4863,30 @@ class PCAPSentryApp:
             return
 
         try:
-            from PIL import Image, ImageTk
+            from PIL import Image, ImageEnhance, ImageTk
             import math as _math
 
             src = self._spin_src_img
-            num_frames = 36
-            self._spin_frames = []
+            num_frames = 60
+            size = self._brand_icon_size
+            thumb = src.resize((size, size), Image.LANCZOS)
 
+            self._spin_frames = []
             for i in range(num_frames):
-                angle: float = 2 * _math.pi * i / num_frames
-                scale_x: float = abs(_math.cos(angle))
-                w: int = max(int(self._brand_icon_size * scale_x), 1)
-                h: int = self._brand_icon_size
-                squeezed = src.resize((w, h), Image.LANCZOS)
-                if _math.cos(angle) < 0:
+                angle = 2 * _math.pi * i / num_frames
+                cos_val = _math.cos(angle)
+                # Y-axis coin-flip: squish width, keep height; thins to 1 px at 90°
+                w = max(int(size * abs(cos_val)), 1)
+                squeezed = thumb.resize((w, size), Image.LANCZOS)
+                if cos_val < 0:
                     squeezed = squeezed.transpose(Image.FLIP_LEFT_RIGHT)
-                canvas = Image.new("RGBA", (self._brand_icon_size, self._brand_icon_size), (0, 0, 0, 0))
-                canvas.paste(squeezed, ((self._brand_icon_size - w) // 2, 0))
-                self._spin_frames.append(ImageTk.PhotoImage(canvas))
+                # Brightness flash: brightest at edge-on (cos≈0), normal at full face
+                brightness = 1.0 + 0.85 * (1.0 - abs(cos_val))
+                squeezed = ImageEnhance.Brightness(squeezed).enhance(brightness)
+                # Centre horizontally and vertically on fixed-size transparent canvas
+                frame = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+                frame.paste(squeezed, ((size - w) // 2, 0))
+                self._spin_frames.append(ImageTk.PhotoImage(frame))
 
             self._spin_frames_generated = True
         except Exception:
@@ -5001,7 +5017,7 @@ class PCAPSentryApp:
                 from PIL import Image, ImageTk
 
                 src_full = Image.open(icon_path).convert("RGBA")
-                self._brand_icon_size = 70
+                self._brand_icon_size = 96
                 src_thumb = src_full.resize((self._brand_icon_size, self._brand_icon_size), Image.LANCZOS)
                 # Keep the full-resolution image as the spin source so every
                 # squeezed frame is downscaled from 512px → best quality.
@@ -5156,9 +5172,16 @@ class PCAPSentryApp:
         ttk.Separator(self.root, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=16)
         status = ttk.Frame(self.root, padding=(16, 8))
         status.pack(fill=tk.X)
-        # Progress bar — wider for clarity
-        self.progress = ttk.Progressbar(status, mode="indeterminate", length=340)
-        self.progress.pack(side=tk.LEFT, padx=(0, 8))
+        # Progress bar — wrapped in a border frame so it's visible even when empty
+        _pb_border = tk.Frame(
+            status,
+            bg=self.colors.get("border_light", "#30363d"),
+            padx=1,
+            pady=1,
+        )
+        _pb_border.pack(side=tk.LEFT, padx=(0, 8))
+        self.progress = ttk.Progressbar(_pb_border, mode="indeterminate", length=340)
+        self.progress.pack()
         # Percent label (hidden when idle — populated by _set_progress)
         self._progress_pct_label = ttk.Label(
             status,
@@ -9491,7 +9514,7 @@ class PCAPSentryApp:
         style.configure(
             "TProgressbar",
             background=accent,
-            troughcolor=panel_alt,
+            troughcolor=self.colors.get("border", "#21262d"),
             bordercolor=border_light,
             lightcolor=accent,
             darkcolor=accent,
@@ -9586,11 +9609,8 @@ class PCAPSentryApp:
                 y1 = int(h * (i + 1) / steps)
                 self.bg_canvas.create_rectangle(0, y0, w, y1, fill=color, outline="")
 
-            # Scanline-style dot grid in dark purple for CRT texture
-            dot_color = "#250040"
-            for x in range(0, w, 4):
-                for y in range(0, h, 4):
-                    self.bg_canvas.create_rectangle(x, y, x, y, fill=dot_color, outline="")
+            # Scanline-style CRT texture — single stipple rect (replaces ~70k items)
+            self.bg_canvas.create_rectangle(0, 0, w, h, fill="#250040", outline="", stipple="gray25")
         else:
             # Light theme: soft lavender gradient
             steps = 8
@@ -9604,11 +9624,8 @@ class PCAPSentryApp:
                 y1 = int(h * (i + 1) / steps)
                 self.bg_canvas.create_rectangle(0, y0, w, y1, fill=color, outline=color)
 
-            # Subtle lavender dot pattern
-            dot_color = "#d0b8f0"
-            for x in range(40, w, 60):
-                for y in range(40, h, 60):
-                    self.bg_canvas.create_oval(x, y, x + 2, y + 2, fill=dot_color, outline=dot_color)
+            # Subtle lavender dot pattern — single stipple rect
+            self.bg_canvas.create_rectangle(0, 0, w, h, fill="#d0b8f0", outline="", stipple="gray12")
 
     def _setup_drag_drop(self) -> None:
         if not _check_tkinterdnd2():
@@ -9879,12 +9896,30 @@ class PCAPSentryApp:
             return
         self._set_busy(False)
         if error is None:
-            on_success(payload)
+            try:
+                on_success(payload)
+            except Exception as _cb_err:
+                import traceback as _tb2
+                messagebox.showerror(
+                    "UI Error",
+                    f"Analysis completed but the results could not be displayed:\n\n{_cb_err}\n\n"
+                    f"{_tb2.format_exc()}",
+                )
         elif on_error:
             on_error(error)
+        elif isinstance(error, MemoryError):
+            messagebox.showerror(
+                "Out of Memory",
+                str(error) or "The system ran out of memory during analysis.",
+            )
+        elif isinstance(error, OSError):
+            messagebox.showerror(
+                "File Error",
+                str(error) or f"A file I/O error occurred: {error}",
+            )
         else:
-            detail: str = f"{error}\n\n{error_tb}" if error_tb else str(error)
-            messagebox.showerror("Error", detail)
+            detail: str = f"{type(error).__name__}: {error}\n\n{error_tb}" if error_tb else f"{type(error).__name__}: {error}"
+            messagebox.showerror("Analysis Error", detail)
 
     def _reset_kb(self) -> None:
         if os.path.exists(KNOWLEDGE_BASE_FILE):
@@ -15608,6 +15643,67 @@ class PCAPSentryApp:
             messagebox.showwarning("Missing file", "Please select a PCAP file.")
             return
 
+        # ── Pre-flight checks for large files ────────────────────────────────
+        try:
+            file_bytes: int = os.path.getsize(path)
+        except OSError:
+            file_bytes = 0
+
+        _MB = 1_048_576
+        _GB = 1_073_741_824
+
+        # Warn when the file is very large
+        if file_bytes > 500 * _MB:
+            size_str = f"{file_bytes / _GB:.2f} GB" if file_bytes >= _GB else f"{file_bytes / _MB:.0f} MB"
+            turbo_on: bool = self.turbo_parse_var.get()
+            hi_mem_on: bool = self.use_high_memory_var.get()
+            suggestions = []
+            if not turbo_on:
+                suggestions.append("• Enable \"Turbo parse\" for 5–15x faster parsing")
+            if hi_mem_on:
+                suggestions.append("• Disable \"High memory\" to avoid loading the whole file into RAM")
+            hint = ("\n".join(suggestions) + "\n\n") if suggestions else ""
+            answer = messagebox.askyesno(
+                "Large File Warning",
+                f"This file is {size_str}.\n\n"
+                f"{hint}"
+                "Large files may take several minutes to analyse and could use\n"
+                "significant memory. Continue anyway?",
+                default=messagebox.YES,
+            )
+            if not answer:
+                return
+
+        # Guard: high-memory mode reads the whole file into RAM — check free RAM first
+        if self.use_high_memory_var.get() and file_bytes > 0:
+            try:
+                import ctypes as _ct
+                class _MEMSTATUS(_ct.Structure):
+                    _fields_ = [("dwLength", _ct.c_ulong), ("dwMemoryLoad", _ct.c_ulong),
+                                ("ullTotalPhys", _ct.c_ulonglong), ("ullAvailPhys", _ct.c_ulonglong),
+                                ("ullTotalPageFile", _ct.c_ulonglong), ("ullAvailPageFile", _ct.c_ulonglong),
+                                ("ullTotalVirtual", _ct.c_ulonglong), ("ullAvailVirtual", _ct.c_ulonglong),
+                                ("ullAvailExtendedVirtual", _ct.c_ulonglong)]
+                ms = _MEMSTATUS()
+                ms.dwLength = _ct.sizeof(ms)
+                _ct.windll.kernel32.GlobalMemoryStatusEx(_ct.byref(ms))
+                avail_mb: float = ms.ullAvailPhys / _MB
+                need_mb: float = file_bytes / _MB * 2.5  # ~2.5x overhead
+                if need_mb > avail_mb:
+                    answer = messagebox.askyesno(
+                        "Memory Warning",
+                        f"High Memory mode needs ~{need_mb:.0f} MB but only "
+                        f"{avail_mb:.0f} MB is free.\n\n"
+                        "This may cause an out-of-memory crash.\n"
+                        "Disable \"High Memory\" and retry, or continue anyway?",
+                        default=messagebox.NO,
+                    )
+                    if not answer:
+                        self.use_high_memory_var.set(False)
+                        return
+            except Exception:
+                pass  # Can't check memory on this platform — proceed
+        # ──────────────────────────────────────────────────────────────────────
         # Hide any previous LLM suggestion banner
         self._hide_llm_suggestion()
 
@@ -15965,11 +16061,24 @@ class PCAPSentryApp:
                         label = "Parsing packets..."
                     progress_cb(percent, eta_seconds, processed, total, label)
 
-            if use_multithreading:
-                # ── Phase 1: Parse + extract in parallel ──
-                with ThreadPoolExecutor(max_workers=2) as pool:
-                    parse_future = pool.submit(
-                        _parser,
+            try:
+                if use_multithreading:
+                    # ── Phase 1: Parse + extract in parallel ──
+                    with ThreadPoolExecutor(max_workers=2) as pool:
+                        parse_future = pool.submit(
+                            _parser,
+                            path,
+                            max_rows=max_rows,
+                            parse_http=parse_http,
+                            progress_cb=phase1_progress_cb,
+                            use_high_memory=use_high_memory,
+                            cancel_event=cancel_event,
+                        )
+                        extract_future = pool.submit(lambda: _safe_extract(path, use_high_memory))
+                        parse_result = parse_future.result()
+                        extracted = extract_future.result()
+                else:
+                    parse_result = _parser(
                         path,
                         max_rows=max_rows,
                         parse_http=parse_http,
@@ -15977,19 +16086,22 @@ class PCAPSentryApp:
                         use_high_memory=use_high_memory,
                         cancel_event=cancel_event,
                     )
-                    extract_future = pool.submit(lambda: _safe_extract(path, use_high_memory))
-                    parse_result = parse_future.result()
-                    extracted = extract_future.result()
-            else:
-                parse_result = _parser(
-                    path,
-                    max_rows=max_rows,
-                    parse_http=parse_http,
-                    progress_cb=phase1_progress_cb,
-                    use_high_memory=use_high_memory,
-                    cancel_event=cancel_event,
+                    extracted = _safe_extract(path, use_high_memory)
+            except MemoryError:
+                raise MemoryError(
+                    "Out of memory while parsing the PCAP file.\n\n"
+                    "Try one or more of the following:\n"
+                    "  • Disable \"High Memory\" mode in Settings\n"
+                    "  • Enable \"Turbo Parse\" for lower memory usage\n"
+                    "  • Reduce \"Max rows\" in Settings\n"
+                    "  • Split the PCAP into smaller files\n"
+                    "  • Close other applications to free RAM"
                 )
-                extracted = _safe_extract(path, use_high_memory)
+            except OSError as _oe:
+                raise OSError(
+                    f"Failed to read the PCAP file: {_oe}\n\n"
+                    "The file may be corrupted, truncated, or on a disconnected drive."
+                ) from _oe
 
             (df, stats, sample_info) = parse_result
             t_p1: float = time.time()
@@ -15998,7 +16110,17 @@ class PCAPSentryApp:
             if stats.get("packet_count", 0) == 0:
                 return {"empty": True, "extracted_data": extracted}
 
-            return _core_analysis(df, stats, extracted, sample_info, t_p1, progress_cb)
+            try:
+                return _core_analysis(df, stats, extracted, sample_info, t_p1, progress_cb)
+            except MemoryError:
+                raise MemoryError(
+                    "Out of memory during analysis.\n\n"
+                    "Try one or more of the following:\n"
+                    "  • Disable \"High Memory\" mode\n"
+                    "  • Reduce \"Max rows\" in Settings\n"
+                    "  • Disable multithreading to reduce peak memory use\n"
+                    "  • Close other applications to free RAM"
+                )
 
         def done(result) -> None:
             if result.get("empty"):
