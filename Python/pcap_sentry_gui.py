@@ -9887,10 +9887,10 @@ class PCAPSentryApp:
                 on_success(payload)
             except Exception as _cb_err:
                 import traceback as _tb2
+
                 messagebox.showerror(
                     "UI Error",
-                    f"Analysis completed but the results could not be displayed:\n\n{_cb_err}\n\n"
-                    f"{_tb2.format_exc()}",
+                    f"Analysis completed but the results could not be displayed:\n\n{_cb_err}\n\n{_tb2.format_exc()}",
                 )
         elif on_error:
             on_error(error)
@@ -9905,7 +9905,9 @@ class PCAPSentryApp:
                 str(error) or f"A file I/O error occurred: {error}",
             )
         else:
-            detail: str = f"{type(error).__name__}: {error}\n\n{error_tb}" if error_tb else f"{type(error).__name__}: {error}"
+            detail: str = (
+                f"{type(error).__name__}: {error}\n\n{error_tb}" if error_tb else f"{type(error).__name__}: {error}"
+            )
             messagebox.showerror("Analysis Error", detail)
 
     def _reset_kb(self) -> None:
@@ -15646,9 +15648,9 @@ class PCAPSentryApp:
             hi_mem_on: bool = self.use_high_memory_var.get()
             suggestions = []
             if not turbo_on:
-                suggestions.append("• Enable \"Turbo parse\" for 5–15x faster parsing")
+                suggestions.append('• Enable "Turbo parse" for 5-15x faster parsing')
             if hi_mem_on:
-                suggestions.append("• Disable \"High memory\" to avoid loading the whole file into RAM")
+                suggestions.append('• Disable "High memory" to avoid loading the whole file into RAM')
             hint = ("\n".join(suggestions) + "\n\n") if suggestions else ""
             answer = messagebox.askyesno(
                 "Large File Warning",
@@ -15665,12 +15667,20 @@ class PCAPSentryApp:
         if self.use_high_memory_var.get() and file_bytes > 0:
             try:
                 import ctypes as _ct
+
                 class _MEMSTATUS(_ct.Structure):
-                    _fields_ = [("dwLength", _ct.c_ulong), ("dwMemoryLoad", _ct.c_ulong),
-                                ("ullTotalPhys", _ct.c_ulonglong), ("ullAvailPhys", _ct.c_ulonglong),
-                                ("ullTotalPageFile", _ct.c_ulonglong), ("ullAvailPageFile", _ct.c_ulonglong),
-                                ("ullTotalVirtual", _ct.c_ulonglong), ("ullAvailVirtual", _ct.c_ulonglong),
-                                ("ullAvailExtendedVirtual", _ct.c_ulonglong)]
+                    _fields_ = [
+                        ("dwLength", _ct.c_ulong),
+                        ("dwMemoryLoad", _ct.c_ulong),
+                        ("ullTotalPhys", _ct.c_ulonglong),
+                        ("ullAvailPhys", _ct.c_ulonglong),
+                        ("ullTotalPageFile", _ct.c_ulonglong),
+                        ("ullAvailPageFile", _ct.c_ulonglong),
+                        ("ullTotalVirtual", _ct.c_ulonglong),
+                        ("ullAvailVirtual", _ct.c_ulonglong),
+                        ("ullAvailExtendedVirtual", _ct.c_ulonglong),
+                    ]
+
                 ms = _MEMSTATUS()
                 ms.dwLength = _ct.sizeof(ms)
                 _ct.windll.kernel32.GlobalMemoryStatusEx(_ct.byref(ms))
@@ -15682,7 +15692,7 @@ class PCAPSentryApp:
                         f"High Memory mode needs ~{need_mb:.0f} MB but only "
                         f"{avail_mb:.0f} MB is free.\n\n"
                         "This may cause an out-of-memory crash.\n"
-                        "Disable \"High Memory\" and retry, or continue anyway?",
+                        'Disable "High Memory" and retry, or continue anyway?',
                         default=messagebox.NO,
                     )
                     if not answer:
@@ -16078,9 +16088,9 @@ class PCAPSentryApp:
                 raise MemoryError(
                     "Out of memory while parsing the PCAP file.\n\n"
                     "Try one or more of the following:\n"
-                    "  • Disable \"High Memory\" mode in Settings\n"
-                    "  • Enable \"Turbo Parse\" for lower memory usage\n"
-                    "  • Reduce \"Max rows\" in Settings\n"
+                    '  • Disable "High Memory" mode in Settings\n'
+                    '  • Enable "Turbo Parse" for lower memory usage\n'
+                    '  • Reduce "Max rows" in Settings\n'
                     "  • Split the PCAP into smaller files\n"
                     "  • Close other applications to free RAM"
                 )
@@ -16103,8 +16113,8 @@ class PCAPSentryApp:
                 raise MemoryError(
                     "Out of memory during analysis.\n\n"
                     "Try one or more of the following:\n"
-                    "  • Disable \"High Memory\" mode\n"
-                    "  • Reduce \"Max rows\" in Settings\n"
+                    '  • Disable "High Memory" mode\n'
+                    '  • Reduce "Max rows" in Settings\n'
                     "  • Disable multithreading to reduce peak memory use\n"
                     "  • Close other applications to free RAM"
                 )
