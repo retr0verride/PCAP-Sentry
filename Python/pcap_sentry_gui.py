@@ -9168,7 +9168,7 @@ class PCAPSentryApp:
             }
         else:
             self.colors: dict[str, str] = {
-                "bg": "#0d1117",
+                "bg": "#000000",
                 "panel": "#161b22",
                 "panel_alt": "#1c2333",
                 "text": "#e6edf3",
@@ -9596,21 +9596,8 @@ class PCAPSentryApp:
         theme: str = self._resolve_theme()
 
         if theme == "dark":
-            # 90s retrowave gradient: deep purple-black top -> dark vivid purple bottom
-            steps = 12
-            for i in range(steps):
-                ratio: float = i / max(steps - 1, 1)
-                # #0d0015 -> #1c0035
-                r = int(13 + (28 - 13) * ratio)
-                g = 0
-                b = int(21 + (53 - 21) * ratio)
-                color: str = f"#{r:02x}{g:02x}{b:02x}"
-                y0 = int(h * i / steps)
-                y1 = int(h * (i + 1) / steps)
-                self.bg_canvas.create_rectangle(0, y0, w, y1, fill=color, outline="")
-
-            # Scanline-style CRT texture — single stipple rect (replaces ~70k items)
-            self.bg_canvas.create_rectangle(0, 0, w, h, fill="#250040", outline="", stipple="gray25")
+            # Solid black background
+            self.bg_canvas.create_rectangle(0, 0, w, h, fill="#000000", outline="")
         else:
             # Light theme: soft lavender gradient
             steps = 8
