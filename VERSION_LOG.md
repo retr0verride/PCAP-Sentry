@@ -17,6 +17,9 @@
 
 
 
+
+## 2026.02.20-16 - 2026-02-20
+- Improve icon quality - adaptive 8x/4x supersampling, proportional outline, larger hex fill
 ## 2026.02.20-15 - 2026-02-20
 - Larger taskbar icon - increase hex radius 41.5, each ICO frame rendered natively at exact size
 ## 2026.02.20-14 - 2026-02-20

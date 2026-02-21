@@ -952,7 +952,7 @@ def _is_valid_model_name(name: str) -> bool:
     return bool(name and _MODEL_NAME_RE.fullmatch(name))
 
 
-_EMBEDDED_VERSION = "2026.02.20-15"  # Stamped by update_version.ps1 at build time
+_EMBEDDED_VERSION = "2026.02.20-16"  # Stamped by update_version.ps1 at build time
 
 
 def _compute_app_version() -> str:
