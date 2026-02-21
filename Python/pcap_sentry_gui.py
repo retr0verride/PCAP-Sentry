@@ -952,7 +952,7 @@ def _is_valid_model_name(name: str) -> bool:
     return bool(name and _MODEL_NAME_RE.fullmatch(name))
 
 
-_EMBEDDED_VERSION = "2026.02.20-11"  # Stamped by update_version.ps1 at build time
+_EMBEDDED_VERSION = "2026.02.20-12"  # Stamped by update_version.ps1 at build time
 
 
 def _compute_app_version() -> str:
@@ -1177,8 +1177,13 @@ def _get_app_icon_path(prefer_png=False):
     candidates = []
     frozen_dir: object = getattr(sys, "_MEIPASS", None)
     if prefer_png:
-        # Prefer high-res 256px PNG, fall back to 48px
-        png_names: list[str] = ["pcap_sentry_256.png", "pcap_sentry_48.png"]
+        # Prefer highest-res PNG available, cascade down for quality
+        png_names: list[str] = [
+            "pcap_sentry_512.png",
+            "pcap_sentry_256.png",
+            "pcap_sentry_128.png",
+            "pcap_sentry_48.png",
+        ]
     else:
         png_names: list[str] = ["pcap_sentry.ico"]
     for ext in png_names:
@@ -1219,7 +1224,6 @@ def _set_app_icon(root) -> None:
 
         IMAGE_ICON = 1
         LR_LOADFROMFILE = 0x10
-        LR_DEFAULTSIZE = 0x40
         WM_SETICON = 0x0080
         ICON_SMALL = 0
         ICON_BIG = 1
@@ -1241,7 +1245,7 @@ def _set_app_icon(root) -> None:
             IMAGE_ICON,
             256,
             256,
-            LR_LOADFROMFILE | LR_DEFAULTSIZE,
+            LR_LOADFROMFILE,
         )
         # GetParent gives the real top-level HWND for a Tk window
         hwnd = user32.GetParent(root.winfo_id())

@@ -13,6 +13,9 @@
 
 
 
+
+## 2026.02.20-12 - 2026-02-20
+- Rebuild icons from 512px master - bundle all sizes, fix 256px taskbar icon
 ## 2026.02.20-11 - 2026-02-20
 - Fix: Reset to Defaults no longer deletes API keys from Windows Credential Manager
 ## 2026.02.20-10 - 2026-02-20
