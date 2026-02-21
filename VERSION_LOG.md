@@ -23,6 +23,9 @@
 
 
 
+
+## 2026.02.21-1 - 2026-02-21
+- Fix: auto-save API keys to WCM on successful verify (OTX, AbuseIPDB, GreyNoise, VirusTotal); update app icon
 ## 2026.02.20-21 - 2026-02-20
 - Fix app logo and taskbar icon: regenerate all icon assets (PNG/ICO) with correct DNA double-helix design; update README and User Manual to reference PNG icons; remove stale build artefacts and dev tool scripts
 ## 2026.02.20-20 - 2026-02-20
