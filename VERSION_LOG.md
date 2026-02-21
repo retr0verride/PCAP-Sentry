@@ -24,6 +24,9 @@
 
 
 
+
+## 2026.02.21-2 - 2026-02-21
+- Rebuild all icon assets from 512px master with full DPI coverage (12 ICO sizes 16-256px); smoother spin animation (60 frames, 40ms, brightness glint); MemoryError fallback for large PCAPs; updated README and User Manual icon references
 ## 2026.02.21-1 - 2026-02-21
 - Fix: auto-save API keys to WCM on successful verify (OTX, AbuseIPDB, GreyNoise, VirusTotal); update app icon
 ## 2026.02.20-21 - 2026-02-20
