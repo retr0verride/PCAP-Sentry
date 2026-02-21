@@ -952,7 +952,7 @@ def _is_valid_model_name(name: str) -> bool:
     return bool(name and _MODEL_NAME_RE.fullmatch(name))
 
 
-_EMBEDDED_VERSION = "2026.02.20-13"  # Stamped by update_version.ps1 at build time
+_EMBEDDED_VERSION = "2026.02.20-14"  # Stamped by update_version.ps1 at build time
 
 
 def _compute_app_version() -> str:
@@ -1215,15 +1215,28 @@ def _set_app_icon(root) -> None:
         root.iconbitmap(icon_path)
     except Exception:
         pass
-    # Set taskbar / title-bar icons explicitly via Win32 API.
-    # Tkinter's iconbitmap() only touches the title-bar small icon.
-    # The taskbar button uses ICON_BIG at the system icon size (SM_CXICON,
-    # typically 32 px at 100 % DPI or 48 px at 150 %). Loading the ICO at
-    # exactly that size picks the best matching frame rather than having
-    # Windows scale a 256 px frame down, which produces a blurry result.
+    # Apply Win32 icon immediately, then re-apply once the window is mapped
+    # so WM_SETICON sticks regardless of when the HWND becomes visible.
+    _apply_win32_icon(root, icon_path)
+    root.after(200, lambda: _apply_win32_icon(root, icon_path))
+
+
+def _apply_win32_icon(root, icon_path: str) -> None:
+    """Set taskbar / title-bar icons via Win32 API with correct 64-bit types.
+
+    LoadImageW and SetClassLongPtrW accept/return pointer-sized values (HANDLE /
+    LONG_PTR).  Without explicit restype / argtypes ctypes defaults to c_int
+    (32-bit), silently truncating handles on 64-bit Windows and passing null to
+    SetClassLongPtrW — causing Windows to fall back to a tiny generic icon.
+    """
+    if not sys.platform.startswith("win"):
+        return
     try:
         import ctypes
         import ctypes.wintypes
+
+        HANDLE = ctypes.c_void_p
+        LONG_PTR = ctypes.c_ssize_t
 
         IMAGE_ICON = 1
         LR_LOADFROMFILE = 0x10
@@ -1239,6 +1252,34 @@ def _set_app_icon(root) -> None:
 
         user32 = ctypes.windll.user32
 
+        # Explicitly type LoadImageW so it returns a proper pointer-sized HANDLE
+        user32.LoadImageW.restype = HANDLE
+        user32.LoadImageW.argtypes = [
+            HANDLE,  # hInst
+            ctypes.c_wchar_p,  # name
+            ctypes.wintypes.UINT,  # type
+            ctypes.c_int,  # cx
+            ctypes.c_int,  # cy
+            ctypes.wintypes.UINT,  # fuLoad
+        ]
+
+        # SetClassLongPtrW uses LONG_PTR (pointer-sized) for both param and return
+        user32.SetClassLongPtrW.restype = LONG_PTR
+        user32.SetClassLongPtrW.argtypes = [
+            ctypes.wintypes.HWND,
+            ctypes.c_int,
+            LONG_PTR,
+        ]
+
+        # SendMessageW lParam is LPARAM (pointer-sized)
+        user32.SendMessageW.restype = LONG_PTR
+        user32.SendMessageW.argtypes = [
+            ctypes.wintypes.HWND,
+            ctypes.wintypes.UINT,
+            ctypes.c_size_t,  # WPARAM
+            LONG_PTR,  # LPARAM
+        ]
+
         # Query the exact pixel sizes Windows uses for icons at current DPI
         big_w = user32.GetSystemMetrics(SM_CXICON)
         big_h = user32.GetSystemMetrics(SM_CYICON)
@@ -1248,16 +1289,21 @@ def _set_app_icon(root) -> None:
         hicon_big = user32.LoadImageW(None, icon_path, IMAGE_ICON, big_w, big_h, LR_LOADFROMFILE)
         hicon_small = user32.LoadImageW(None, icon_path, IMAGE_ICON, sm_w, sm_h, LR_LOADFROMFILE)
 
+        if not hicon_big or not hicon_small:
+            return
+
         # GetParent gives the real top-level HWND for a Tk window
         hwnd = user32.GetParent(root.winfo_id())
         if not hwnd:
             hwnd = root.winfo_id()
+        if not hwnd:
+            return
 
         # Window-level icons (title bar + alt-tab)
         user32.SendMessageW(hwnd, WM_SETICON, ICON_SMALL, hicon_small)
         user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, hicon_big)
 
-        # Class-level icons — this is what actually drives the taskbar button
+        # Class-level icons — this drives the taskbar button size
         user32.SetClassLongPtrW(hwnd, GCL_HICON, hicon_big)
         user32.SetClassLongPtrW(hwnd, GCL_HICONSM, hicon_small)
     except Exception:

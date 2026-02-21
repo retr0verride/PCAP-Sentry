@@ -15,6 +15,9 @@
 
 
 
+
+## 2026.02.20-14 - 2026-02-20
+- Fix taskbar icon size - proper 64-bit ctypes types for LoadImageW/SetClassLongPtrW, re-apply icons after window mapped
 ## 2026.02.20-13 - 2026-02-20
 - Fix taskbar icon size - load ICO at SM_CXICON/SM_CYICON metrics, set class-level icons via SetClassLongPtrW
 ## 2026.02.20-12 - 2026-02-20
