@@ -132,8 +132,12 @@ Python/
 ├── threat_intelligence.py     # Concurrent threat intel (OTX, URLhaus, AbuseIPDB, ThreatFox, GreyNoise) with persistent cache
 └── enhanced_ml_trainer.py     # Optional standalone ML trainer class
 assets/
-├── pcap_sentry.ico            # Default application icon
-├── custom.ico                 # Optional preferred icon if present
+├── pcap_sentry.ico            # Multi-size ICO (16–256px, used by Windows taskbar/title bar)
+├── pcap_sentry_512.png        # 512px master PNG (app header logo, spin animation source)
+├── pcap_sentry_256.png        # 256px PNG
+├── pcap_sentry_128.png        # 128px PNG
+├── pcap_sentry_48.png         # 48px PNG
+├── custom.ico                 # Optional preferred icon override (if present, used instead)
 ├── pcap_sentry_baseline_model.pkl         # Pre-trained RandomForest baseline model (199 KB)
 ├── pcap_sentry_baseline_model.pkl.sha256  # SHA-256 integrity hash for the baseline model
 ├── pcap_sentry_seed_data.json             # 146 seed feature rows used in combined retraining

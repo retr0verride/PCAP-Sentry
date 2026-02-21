@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/pcap_sentry.ico" alt="PCAP Sentry" width="96" />
+<img src="assets/pcap_sentry_512.png" alt="PCAP Sentry" width="96" />
 
 # PCAP Sentry
 
