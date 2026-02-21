@@ -1488,7 +1488,7 @@ The analysis engine evaluates numerous heuristic signals including:
 
 <div align="center">
 
-<img src="assets/pcap_sentry.ico" alt="PCAP Sentry" width="48" />
+<img src="assets/pcap_sentry_48.png" alt="PCAP Sentry" width="48" />
 
 **PCAP Sentry** — *Network traffic analysis made accessible.*
 
