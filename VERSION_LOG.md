@@ -20,6 +20,9 @@
 
 
 
+
+## 2026.02.20-19 - 2026-02-20
+- Boost helix visibility at small icon sizes: wider amplitude, thicker strands/rungs, fewer turns and rungs for sub-128px frames
 ## 2026.02.20-18 - 2026-02-20
 - Rebuild logo: skeletal double helix — thin strands, solid rungs, no dot nodes, no glow; all icon assets regenerated
 ## 2026.02.20-18 - 2026-02-20
