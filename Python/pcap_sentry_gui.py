@@ -952,7 +952,7 @@ def _is_valid_model_name(name: str) -> bool:
     return bool(name and _MODEL_NAME_RE.fullmatch(name))
 
 
-_EMBEDDED_VERSION = "2026.02.20-21"  # Stamped by update_version.ps1 at build time
+_EMBEDDED_VERSION = "2026.02.21-1"  # Stamped by update_version.ps1 at build time
 
 
 def _compute_app_version() -> str:
@@ -10774,6 +10774,9 @@ class PCAPSentryApp:
         def _apply(result) -> None:
             success, message = result
             if success:
+                # Save immediately to WCM so closing without clicking Save still persists the key
+                _store_cred(_KEY_OTX, key)
+                self.settings["otx_api_key"] = key
                 label.configure(text=f"✓ Valid ({message})", fg=self.colors.get("success", "#3fb950"))
             else:
                 label.configure(text=f"✗ {message}", fg=self.colors.get("danger", "#f85149"))
@@ -10826,6 +10829,9 @@ class PCAPSentryApp:
         def _apply(result) -> None:
             success, message = result
             if success:
+                # Save immediately to WCM so closing without clicking Save still persists the key
+                _store_cred(_KEY_ABUSEIPDB, key)
+                self.settings["abuseipdb_api_key"] = key
                 label.configure(text=f"\u2713 {message}", fg=self.colors.get("success", "#3fb950"))
             else:
                 label.configure(text=f"\u2717 {message}", fg=self.colors.get("danger", "#f85149"))
@@ -10877,6 +10883,9 @@ class PCAPSentryApp:
         def _apply(result) -> None:
             success, message = result
             if success:
+                # Save immediately to WCM so closing without clicking Save still persists the key
+                _store_cred(_KEY_GREYNOISE, key)
+                self.settings["greynoise_api_key"] = key
                 label.configure(text=f"\u2713 {message}", fg=self.colors.get("success", "#3fb950"))
             else:
                 label.configure(text=f"\u2717 {message}", fg=self.colors.get("danger", "#f85149"))
@@ -10928,6 +10937,9 @@ class PCAPSentryApp:
         def _apply(result) -> None:
             success, message = result
             if success:
+                # Save immediately to WCM so closing without clicking Save still persists the key
+                _store_cred(_KEY_VIRUSTOTAL, key)
+                self.settings["virustotal_api_key"] = key
                 label.configure(text=f"\u2713 {message}", fg=self.colors.get("success", "#3fb950"))
             else:
                 label.configure(text=f"\u2717 {message}", fg=self.colors.get("danger", "#f85149"))
@@ -11128,6 +11140,14 @@ class PCAPSentryApp:
 
         def _run_all() -> None:
             results: dict[str, tuple[bool, str]] = {}
+            # Build a mapping from attr to (key_value, cred_name) for immediate save on success
+            _attr_to_cred: dict[str, tuple[str, str]] = {
+                "_otx_verify_label": ("otx_api_key", _KEY_OTX),
+                "_abuseipdb_verify_label": ("abuseipdb_api_key", _KEY_ABUSEIPDB),
+                "_greynoise_verify_label": ("greynoise_api_key", _KEY_GREYNOISE),
+                "_virustotal_verify_label": ("virustotal_api_key", _KEY_VIRUSTOTAL),
+            }
+            _attr_to_key_val = {attr: key_val for attr, key_val, _ in candidates}
             with ThreadPoolExecutor(max_workers=4) as executor:
                 future_map = {executor.submit(test_fn, key): attr for attr, key, test_fn in candidates}
                 for fut in as_completed(future_map):
@@ -11137,6 +11157,13 @@ class PCAPSentryApp:
                     except Exception as exc:
                         success, message = False, str(exc)[:40]
                     results[attr] = (success, message)
+                    # Save immediately to WCM on success
+                    if success and attr in _attr_to_cred:
+                        _settings_key, _cred_name = _attr_to_cred[attr]
+                        _key_val = _attr_to_key_val.get(attr, "")
+                        if _key_val:
+                            _store_cred(_cred_name, _key_val)
+                            self.settings[_settings_key] = _key_val
                     # Update the individual per-key label as each result arrives
                     ind_lbl = getattr(self, attr, None)
                     if ind_lbl:
